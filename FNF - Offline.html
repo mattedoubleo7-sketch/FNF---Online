@@ -1299,8 +1299,8 @@ function finish(failed=false){
     ui.resultTitle.textContent = state.currentSong.title; ui.resultGrade.textContent = g; ui.resultSummary.textContent = failed ? "Health dropped to zero before the song ended." : rating(acc); ui.rScore.textContent = state.stats.player.score.toLocaleString(); ui.rAccuracy.textContent = (acc * 100).toFixed(2) + "%"; ui.rCombo.textContent = state.stats.player.maxCombo; ui.rJudge.textContent = `${j.perfect} / ${j.good} / ${j.bad} / ${j.miss}`;
     ui.resultsWrap.classList.add("show");
 }
-function laneX(i){ return 224 + i * 104; }
-function receptorY(){ return 186; }
+function laneX(i){ return 248 + i * 112; }
+function receptorY(){ return 172; }
 function arrow(x, y, size, angle, fill, stroke, alpha=1){
     ctx.save();
     ctx.translate(x, y);
