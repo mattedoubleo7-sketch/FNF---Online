@@ -162,7 +162,7 @@ function createGameServer({ port = Number(process.env.PORT) || 3000, host = proc
         return;
       }
       room.songId = payload?.songId || room.songId;
-      const startAt = Date.now() + 3000;
+      const startAt = Date.now() + 5000;
       io.to(room.id).emit("game:start", { roomId: room.id, songId: room.songId, startAt });
       broadcastRoom(io, room);
     });

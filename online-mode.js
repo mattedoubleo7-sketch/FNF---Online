@@ -20,10 +20,61 @@ Object.assign(ui, {
 });
 
 state.startTimer = null;
-state.network = { socket: null, connected: false, roomId: "", role: null, peerConnected: false, user: null };
+state.network = { socket: null, connected: false, roomId: "", role: null, peerConnected: false, user: null, matchStartAt: 0, lastTrackSync: 0 };
 
 let socketClientPromise = null;
 const originalVoice = voice;
+const originalSongTime = songTime;
+
+function expectedOnlineSongTime() {
+  if (state.mode !== "online" || !state.playing || !state.network.matchStartAt) return null;
+  return Math.max(0, (Date.now() - state.network.matchStartAt) / 1000);
+}
+
+function syncTrackToTime(track, targetTime, shouldPlay) {
+  if (!track) return;
+  if (track.readyState === 0) {
+    try { track.load(); } catch {}
+  }
+  const duration = Number.isFinite(track.duration) && track.duration > 0 ? track.duration : null;
+  const desiredTime = Math.max(0, duration == null ? targetTime : Math.min(targetTime, Math.max(0, duration - 0.05)));
+  const tolerance = shouldPlay ? 0.12 : 0.03;
+  if (Math.abs((track.currentTime || 0) - desiredTime) > tolerance) {
+    try { track.currentTime = desiredTime; } catch {}
+  }
+  if (shouldPlay) {
+    if (track.paused && (duration == null || desiredTime < duration - 0.05)) track.play().catch(() => {});
+  } else if (!track.paused) {
+    track.pause();
+  }
+}
+
+function syncOnlinePlayback(force = false) {
+  const targetTime = expectedOnlineSongTime();
+  if (targetTime == null) return null;
+  const now = Date.now();
+  if (!force && now - (state.network.lastTrackSync || 0) < 120) return targetTime;
+  state.network.lastTrackSync = now;
+  const shouldPlay = now + 40 >= state.network.matchStartAt;
+  if (state.currentSong.chartSource === "sporting") {
+    ensureSportingAudio();
+    syncTrackToTime(state.audio.inst, targetTime, shouldPlay);
+    syncTrackToTime(state.audio.voices, targetTime, shouldPlay);
+  } else if (state.currentSong.chartSource === "perseverance") {
+    ensurePerseveranceAudio();
+    syncTrackToTime(state.audio.inst2, targetTime, shouldPlay);
+    syncTrackToTime(state.audio.voices2a, targetTime, shouldPlay);
+    syncTrackToTime(state.audio.voices2b, targetTime, shouldPlay);
+  }
+  return targetTime;
+}
+
+songTime = function() {
+  const targetTime = expectedOnlineSongTime();
+  if (targetTime == null) return originalSongTime();
+  syncOnlinePlayback();
+  return targetTime;
+};
 
 function onlineSupported() {
   return location.protocol === "http:" || location.protocol === "https:";
@@ -122,6 +173,8 @@ async function ensureOnlineSocket() {
   if (state.network.socket) {
     try { state.network.socket.disconnect(); } catch {}
   }
+  state.network.matchStartAt = 0;
+  state.network.lastTrackSync = 0;
   const socket = window.io({ transports: ["websocket", "polling"] });
   state.network.socket = socket;
   socket.on("connect", () => {
@@ -154,9 +207,9 @@ async function ensureOnlineSocket() {
   });
   socket.on("game:start", payload => {
     if (payload && payload.songId) selectSong(payload.songId, true);
-    const delay = Math.max(0, (payload && payload.startAt ? payload.startAt : Date.now()) - Date.now());
-    setOnlineMessage("Match starting", "Both players are syncing now.");
-    startSong(payload && payload.songId ? payload.songId : state.selectedSong, { forceMode: "online", startDelayMs: delay });
+    const startAt = payload && payload.startAt ? payload.startAt : Date.now() + 1200;
+    setOnlineMessage("Match starting", "Both players are syncing to the same server clock now.");
+    startSong(payload && payload.songId ? payload.songId : state.selectedSong, { forceMode: "online", startAt });
   });
   socket.on("game:judgment", payload => applyRemoteJudgment(payload));
   socket.on("game:dodge", payload => applyRemoteDodge(payload));
@@ -419,6 +472,7 @@ startSong = function(id = state.selectedSong, options = {}){
   if (a.state === "suspended") a.resume();
   stopExternalAudio();
   if (state.startTimer) clearTimeout(state.startTimer);
+  state.startTimer = null;
   state.selectedSong = id;
   state.currentSong = SONGS[id];
   state.mode = "online";
@@ -427,7 +481,7 @@ startSong = function(id = state.selectedSong, options = {}){
   state.chart.notes = state.chart.notes.map((n, i) => ({ ...n, id: n.id == null ? i : n.id }));
   resetStats();
   state.health = 0.65;
-  state.playing = false;
+  state.playing = true;
   state.songStart = 0;
   state.nextStep = 0;
   state.nextStepTime = 0;
@@ -437,38 +491,38 @@ startSong = function(id = state.selectedSong, options = {}){
   state.receptorFx.forEach(fx => fx.time = -10);
   state.perseverance = { canDodge: false, prompt: false, dodging: false, dodged: false, resolved: false, dodgeStart: -10, flashTime: -10, gfAlpha: 0 };
   state.camera = { x: 0, target: 0, sideTime: 0, lastSide: "both" };
+  state.network.matchStartAt = Number(options.startAt || Date.now() + 1200);
+  state.network.lastTrackSync = 0;
   ui.songTitle.textContent = state.currentSong.title;
   ui.songSub.textContent = state.currentSong.subtitle;
-  ui.statusText.textContent = options.forceMode === "online" ? "Match syncing" : "Get ready";
-  ui.statusSub.textContent = state.currentSong.chartSource === "sporting" ? "Sporting is using the original beat and vocal track at full speed." : "Perseverance is using the original hard chart, split vocals, pixel section, and dodge mechanic.";
+  ui.statusText.textContent = "Match syncing";
+  ui.statusSub.textContent = "Both players are locked to the same server clock. Audio will auto-correct if a browser starts late.";
   ui.timer.textContent = "0:00 / " + formatTime(state.chart.totalTime);
   ui.menu.classList.remove("show");
   ui.settings.classList.remove("show");
   ui.resultsWrap.classList.remove("show");
   syncModeUI();
-  const delayMs = Math.max(0, options.startDelayMs == null ? 120 : options.startDelayMs);
-  const beginPlayback = () => {
-    if (state.currentSong.chartSource === "sporting") {
-      ensureSportingAudio();
-      state.audio.inst.currentTime = 0;
-      state.audio.voices.currentTime = 0;
-      state.playing = true;
-      state.audio.inst.play();
-      state.audio.voices.play();
-    } else {
-      ensurePerseveranceAudio();
-      state.audio.inst2.currentTime = 0;
-      state.audio.voices2a.currentTime = 0;
-      state.audio.voices2b.currentTime = 0;
-      state.playing = true;
-      state.audio.inst2.play();
-      state.audio.voices2a.play();
-      state.audio.voices2b.play();
-    }
-    ui.statusText.textContent = "Battle live";
-  };
-  if (delayMs > 0) state.startTimer = setTimeout(beginPlayback, delayMs);
-  else beginPlayback();
+  if (state.currentSong.chartSource === "sporting") {
+    ensureSportingAudio();
+    state.audio.inst.pause();
+    state.audio.voices.pause();
+    state.audio.inst.currentTime = 0;
+    state.audio.voices.currentTime = 0;
+    state.audio.inst.load();
+    state.audio.voices.load();
+  } else {
+    ensurePerseveranceAudio();
+    state.audio.inst2.pause();
+    state.audio.voices2a.pause();
+    state.audio.voices2b.pause();
+    state.audio.inst2.currentTime = 0;
+    state.audio.voices2a.currentTime = 0;
+    state.audio.voices2b.currentTime = 0;
+    state.audio.inst2.load();
+    state.audio.voices2a.load();
+    state.audio.voices2b.load();
+  }
+  syncOnlinePlayback(true);
 };
 
 ui.playBtn.onclick = () => {
