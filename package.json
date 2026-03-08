@@ -1,7 +1,7 @@
 {
   "name": "friday-night-funkin-game",
   "version": "1.0.0",
-  "description": "Standalone Friday Night Funkin' style desktop game with server-based online rooms.",
+  "description": "FNF Onliine with server-based online rooms.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -18,9 +18,10 @@
   },
   "build": {
     "appId": "com.matth.fnfbrowserjam",
-    "productName": "FNF Browser Jam",
+    "productName": "FNF Onliine",
     "files": [
       "main.js",
+      "remote-server-url.txt",
       "server.js",
       "downloads.html",
       "FNF - Online.html",

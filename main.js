@@ -1,9 +1,18 @@
 const { app, BrowserWindow } = require("electron");
+const fs = require("fs");
 const path = require("path");
 const { createGameServer } = require("./server");
 
 let mainWindow = null;
 let embeddedServer = null;
+
+function readRemoteServerUrl() {
+  const envUrl = String(process.env.FNF_REMOTE_SERVER_URL || "").trim();
+  if (envUrl) return envUrl;
+  const configPath = path.join(__dirname, "remote-server-url.txt");
+  if (!fs.existsSync(configPath)) return "";
+  return String(fs.readFileSync(configPath, "utf8")).trim();
+}
 
 async function createWindow() {
   const win = new BrowserWindow({
@@ -20,7 +29,7 @@ async function createWindow() {
   mainWindow = win;
   win.setMenuBarVisibility(false);
 
-  const targetUrl = process.env.FNF_REMOTE_SERVER_URL;
+  const targetUrl = readRemoteServerUrl();
   if (targetUrl) {
     await win.loadURL(targetUrl.replace(/\/$/, "") + "/play");
     return;

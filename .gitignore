@@ -4,3 +4,4 @@ dist-offline/
 *.log
 public-share-pids.json
 cloudflared.exe
+dist-online-fixed/
