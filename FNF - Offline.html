@@ -1,0 +1,1739 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FNF Browser Jam Offline</title>
+<link rel="icon" type="image/png" href="assets/bf-logo.png.png">
+<style>
+:root {
+    --bg: #050816;
+    --panel: rgba(8, 14, 28, 0.88);
+    --panel2: rgba(12, 21, 40, 0.96);
+    --line: rgba(255,255,255,0.12);
+    --text: #f6f8ff;
+    --muted: #96a5ce;
+    --hot: #ff7b54;
+    --cool: #56d7ff;
+    --gold: #ffd166;
+    --good: #7ef3a6;
+    --bad: #ff6e70;
+}
+* { box-sizing: border-box; }
+html, body {
+    margin: 0;
+    min-height: 100%;
+    background:
+        radial-gradient(circle at top, rgba(69, 113, 255, 0.18), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(255, 103, 52, 0.18), transparent 26%),
+        linear-gradient(180deg, #09111f, var(--bg));
+    color: var(--text);
+    font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
+}
+body { display: flex; align-items: center; justify-content: center; padding: 18px; }
+#app {
+    position: relative;
+    width: min(1280px, 100%);
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border-radius: 28px;
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 28px 90px rgba(0,0,0,0.45);
+    background: linear-gradient(180deg, rgba(6, 12, 24, 0.7), rgba(5, 8, 20, 0.95));
+}
+canvas { display: block; width: 100%; height: 100%; }
+.hud, .overlay { position: absolute; inset: 0; }
+.hud { pointer-events: none; }
+.top, .bottom {
+    position: absolute;
+    left: 18px;
+    right: 18px;
+    display: flex;
+    gap: 14px;
+    justify-content: space-between;
+}
+.top { top: 18px; align-items: flex-start; }
+.bottom { bottom: 18px; align-items: flex-end; }
+.panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 12px 30px rgba(0,0,0,0.16);
+}
+.now { min-width: 280px; padding: 14px 16px; }
+.eyebrow, .muted, .mini .label {
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    font-size: 11px;
+}
+.now .title { font-size: 24px; font-weight: 900; line-height: 1; margin-top: 4px; }
+.now .sub { font-size: 13px; color: #dbe2fb; margin-top: 8px; }
+.health { flex: 1; max-width: 500px; padding: 14px 16px; }
+.row { display: flex; gap: 12px; align-items: center; }
+.bar { flex: 1; height: 18px; background: rgba(255,255,255,0.08); border-radius: 999px; overflow: hidden; }
+.bar > div {
+    width: 60%;
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #ff5470, #ffd166 55%, #63f7aa);
+    box-shadow: 0 0 18px rgba(255, 130, 84, 0.35);
+    transition: width 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+.stats { display: flex; gap: 12px; padding: 12px; }
+.mini { min-width: 150px; padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,0.04); }
+.mini .value { font-size: 28px; font-weight: 900; margin-top: 4px; }
+.mini .sub { color: #d7dff8; font-size: 12px; margin-top: 3px; }
+.status { min-width: 340px; padding: 14px 16px; }
+#statusText { font-size: 26px; font-weight: 900; line-height: 1; }
+#statusSub { margin-top: 8px; font-size: 13px; color: #d7dff8; }
+.help { display: flex; gap: 10px; flex-wrap: wrap; }
+.pill {
+    padding: 10px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: rgba(255,255,255,0.04);
+    color: #d7dff8;
+    font-size: 12px;
+}
+#judgments { position: absolute; inset: 0; pointer-events: none; }
+.feed {
+    position: absolute;
+    top: 248px;
+    font-size: 42px;
+    font-weight: 900;
+    opacity: 0;
+    letter-spacing: 1px;
+}
+#playerFeed { right: 120px; }
+#oppFeed { left: 120px; }
+.overlay {
+    display: flex;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    background:
+        linear-gradient(180deg, rgba(4,7,16,0.56), rgba(4,7,16,0.92)),
+        radial-gradient(circle at top right, rgba(86, 215, 255, 0.14), transparent 24%),
+        radial-gradient(circle at left, rgba(255, 123, 84, 0.14), transparent 30%);
+    backdrop-filter: blur(0px);
+    transition: opacity 0.35s ease, backdrop-filter 0.35s ease, visibility 0s 0.35s;
+}
+.overlay.show { pointer-events: auto; opacity: 1; visibility: visible; backdrop-filter: blur(10px); transition: opacity 0.35s ease, backdrop-filter 0.35s ease, visibility 0s 0s; }
+#menu { padding: 26px; gap: 24px; }
+.hero, .songs, .modal, .results {
+    background: var(--panel2);
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.32);
+}
+.hero { flex: 1.05; padding: 26px; }
+.songs { flex: 0.95; padding: 22px; display: flex; flex-direction: column; gap: 14px; }
+#menu { align-items: stretch; }
+.heroBrand {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin: 10px 0 12px;
+}
+.heroLogo {
+    width: clamp(96px, 12vw, 142px);
+    height: auto;
+    display: block;
+    image-rendering: auto;
+    filter: drop-shadow(0 10px 24px rgba(0,0,0,0.35));
+}
+.heroTitle {
+    min-width: 0;
+}
+.hero h1 {
+    font-size: clamp(44px, 6vw, 74px);
+    line-height: 0.92;
+    letter-spacing: -0.06em;
+    margin: 0;
+}
+.hero p { color: #d7dff8; line-height: 1.55; max-width: 58ch; }
+.features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 20px; }
+.feature { padding: 15px; border-radius: 18px; border: 1px solid var(--line); background: rgba(255,255,255,0.035); }
+.feature .name { font-weight: 800; }
+.feature .desc { font-size: 12px; color: #c6d0f2; line-height: 1.45; margin-top: 8px; }
+.actions, .menuFoot, .modalFoot, .resultsFoot { display: flex; gap: 12px; flex-wrap: wrap; }
+.actions { margin-top: 22px; }
+.btn, .songCard {
+    font: inherit;
+    cursor: pointer;
+    transition: transform 0.14s ease, background 0.14s ease, box-shadow 0.14s ease;
+}
+.btn {
+    border: 0;
+    border-radius: 16px;
+    padding: 14px 18px;
+    font-weight: 900;
+}
+.btn:hover, .songCard:hover { transform: translateY(-1px); }
+.primary { background: linear-gradient(135deg, #ffd166, #ff7b54 82%); color: #09111f; box-shadow: 0 14px 34px rgba(255, 123, 84, 0.22); }
+.secondary { color: white; background: rgba(255,255,255,0.08); border: 1px solid var(--line); }
+.songList { display: flex; flex-direction: column; gap: 12px; }
+.songCard {
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 20px;
+    padding: 15px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    text-align: left;
+}
+.songCard { transition: transform 0.14s ease, background 0.14s ease, box-shadow 0.3s ease, border-color 0.3s ease; }
+.songCard.selected { border-color: rgba(255, 209, 102, 0.7); box-shadow: 0 16px 42px rgba(255, 125, 84, 0.14); }
+.songCard .name { font-size: 24px; font-weight: 900; }
+.songCard .meta { margin-top: 8px; display: flex; justify-content: space-between; gap: 10px; color: #c8d2f4; font-size: 12px; }
+.songCard .desc { margin-top: 9px; color: #e2e8fc; font-size: 13px; line-height: 1.45; }
+.toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: rgba(255,255,255,0.04);
+}
+.toggle input { width: 20px; height: 20px; accent-color: #ffd166; }
+.onlineCard { margin-top: 16px; padding: 16px; border-radius: 18px; border: 1px solid var(--line); background: rgba(255,255,255,0.045); display: grid; gap: 12px; }
+.onlineMeta { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
+.onlineStatus { font-size: 18px; font-weight: 900; }
+.onlineAccount { font-size: 14px; color: #d7dff8; text-align: right; }
+.onlineRow { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.onlineInput { flex: 1; min-width: 140px; border-radius: 14px; border: 1px solid var(--line); background: rgba(255,255,255,0.08); color: #fff; padding: 12px 14px; font: inherit; text-transform: uppercase; letter-spacing: 0.12em; }
+.onlineHint { color: #d7dff8; font-size: 12px; line-height: 1.45; min-height: 34px; }
+.onlineBtn { padding: 12px 16px; }
+.authFields { display: grid; gap: 12px; margin-top: 18px; }
+.authInput { width: 100%; border-radius: 14px; border: 1px solid var(--line); background: rgba(255,255,255,0.08); color: #fff; padding: 14px 16px; font: inherit; }
+.authNote { margin-top: 12px; color: #d7dff8; min-height: 22px; }
+#app.coverViewport { width: 100vw; height: 100vh; aspect-ratio: auto; border-radius: 0; }
+body.fullViewport { padding: 0; }
+body.fullViewport #app { width: 100vw; height: 100vh; aspect-ratio: auto; border-radius: 0; }
+#settings, #results { justify-content: center; align-items: center; }
+.modal, .results { width: min(960px, calc(100% - 32px)); padding: 24px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; margin-top: 18px; }
+.block { padding: 18px; border-radius: 18px; background: rgba(255,255,255,0.04); border: 1px solid var(--line); }
+.block h3 { margin: 0 0 14px; }
+.binds { display: grid; gap: 10px; }
+.bind {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: rgba(255,255,255,0.05);
+    color: white;
+}
+.bind.waiting { background: rgba(255, 209, 102, 0.16); border-color: rgba(255, 209, 102, 0.7); }
+.results .grade { font-size: 72px; font-weight: 900; line-height: 1; margin: 8px 0 0; }
+.resultGrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 18px; }
+.rStat { padding: 16px; border-radius: 16px; background: rgba(255,255,255,0.05); border: 1px solid var(--line); }
+.rStat .value { margin-top: 6px; font-size: 30px; font-weight: 900; }
+@media (max-width: 1100px) {
+    body { padding: 12px; }
+    #app { aspect-ratio: auto; min-height: calc(100vh - 24px); }
+    #menu, .features, .grid2, .resultGrid { flex-direction: column; grid-template-columns: 1fr; }
+    .top, .bottom { flex-direction: column; align-items: stretch; }
+    .stats, .help { flex-wrap: wrap; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+    <canvas id="canvas" width="1280" height="720"></canvas>
+    <div class="hud">
+        <div class="top">
+            <div class="panel now">
+                <div class="eyebrow">Now Playing</div>
+                <div class="title" id="songTitle">Dad Battle Lite</div>
+                <div class="sub" id="songSub">FNF-style browser showdown</div>
+            </div>
+            <div class="panel health">
+                <div class="row">
+                    <div class="muted" id="modeLabel">Solo Battle</div>
+                    <div class="bar"><div id="healthFill"></div></div>
+                    <div class="muted" id="timer">0:00 / 0:00</div>
+                </div>
+            </div>
+            <div class="panel stats">
+                <div class="mini"><div class="label">Score</div><div class="value" id="score">0</div><div class="sub" id="combo">Max Combo 0</div></div>
+                <div class="mini"><div class="label">Accuracy</div><div class="value" id="accuracy">100.00%</div><div class="sub" id="rating">SS Sick</div></div>
+                <div class="mini" id="p1Box" style="display:none;"><div class="label">P1 Score</div><div class="value" id="p1Score">0</div><div class="sub" id="p1Combo">Combo 0</div></div>
+            </div>
+        </div>
+        <div class="bottom">
+            <div class="panel status"><div id="statusText">Pick a track and start the battle.</div><div id="statusSub">Four-lane charts, synth backing, health, results, and local keybind saves in one HTML file.</div></div>
+            <div class="help">
+                <div class="pill"><strong>Solo:</strong> WASD or Arrows</div>
+                <div class="pill"><strong>Versus:</strong> P1 WASD, P2 Arrows</div>
+                <div class="pill"><strong>Settings:</strong> Esc closes</div>
+            </div>
+        </div>
+    </div>
+    <div id="judgments"><div class="feed" id="oppFeed"></div><div class="feed" id="playerFeed"></div></div>
+    <div class="overlay show" id="menu">
+        <section class="hero">
+            <div class="eyebrow">Standalone rhythm battle</div>
+            <div class="heroBrand">
+                <img class="heroLogo" src="assets/bf-logo.png.png" alt="Boyfriend logo">
+                <div class="heroTitle">
+                    <h1>Friday Night Funkin' Browser Jam</h1>
+                </div>
+            </div>
+            <p>This is a self-contained Friday Night Funkin' style browser game with procedural charts, synthesized music, judgments, health, rebindable controls, and a proper results screen.</p>
+            <div class="features">
+                <div class="feature"><div class="name">Four-lane highway</div><div class="desc">Classic left, down, up, right note lanes with timing windows, combo tracking, and misses.</div></div>
+                <div class="feature"><div class="name">Week-style tracks</div><div class="desc">Battle Matt in Sporting or Sans in Perseverance.</div></div>
+                <div class="feature"><div class="name">No setup required</div><div class="desc">Open the file and play. No installs, assets, or servers required.</div></div>
+            </div>
+            <div class="actions">
+                <button class="btn primary" id="playBtn">Play Selected</button>
+                <button class="btn secondary" id="settingsBtn">Controls</button>
+            </div>
+        </section>
+        <section class="songs">
+            <div class="row" style="justify-content:space-between; align-items:flex-end;"><div><div class="eyebrow">Set List</div><div style="font-size:30px; font-weight:900; line-height:1; margin-top:4px;">Select a track</div></div><div class="eyebrow" id="difficulty">Difficulty: Normal</div></div>
+            <div class="songList" id="songList"></div>
+            <div class="menuFoot" style="margin-top:auto; justify-content:space-between; align-items:center;">
+                <label class="toggle"><input type="checkbox" id="versusToggle"><span>Local 1v1 versus mode</span></label>
+                <label class="toggle"><select id="cameraMode" style="font:inherit;background:rgba(255,255,255,0.08);color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:6px 10px;cursor:pointer;"><option value="off">Camera: Off</option><option value="center">Camera: Stay Center</option><option value="pan" selected>Camera: Pan L/R</option></select></label>
+            </div>
+            <div class="onlineCard">
+                <div class="onlineMeta">
+                    <div><div class="eyebrow">Online</div><div class="onlineStatus" id="onlineStatus">Offline</div></div>
+                    <div><div class="eyebrow">Account</div><div class="onlineAccount" id="onlineAccount">Signed out</div></div>
+                </div>
+                <div class="onlineRow">
+                    <button class="btn secondary onlineBtn" id="onlineAuthBtn">Online</button>
+                    <input class="onlineInput" id="roomCodeInput" placeholder="Room Code" maxlength="6">
+                    <button class="btn secondary onlineBtn" id="hostOnlineBtn">Host</button>
+                    <button class="btn secondary onlineBtn" id="joinOnlineBtn">Join</button>
+                    <button class="btn secondary onlineBtn" id="leaveOnlineBtn">Leave</button>
+                    <button class="btn secondary onlineBtn" id="onlineLogoutBtn">Log Out</button>
+                </div>
+                <div class="onlineHint" id="onlineHint">Create an account to host or join online rooms.</div>
+            </div>
+        </section>
+    </div>
+    <div class="overlay" id="settings">
+        <div class="modal">
+            <div class="eyebrow">Controls</div>
+            <h2 style="margin:4px 0 0; font-size:30px;">Controls</h2>
+            <div class="grid2">
+                <div class="block"><h3>Solo Controls</h3><div class="binds" id="soloBinds"></div></div>
+                <div class="block"><h3>Versus Controls</h3><div class="binds" id="p1Binds"></div><div style="height:14px;"></div><div class="binds" id="p2Binds"></div></div>
+            </div>
+            <div class="modalFoot" style="margin-top:20px; justify-content:flex-end;"><button class="btn secondary" id="resetBtn">Reset Defaults</button><button class="btn primary" id="closeSettings">Close</button></div>
+        </div>
+    </div>
+    <div class="overlay" id="authWrap">
+        <div class="modal">
+            <div class="eyebrow">Online Account</div>
+            <h2 style="margin:4px 0 0; font-size:30px;">Sign In Or Create Account</h2>
+            <div class="authFields">
+                <input class="authInput" id="authUsername" placeholder="Username" maxlength="18">
+                <input class="authInput" id="authPassword" type="password" placeholder="Password" maxlength="64">
+            </div>
+            <div class="authNote" id="authMessage">Create an account or sign in to use online rooms.</div>
+            <div class="modalFoot" style="margin-top:20px; justify-content:flex-end;"><button class="btn secondary" id="closeAuth">Close</button><button class="btn secondary" id="loginBtn">Log In</button><button class="btn primary" id="signupBtn">Create Account</button></div>
+        </div>
+    </div>
+    <div class="overlay" id="resultsWrap">
+        <div class="results">
+            <div class="eyebrow">Results</div>
+            <h2 id="resultTitle" style="margin:4px 0 0; font-size:30px;">Dad Battle Lite</h2>
+            <div class="grade" id="resultGrade">A</div>
+            <div id="resultSummary">Solid run.</div>
+            <div class="resultGrid">
+                <div class="rStat"><div class="eyebrow">Score</div><div class="value" id="rScore">0</div></div>
+                <div class="rStat"><div class="eyebrow">Accuracy</div><div class="value" id="rAccuracy">0%</div></div>
+                <div class="rStat"><div class="eyebrow">Max Combo</div><div class="value" id="rCombo">0</div></div>
+                <div class="rStat"><div class="eyebrow">Judgments</div><div class="value" id="rJudge">0 / 0 / 0 / 0</div></div>
+            </div>
+            <div class="resultsFoot" style="margin-top:20px; justify-content:flex-end;"><button class="btn secondary" id="menuBtn">Back To Menu</button><button class="btn primary" id="replayBtn">Replay</button></div>
+        </div>
+    </div>
+</div>
+<script src="sprite-data.js"></script>
+<script src="sporting-chart.js"></script>
+<script src="perseverance-data.js"></script>
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const ui = {
+    menu: document.getElementById("menu"), settings: document.getElementById("settings"), resultsWrap: document.getElementById("resultsWrap"), songList: document.getElementById("songList"),
+    versusToggle: document.getElementById("versusToggle"), cameraMode: document.getElementById("cameraMode"), difficulty: document.getElementById("difficulty"), playBtn: document.getElementById("playBtn"), storyBtn: document.getElementById("storyBtn"), settingsBtn: document.getElementById("settingsBtn"),
+    closeSettings: document.getElementById("closeSettings"), resetBtn: document.getElementById("resetBtn"), soloBinds: document.getElementById("soloBinds"), p1Binds: document.getElementById("p1Binds"), p2Binds: document.getElementById("p2Binds"),
+    songTitle: document.getElementById("songTitle"), songSub: document.getElementById("songSub"), modeLabel: document.getElementById("modeLabel"), timer: document.getElementById("timer"), healthFill: document.getElementById("healthFill"),
+    score: document.getElementById("score"), combo: document.getElementById("combo"), accuracy: document.getElementById("accuracy"), rating: document.getElementById("rating"), p1Box: document.getElementById("p1Box"), p1Score: document.getElementById("p1Score"), p1Combo: document.getElementById("p1Combo"),
+    statusText: document.getElementById("statusText"), statusSub: document.getElementById("statusSub"), playerFeed: document.getElementById("playerFeed"), oppFeed: document.getElementById("oppFeed"),
+    resultTitle: document.getElementById("resultTitle"), resultGrade: document.getElementById("resultGrade"), resultSummary: document.getElementById("resultSummary"), rScore: document.getElementById("rScore"), rAccuracy: document.getElementById("rAccuracy"), rCombo: document.getElementById("rCombo"), rJudge: document.getElementById("rJudge"), menuBtn: document.getElementById("menuBtn"), replayBtn: document.getElementById("replayBtn")
+};
+const STORAGE = "fnf-browser-jam-v1";
+const DIRS = ["left", "down", "up", "right"];
+const COLORS = ["#ff5a91", "#ff9d42", "#b7ff65", "#4de3ff", "#ff5a91", "#ff9d42", "#b7ff65", "#4de3ff"];
+const MOTIFS = [[0,1,2,3,2,1],[0,2,1,3,2,0],[3,2,1,0,1,2],[1,1,2,3,2,0],[0,3,1,2,3,1],[2,0,3,1,2,1]];
+const DEFAULTS = { solo:{left:"a",down:"s",up:"w",right:"d"}, p1:{left:"a",down:"s",up:"w",right:"d"}, p2:{left:"arrowleft",down:"arrowdown",up:"arrowup",right:"arrowright"} };
+const SONGS = {
+    sporting:{ title:"Sporting", subtitle:"Original beat + exact chart", diff:"Normal (Original Chart)", tempo:300, root:45, scale:[0,2,3,5,7,8,10], prog:[0,5,3,7], scroll:920, seed:29, introBeats:0, outroBeats:4, palette:["#0f1422","#1b2f46","#314f74","#0b0e16","#4de3ff","#ff9d42"], blurb:"Imported from the original VS Matt chart file and synced to the real Sporting instrumental and vocals for original-speed playback.", chartSource:"sporting"},
+    perseverance:{ title:"Perseverance", subtitle:"Friday Night Dustin hard chart", diff:"Hard (Original Chart)", tempo:120, root:41, scale:[0,2,3,5,7,8,10], prog:[0,5,3,6], scroll:810, seed:33, introBeats:0, outroBeats:4, palette:["#06080d","#182332","#34455b","#0b0d12","#cfe7ff","#7fb7ff"], blurb:"Imported from Friday Night Dustin with the original hard chart, ruins exit stage art, Sans sprites, pixel section, and gaster blaster dodge mechanic.", chartSource:"perseverance"},
+};
+const PATTERNS = {
+    chill:{kick:[0,8],snare:[4,12],hat:[2,6,10,14],bass:[0,null,0,null,2,null,4,null],lead:[null,null,4,null,3,null,2,null,0,null,2,null,4,null,5,null],chords:[0,8]},
+    anthem:{kick:[0,6,8,14],snare:[4,12],hat:[2,4,6,8,10,12,14],bass:[0,0,null,2,3,null,4,2],lead:[null,4,null,5,4,null,2,null,0,2,null,3,null,4,5,null],chords:[0,8,12]},
+    menace:{kick:[0,7,8,11,14],snare:[4,12],hat:[2,3,6,7,10,11,14,15],bass:[0,null,0,0,4,null,3,null],lead:[null,7,6,null,5,null,7,null,8,7,null,6,5,null,3,null],chords:[0,8]},
+    rush:{kick:[0,5,8,10,14],snare:[4,12],hat:[1,2,3,5,6,7,9,10,11,13,14,15],bass:[0,0,2,null,3,null,5,4],lead:[7,null,6,5,4,null,5,7,8,null,7,6,5,4,2,null],chords:[0,6,8,12]},
+    chaos:{kick:[0,3,6,8,10,14],snare:[4,12],hat:[1,2,3,5,6,7,9,10,11,13,14,15],bass:[0,2,0,3,4,2,5,3],lead:[8,7,6,5,7,8,10,8,7,6,5,4,5,7,3,2],chords:[0,4,8,12]}
+};
+const SPORTING_BEAT = {
+    kicks:[1,5,13],
+    snares:[9],
+    hats:[1,3,5,7,9,11,13,15],
+    openHats:[13],
+    riff:[
+        [null,51,null,51,null,51,null,53,53,51,51,51,null,51,null,51],
+        [null,50,null,48,null,51,50,50,50,50,50,51,50,50,null,50],
+        [null,53,null,51,null,51,null,53,null,53,53,51,null,51,null,null],
+        [51,null,null,null,null,50,50,50,50,48,48,48,48,51,51,51]
+    ]
+};
+const spriteState = { images:{}, initialized:false };
+const perseveranceSpriteState = { images:{}, initialized:false };
+const introSnow = Array.from({length: 120}, () => ({
+    x: Math.random() * 1400, y: Math.random() * 800,
+    r: Math.random() * 2 + 0.5, speed: Math.random() * 30 + 10,
+    drift: Math.random() * 20 - 10, alpha: Math.random() * 0.6 + 0.2
+}));
+function drawSnow(t){
+    for(const s of introSnow){
+        const sy = (s.y + s.speed * t) % (canvas.height + 20) - 10;
+        const sx = s.x + Math.sin(t * 0.8 + s.drift) * 15 + s.drift * t * 0.3;
+        const wx = ((sx % (canvas.width + 20)) + canvas.width + 20) % (canvas.width + 20) - 10;
+        ctx.globalAlpha = s.alpha * 0.5;
+        ctx.fillStyle = "#c8bfaa";
+        ctx.beginPath();
+        ctx.arc(wx, sy, s.r, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+}
+const SPORTING_ARENA_CROWD = {
+    image: "assets/arena-characters.png",
+    frames: [
+        { x:5, y:5, w:2560, h:311, fx:0, fy:-33, fw:2560, fh:344 },
+        { x:5, y:5, w:2560, h:311, fx:0, fy:-33, fw:2560, fh:344 },
+        { x:5, y:321, w:2560, h:321, fx:0, fy:-23, fw:2560, fh:344 },
+        { x:5, y:321, w:2560, h:321, fx:0, fy:-23, fw:2560, fh:344 },
+        { x:5, y:647, w:2560, h:330, fx:0, fy:-14, fw:2560, fh:344 },
+        { x:5, y:647, w:2560, h:330, fx:0, fy:-14, fw:2560, fh:344 },
+        { x:5, y:982, w:2560, h:338, fx:0, fy:-5, fw:2560, fh:344 },
+        { x:5, y:982, w:2560, h:338, fx:0, fy:-5, fw:2560, fh:344 },
+        { x:5, y:1325, w:2560, h:342, fx:0, fy:0, fw:2560, fh:344 },
+        { x:5, y:1325, w:2560, h:342, fx:0, fy:0, fw:2560, fh:344 },
+        { x:5, y:1325, w:2560, h:342, fx:0, fy:0, fw:2560, fh:344 },
+        { x:5, y:1325, w:2560, h:342, fx:0, fy:0, fw:2560, fh:344 },
+        { x:5, y:1325, w:2560, h:342, fx:0, fy:0, fw:2560, fh:344 },
+        { x:5, y:1325, w:2560, h:342, fx:0, fy:0, fw:2560, fh:344 }
+    ]
+};
+function initPerseveranceSprites(){
+    if(perseveranceSpriteState.initialized || !window.PERSEVERANCE_DATA) return;
+    perseveranceSpriteState.initialized = true;
+    const sources = {
+        bfMain: window.PERSEVERANCE_DATA.sprites.boyfriend.images.main,
+        bfDodge: window.PERSEVERANCE_DATA.sprites.boyfriend.images.dodge,
+        sans: window.PERSEVERANCE_DATA.sprites.sans.image,
+        sansPixel: window.PERSEVERANCE_DATA.sprites.sansPixel.image,
+        gf: window.PERSEVERANCE_DATA.sprites.gf.image,
+        notesDefault: window.PERSEVERANCE_DATA.sprites.notes.default.image,
+        notesPixel: window.PERSEVERANCE_DATA.sprites.notes.pixel.image,
+        notesPixelEnds: window.PERSEVERANCE_DATA.sprites.notes.pixel.hold.image,
+        bgA: window.PERSEVERANCE_DATA.stage.images.backA,
+        bgB: window.PERSEVERANCE_DATA.stage.images.backB,
+        bgMid: window.PERSEVERANCE_DATA.stage.images.mid,
+        pillars: window.PERSEVERANCE_DATA.stage.images.pillars,
+        blaster: window.PERSEVERANCE_DATA.stage.blaster.image,
+        prompt: window.PERSEVERANCE_DATA.stage.prompt.image,
+        impact1: window.PERSEVERANCE_DATA.stage.images.impact1,
+        impact2: window.PERSEVERANCE_DATA.stage.images.impact2,
+        vignette: "assets/perseverance-vignette.png"
+    };
+    Object.entries(sources).forEach(([key, src]) => {
+        const img = new Image();
+        img.src = src;
+        perseveranceSpriteState.images[key] = img;
+    });
+}
+function initSportingSprites(){
+    if(spriteState.initialized || !window.SPORTING_SPRITES) return;
+    spriteState.initialized = true;
+    const sources = {
+        matt: window.SPORTING_SPRITES.matt.image,
+        boyfriend: window.SPORTING_SPRITES.boyfriend.image,
+        gf: window.SPORTING_SPRITES.gf.image,
+        notes: window.SPORTING_SPRITES.notes.image,
+        stageBack: window.SPORTING_SPRITES.stage.back,
+        stageFront: window.SPORTING_SPRITES.stage.front,
+        stageCurtains: window.SPORTING_SPRITES.stage.curtains,
+        arenaBack: window.SPORTING_SPRITES.stage.arenaBack,
+        arenaNight: window.SPORTING_SPRITES.stage.arenaNight,
+        arenaCrowd: SPORTING_ARENA_CROWD.image,
+        railing: window.SPORTING_SPRITES.stage.railing
+    };
+    Object.entries(sources).forEach(([key, src]) => {
+        const img = new Image();
+        img.src = src;
+        spriteState.images[key] = img;
+    });
+}
+function sportingSpritesReady(){
+    return spriteState.initialized && Object.values(spriteState.images).every(img => img && img.complete && img.naturalWidth);
+}
+function perseveranceSpritesReady(){
+    return perseveranceSpriteState.initialized && Object.values(perseveranceSpriteState.images).every(img => img && img.complete && img.naturalWidth);
+}
+function frameFromList(frames, elapsed, fps=12, loop=true){
+    if(!frames || !frames.length) return null;
+    const raw = Math.floor(Math.max(0, elapsed) * fps);
+    const index = loop ? raw % frames.length : Math.min(frames.length - 1, raw);
+    return frames[index];
+}
+function spriteFrame(spriteDef, anim, elapsed, fps=12, loop=true){
+    return frameFromList(spriteDef.animations[anim], elapsed, fps, loop);
+}
+function sportingAnimDuration(frames, fps, min=0.2, max=0.7){
+    if(!frames || !frames.length) return min;
+    return Math.min(max, Math.max(min, frames.length / fps));
+}
+function drawAtlasSub(image, frame, dx, dy, scale){
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    if(frame.rotated){
+        ctx.save();
+        ctx.translate(dx, dy + frame.w * scale);
+        ctx.rotate(-Math.PI / 2);
+        ctx.drawImage(image, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w * scale, frame.h * scale);
+        ctx.restore();
+        return;
+    }
+    ctx.drawImage(image, frame.x, frame.y, frame.w, frame.h, dx, dy, frame.w * scale, frame.h * scale);
+}
+function drawAtlasFrame(image, frame, x, y, scale, alpha=1, flipX=false){
+    const fw = frame.fw || frame.w, fh = frame.fh || frame.h, fx = frame.fx || 0, fy = frame.fy || 0;
+    const dx = -fw * scale / 2 - fx * scale;
+    const dy = -fh * scale - fy * scale;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(x, y);
+    if(flipX) ctx.scale(-1, 1);
+    drawAtlasSub(image, frame, dx, dy, scale);
+    ctx.restore();
+}
+function drawAtlasFrameSilhouette(image, frame, x, y, scale, alpha=1, flipX=false, color="#000"){
+    const fw = frame.fw || frame.w, fh = frame.fh || frame.h, fx = frame.fx || 0, fy = frame.fy || 0;
+    const dx = -fw * scale / 2 - fx * scale;
+    const dy = -fh * scale - fy * scale;
+    const padW = Math.ceil(fw * scale * 2), padH = Math.ceil(fh * scale * 2);
+    if(!drawAtlasFrameSilhouette._c){ drawAtlasFrameSilhouette._c = document.createElement("canvas"); }
+    const offC = drawAtlasFrameSilhouette._c;
+    offC.width = padW; offC.height = padH;
+    const oc = offC.getContext("2d");
+    oc.clearRect(0, 0, padW, padH);
+    oc.save();
+    oc.imageSmoothingEnabled = true;
+    oc.imageSmoothingQuality = "high";
+    oc.translate(padW / 2, padH / 2);
+    if(flipX) oc.scale(-1, 1);
+    if(frame.rotated){
+        oc.save();
+        oc.translate(dx, dy + frame.w * scale);
+        oc.rotate(-Math.PI / 2);
+        oc.drawImage(image, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w * scale, frame.h * scale);
+        oc.restore();
+    } else {
+        oc.drawImage(image, frame.x, frame.y, frame.w, frame.h, dx, dy, frame.w * scale, frame.h * scale);
+    }
+    oc.restore();
+    oc.globalCompositeOperation = "source-atop";
+    oc.fillStyle = color;
+    oc.fillRect(0, 0, padW, padH);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(offC, x - padW / 2, y - padH / 2);
+    ctx.restore();
+}
+function drawAtlasTopLeft(image, frame, x, y, scale, alpha=1, flipX=false){
+    const fx = frame.fx || 0, fy = frame.fy || 0;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(x, y);
+    if(flipX) ctx.scale(-1, 1);
+    drawAtlasSub(image, frame, -fx * scale, -fy * scale, scale);
+    ctx.restore();
+}
+function drawAtlasCentered(image, frame, x, y, scale, alpha=1, flipX=false){
+    const fw = frame.fw || frame.w, fh = frame.fh || frame.h, fx = frame.fx || 0, fy = frame.fy || 0;
+    const dx = -fw * scale / 2 - fx * scale;
+    const dy = -fh * scale / 2 - fy * scale;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(x, y);
+    if(flipX) ctx.scale(-1, 1);
+    drawAtlasSub(image, frame, dx, dy, scale);
+    ctx.restore();
+}
+function sportingLaneKey(lane){ return DIRS[lane % 4]; }
+function sportingCrowdFrame(t){
+    return frameFromList(SPORTING_ARENA_CROWD.frames, t, 18, true);
+}
+function sportingPose(kind, t){
+    if(kind === "gf") return { anim:"dance", elapsed:t * 1.2, fps:12, loop:true };
+    const pose = state.poses[kind === "boyfriend" ? "player" : kind];
+    const dir = sportingLaneKey(pose.lane || 0);
+    const age = performance.now() / 1000 - pose.time;
+    const def = kind === "boyfriend" ? window.SPORTING_SPRITES.boyfriend : window.SPORTING_SPRITES.matt;
+    const missAnim = dir + "Miss";
+    const anim = pose.kind === "miss" && def.animations[missAnim] && def.animations[missAnim].length ? missAnim : dir;
+    const frames = def.animations[anim];
+    const animFps = kind === "matt" ? 22 : 24;
+    if(age >= 0 && age < sportingAnimDuration(frames, animFps)){
+        return { anim, elapsed:age, fps:animFps, loop:false };
+    }
+    return { anim:"idle", elapsed:t + (kind === "boyfriend" ? 0.08 : 0), fps:12, loop:true };
+}
+function drawSportingSprite(kind, x, y, scale, t){
+    const def = kind === "boyfriend" ? window.SPORTING_SPRITES.boyfriend : kind === "gf" ? window.SPORTING_SPRITES.gf : window.SPORTING_SPRITES.matt;
+    const img = spriteState.images[kind];
+    if(!def || !img) return;
+    const pose = sportingPose(kind, t);
+    const frame = spriteFrame(def, pose.anim, pose.elapsed, pose.fps, pose.loop);
+    if(frame) drawAtlasTopLeft(img, frame, x, y, scale);
+}
+function sportingReceptorFrame(lane){
+    const dir = sportingLaneKey(lane);
+    const notes = window.SPORTING_SPRITES.notes;
+    if(state.keysDown[lane] && notes.press[dir] && notes.press[dir].length) return frameFromList(notes.press[dir], performance.now() / 1000, 24, true);
+    return notes.static[dir];
+}
+function drawSportingReceptor(lane, x, y){
+    const fx = state.receptorFx[lane];
+    const age = performance.now() / 1000 - fx.time;
+    if(age < 0.16){
+        const frames = window.SPORTING_SPRITES.notes.confirm[sportingLaneKey(lane)];
+        const frame = frameFromList(frames, age, 26, false);
+        if(frame){
+            const alpha = 1 - age / 0.16;
+            drawAtlasCentered(spriteState.images.notes, frame, x, y, 0.78 + (0.16 - age) * 0.9, alpha);
+            return;
+        }
+    }
+    const frame = sportingReceptorFrame(lane);
+    if(frame) drawAtlasCentered(spriteState.images.notes, frame, x, y, 0.72, lane < 4 ? 0.9 : 1);
+}
+function drawSportingNote(lane, x, y, scale, alpha=1){
+    const frame = window.SPORTING_SPRITES.notes.gem[sportingLaneKey(lane)];
+    if(!frame) return;
+    ctx.save();
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = COLORS[lane];
+    drawAtlasCentered(spriteState.images.notes, frame, x, y, scale, alpha);
+    ctx.restore();
+}
+function perseveranceTime(){ return songTime(); }
+function perseveranceIsPixelPhase(t){ const m = window.PERSEVERANCE_DATA.mechanics; return t >= m.pixelStart && t < m.pixelEnd; }
+const PERSEVERANCE_POST_BLASTER_FLASHES = [210.545349, 211.145349, 211.745349, 220.145349, 220.745349, 221.345349, 222.395349];
+function perseveranceSlowdownStart(){ return 222.395349; }
+function perseveranceSlowdownEnd(){ return 239.945349; }
+const PERSEVERANCE_SCROLL_TWEENS = [
+    { time: 82.195349, from: 2.0, to: 3.0, steps: 4, ease: "cubeIn" },
+    { time: 82.795349, from: 2.0, to: 3.0, steps: 4, ease: "cubeIn" },
+    { time: 91.795349, from: 2.0, to: 3.0, steps: 4, ease: "cubeIn" },
+    { time: 92.395349, from: 2.0, to: 3.0, steps: 4, ease: "cubeIn" },
+    { time: 92.995349, from: 2.0, to: 3.0, steps: 4, ease: "cubeIn" },
+    { time: 152.995349, from: 2.0, to: 3.2, steps: 16, ease: "cubeIn" },
+    { time: 153.295349, from: 2.0, to: 3.2, steps: 8, ease: "sineInOut" },
+    { time: 155.695349, from: 2.0, to: 3.2, steps: 8, ease: "sineInOut" },
+    { time: 158.095349, from: 2.0, to: 3.2, steps: 8, ease: "sineInOut" },
+    { time: 171.295349, from: 1.7, to: 3.2, steps: 8, ease: "sineInOut" },
+    { time: 172.495349, from: 1.7, to: 3.2, steps: 8, ease: "sineInOut" },
+    { time: 180.895349, from: 1.7, to: 3.2, steps: 8, ease: "sineInOut" },
+    { time: 182.095349, from: 1.7, to: 3.2, steps: 8, ease: "sineInOut" },
+    { time: 184.945349, from: 1.6, to: 3.3, steps: 8, ease: "sineInOut" },
+    { time: 210.545349, from: 1.6, to: 3.3, steps: 5.75, ease: "quadInOut" },
+    { time: 211.145349, from: 1.6, to: 3.3, steps: 5.75, ease: "quadInOut" },
+    { time: 211.745349, from: 1.6, to: 3.3, steps: 5.75, ease: "quadInOut" },
+    { time: 220.145349, from: 1.6, to: 3.3, steps: 5.75, ease: "quadInOut" },
+    { time: 220.745349, from: 1.6, to: 3.3, steps: 5.75, ease: "quadInOut" },
+    { time: 221.345349, from: 1.6, to: 3.3, steps: 5.75, ease: "quadInOut" },
+    { time: 222.395349, from: 1.6, to: 3.5, steps: 16, ease: "circOut" }
+];
+const PERSEVERANCE_SCROLL_BASELINES = [
+    { time: 0, speed: 2.0 },
+    { time: 170.995349, speed: 1.7 },
+    { time: 184.645349, speed: 1.6 }
+];
+function easeCurve(name, p){
+    const t = clamp(p, 0, 1);
+    if(name === "cubeIn") return t * t * t;
+    if(name === "sineInOut") return -(Math.cos(Math.PI * t) - 1) / 2;
+    if(name === "quadInOut") return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    if(name === "circOut") return Math.sqrt(1 - Math.pow(t - 1, 2));
+    return t;
+}
+function perseveranceScrollBasePx(){ return 405; }
+function perseveranceBloomStrength(t){
+    if(perseveranceIsPixelPhase(t)) return 0;
+    if(t >= 198.895349 && t < 221.795349) return 0.62;
+    if(t >= perseveranceSlowdownStart()) return 0.52;
+    if(t >= 163.195349) return 0.42;
+    return 0.28;
+}
+function perseveranceScrollSpeed(t){
+    let current = 2.0;
+    for(const base of PERSEVERANCE_SCROLL_BASELINES){
+        if(t >= base.time) current = base.speed;
+        else break;
+    }
+    for(const tween of PERSEVERANCE_SCROLL_TWEENS){
+        if(t < tween.time) break;
+        const duration = tween.steps * 0.125;
+        if(duration > 0 && t < tween.time + duration){
+            const eased = easeCurve(tween.ease, (t - tween.time) / duration);
+            return tween.from + (tween.to - tween.from) * eased;
+        }
+        current = Math.max(current, tween.to);
+    }
+    return current;
+}
+function perseveranceScroll(){ return perseveranceScrollBasePx() * perseveranceScrollSpeed(perseveranceTime()); }
+function perseveranceCurrentSkin(){ return perseveranceIsPixelPhase(perseveranceTime()) ? window.PERSEVERANCE_DATA.sprites.notes.pixel : window.PERSEVERANCE_DATA.sprites.notes.default; }
+function perseveranceDirAnim(dir){ return ({left:'singLEFT',down:'singDOWN',up:'singUP',right:'singRIGHT'})[dir]; }
+function perseveranceMissAnim(dir){ return ({left:'singLEFTmiss',down:'singDOWNmiss',up:'singUPmiss',right:'singRIGHTmiss'})[dir]; }
+function perseverancePlayerDirAnim(dir){ return ({left:'singRIGHT',down:'singDOWN',up:'singUP',right:'singLEFT'})[dir]; }
+function perseverancePlayerMissAnim(dir){ return ({left:'singRIGHTmiss',down:'singDOWNmiss',up:'singUPmiss',right:'singLEFTmiss'})[dir]; }
+function perseveranceOpponentVariant(t){
+    const m = window.PERSEVERANCE_DATA.mechanics;
+    if(perseveranceIsPixelPhase(t)) return 'pixel';
+    if(t >= 198.895349 && t < 221.795349) return 'madvoice';
+    if(t >= 163.195349) return 'red-eye';
+    if(t >= m.pixelEnd) return 'normal';
+    if(t >= 74.995349 && t < 114.595349) return 'racist';
+    if(t >= 74.472093 && t < 74.995349) return 'red-eye';
+    if(t >= 68.725 && t < 74.472093) return 'eye';
+    if(t >= 64 && t < 68.725) return 'eyedle';
+    return 'normal';
+}
+function perseveranceGrayness(t){
+    let gray = 0;
+    if(t <= 64) gray = 1;
+    else if(t < 68.725) gray = 1 - (t - 64) / (68.725 - 64);
+    if(t >= perseveranceSlowdownStart()){
+        const slowFade = Math.max(0, Math.min(1, (t - perseveranceSlowdownStart()) / 1.6));
+        gray = Math.max(gray, 0.82 * slowFade);
+    }
+    return gray;
+}
+function perseveranceIntroCover(t){ return Math.max(0, Math.min(1, 1 - t / 7)); }
+function perseveranceAnimation(sprite, name){ return sprite && sprite.animations ? sprite.animations[name] : null; }
+function perseveranceExactAnimDuration(anim){ return anim && anim.frames ? anim.frames.length / (anim.fps || 24) : 0; }
+function perseveranceGlowPhase(t){
+    if(t >= 68.725 && t < 74.472093) return { intro: "eye", loop: "eye-loop", start: 68.725 };
+    if(t >= 74.472093 && t < 74.995349) return { intro: "red_eye", loop: "red_eye-loop", start: 74.472093 };
+    if(t >= 163.195349 && t < 198.895349) return { intro: "red_eye", loop: "red_eye-loop", start: 163.195349 };
+    if(t >= 221.795349) return { intro: "red_eye", loop: "red_eye-loop", start: 221.795349 };
+    return null;
+}
+function perseveranceGlowAnim(sprite, t){
+    const phase = perseveranceGlowPhase(t);
+    if(!phase) return null;
+    const intro = perseveranceAnimation(sprite, phase.intro);
+    const loop = perseveranceAnimation(sprite, phase.loop) || intro;
+    const elapsed = Math.max(0, t - phase.start);
+    const introLen = perseveranceExactAnimDuration(intro);
+    if(intro && elapsed < introLen) return { anim: intro, elapsed, loop: false };
+    return { anim: loop, elapsed: Math.max(0, elapsed - introLen), loop: true };
+}
+function perseveranceAnimFrame(anim, elapsed, loop=false){ return anim ? frameFromList(anim.frames, elapsed, anim.fps || 24, loop || anim.loop === true) : null; }
+function perseveranceCharacter(kind, t){
+    if(!window.PERSEVERANCE_DATA) return null;
+    if(kind === 'gf'){
+        const sprite = window.PERSEVERANCE_DATA.sprites.gf;
+        const dance = Math.floor(t * 2) % 2 === 0 ? 'danceLeft' : 'danceRight';
+        return { sprite, image: perseveranceSpriteState.images.gf, anim: perseveranceAnimation(sprite, dance), elapsed: t, loop: true, flipX: false, alpha: state.perseverance.gfAlpha };
+    }
+    if(kind === 'boyfriend'){
+        const sprite = window.PERSEVERANCE_DATA.sprites.boyfriend;
+        const pose = state.poses.player;
+        if(state.perseverance.dodging){
+            const anim = perseveranceAnimation(sprite, 'dodge');
+            return { sprite, image: perseveranceSpriteState.images[anim.image === 'dodge' ? 'bfDodge' : 'bfMain'], anim, elapsed: perseveranceTime() - state.perseverance.dodgeStart, loop: false, flipX: false, alpha: perseveranceIsPixelPhase(t) ? 0.0001 : 1 };
+        }
+        const held = perseveranceHeldNote('boyfriend', perseveranceTime());
+        const dir = sportingLaneKey((held ? held.lane : pose.lane) || 0);
+        const age = performance.now() / 1000 - pose.time;
+        const animName = pose.kind === 'miss' ? perseverancePlayerMissAnim(dir) : perseverancePlayerDirAnim(dir);
+        const active = perseveranceAnimation(sprite, animName);
+        const idle = perseveranceAnimation(sprite, 'idle');
+        if(held && active) return { sprite, image: perseveranceSpriteState.images[active.image === 'dodge' ? 'bfDodge' : 'bfMain'], anim: active, elapsed: Math.max(0, perseveranceTime() - held.time), loop: false, flipX: false, alpha: perseveranceIsPixelPhase(t) ? 0.0001 : 1 };
+        if(age >= 0 && active && age < sportingAnimDuration(active.frames, active.fps || 24, 0.18, 0.6)) return { sprite, image: perseveranceSpriteState.images[active.image === 'dodge' ? 'bfDodge' : 'bfMain'], anim: active, elapsed: age, loop: false, flipX: false, alpha: perseveranceIsPixelPhase(t) ? 0.0001 : 1 };
+        return { sprite, image: perseveranceSpriteState.images[idle.image === 'dodge' ? 'bfDodge' : 'bfMain'], anim: idle, elapsed: t * 0.5, loop: true, flipX: false, alpha: perseveranceIsPixelPhase(t) ? 0.0001 : 1 };
+    }
+    const variant = perseveranceOpponentVariant(t);
+    if(variant === 'pixel'){
+        const sprite = window.PERSEVERANCE_DATA.sprites.sansPixel;
+        const pose = state.poses.sans;
+        const held = perseveranceHeldNote('sans', perseveranceTime());
+        const dir = sportingLaneKey((held ? held.lane : pose.lane) || 0);
+        const age = performance.now() / 1000 - pose.time;
+        const active = perseveranceAnimation(sprite, perseveranceDirAnim(dir));
+        const idle = perseveranceAnimation(sprite, 'idle');
+        if(held && active) return { sprite, image: perseveranceSpriteState.images.sansPixel, anim: active, elapsed: Math.max(0, perseveranceTime() - held.time), loop: false, flipX: false, alpha: 1 };
+        if(age >= 0 && active && age < sportingAnimDuration(active.frames, active.fps || 12, 0.18, 0.8)) return { sprite, image: perseveranceSpriteState.images.sansPixel, anim: active, elapsed: age, loop: false, flipX: false, alpha: 1 };
+        return { sprite, image: perseveranceSpriteState.images.sansPixel, anim: idle, elapsed: t * 0.5, loop: true, flipX: false, alpha: 1 };
+    }
+    const sprite = window.PERSEVERANCE_DATA.sprites.sans;
+    const pose = state.poses.sans;
+    const held = perseveranceHeldNote('sans', perseveranceTime());
+    const dir = sportingLaneKey((held ? held.lane : pose.lane) || 0);
+    const age = performance.now() / 1000 - pose.time;
+    const glow = perseveranceGlowAnim(sprite, t);
+    const suffix = variant === 'racist' ? '-racist' : variant === 'madvoice' ? '-mad' : '';
+    const idleName = variant === 'eyedle' ? 'eyedle' : ('idle' + suffix);
+    const hitName = perseveranceDirAnim(dir) + suffix;
+    const active = perseveranceAnimation(sprite, hitName) || perseveranceAnimation(sprite, perseveranceDirAnim(dir));
+    const idle = perseveranceAnimation(sprite, idleName) || perseveranceAnimation(sprite, 'idle');
+    if(variant === 'madvoice'){
+        const startedAt = 198.895349;
+        const intro = perseveranceAnimation(sprite, 'madvoiceline');
+        const introLen = perseveranceExactAnimDuration(intro);
+        if(intro && t < startedAt + introLen && !(held && active) && !(age >= 0 && active && age < sportingAnimDuration(active.frames, active.fps || 24, 0.16, 0.7))) return { sprite, image: perseveranceSpriteState.images.sans, anim: intro, elapsed: Math.max(0, t - startedAt), loop: false, flipX: false, alpha: 1 };
+    }
+    if(held && active) return { sprite, image: perseveranceSpriteState.images.sans, anim: active, elapsed: Math.max(0, perseveranceTime() - held.time), loop: false, flipX: false, alpha: 1, overlayAnim: glow && (variant === 'eye' || variant === 'red-eye') ? glow.anim : null, overlayElapsed: glow ? glow.elapsed : 0, overlayLoop: glow ? glow.loop : false };
+    if(age >= 0 && active && age < sportingAnimDuration(active.frames, active.fps || 24, 0.16, 0.7)) return { sprite, image: perseveranceSpriteState.images.sans, anim: active, elapsed: age, loop: false, flipX: false, alpha: 1, overlayAnim: glow && (variant === 'eye' || variant === 'red-eye') ? glow.anim : null, overlayElapsed: glow ? glow.elapsed : 0, overlayLoop: glow ? glow.loop : false };
+    if(glow && (variant === 'eye' || variant === 'red-eye')) return { sprite, image: perseveranceSpriteState.images.sans, anim: glow.anim, elapsed: glow.elapsed, loop: glow.loop, flipX: false, alpha: 1 };
+    return { sprite, image: perseveranceSpriteState.images.sans, anim: idle, elapsed: t * 0.5, loop: true, flipX: false, alpha: 1 };
+}
+function _anchoredFrame(frame){
+    return { x: frame.x, y: frame.y, w: frame.w, h: frame.h, fw: frame.fw, fh: frame.fh, fx: frame.fx || 0, fy: 0, rotated: frame.rotated };
+}
+function drawPerseveranceCharacter(kind, x, y, scale, t){
+    const data = perseveranceCharacter(kind, t);
+    if(!data || !data.anim) return;
+    const frame = perseveranceAnimFrame(data.anim, data.elapsed, !!data.loop);
+    if(!frame) return;
+    const off = data.anim.offset || [0,0];
+    const alpha = data.alpha == null ? 1 : data.alpha;
+    const drawX = x;
+    const drawY = y;
+    const drawScale = scale * (data.sprite.scale || 1);
+    const anchored = _anchoredFrame(frame);
+    const silhouette = (t < 16 || state._flashWhiteSilhouette) && (kind === "sans" || kind === "boyfriend");
+    if(silhouette){
+        drawAtlasFrameSilhouette(data.image, anchored, drawX, drawY, drawScale, alpha, !!data.flipX, state._flashWhiteSilhouette ? "#fff" : "#000");
+        return;
+    }
+    const bloom = perseveranceBloomStrength(t);
+    if(bloom > 0.001 && kind !== "gf" && !perseveranceIsPixelPhase(t)){
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.filter = "blur(" + (8 + bloom * 18).toFixed(2) + "px) brightness(" + (1.2 + bloom * 0.9).toFixed(2) + ")";
+        drawAtlasFrame(data.image, anchored, drawX, drawY, drawScale, alpha * Math.min(0.6, bloom), !!data.flipX);
+        ctx.restore();
+    }
+    drawAtlasFrame(data.image, anchored, drawX, drawY, drawScale, alpha, !!data.flipX);
+    if(data.overlayAnim){
+        const overlayFrame = perseveranceAnimFrame(data.overlayAnim, data.overlayElapsed || 0, !!data.overlayLoop);
+        if(overlayFrame){
+            const overlayOff = data.overlayAnim.offset || [0,0];
+            ctx.save();
+            ctx.globalCompositeOperation = "screen";
+            drawAtlasFrame(data.image, _anchoredFrame(overlayFrame), x + overlayOff[0] * scale, y, drawScale, Math.min(0.95, alpha * 0.92), !!data.flipX);
+            ctx.restore();
+        }
+    }
+}
+function drawPerseverancePixelCell(image, index, x, y, scale, alpha=1){
+    const cell = window.PERSEVERANCE_DATA.sprites.notes.pixel.cell;
+    const cols = Math.floor(image.naturalWidth / cell);
+    const sx = (index % cols) * cell;
+    const sy = Math.floor(index / cols) * cell;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(image, sx, sy, cell, cell, x - cell * scale / 2, y - cell * scale / 2, cell * scale, cell * scale);
+    ctx.restore();
+}
+function drawPerseverancePixelSlice(image, sx, sy, sw, sh, x, y, w, h, alpha=1){
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(image, sx, sy, sw, sh, x, y, w, h);
+    ctx.restore();
+}
+function drawAtlasStretchVertical(image, frame, x, y, width, height, alpha=1){
+    if(height <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    if(frame.rotated){
+        ctx.translate(x - width / 2, y + height);
+        ctx.rotate(-Math.PI / 2);
+        ctx.drawImage(image, frame.x, frame.y, frame.w, frame.h, 0, 0, height, width);
+    } else {
+        ctx.drawImage(image, frame.x, frame.y, frame.w, frame.h, x - width / 2, y, width, height);
+    }
+    ctx.restore();
+}
+function isHoldNote(note){ return (note.sLen || 0) > 0.05; }
+function holdEndTime(note){ return note.time + Math.max(0, note.sLen || 0); }
+function perseveranceHeldNote(char, t){
+    if(!state.chart) return null;
+    for(const n of state.chart.notes){
+        if(!n.holdActive || n.holdDone || !isHoldNote(n) || n.character !== char) continue;
+        if(t < n.time || t > holdEndTime(n)) continue;
+        if(n.side === "player" && t > n.time + 0.09 && !state.keysDown[n.lane]) continue;
+        return n;
+    }
+    return null;
+}
+function drawPerseveranceSustain(note, x, topY, tailY, alpha=1){
+    if(!isHoldNote(note) || tailY <= topY + 12) return;
+    const skin = perseveranceCurrentSkin();
+    if(skin.cell){
+        const hold = skin.hold;
+        const img = perseveranceSpriteState.images.notesPixelEnds;
+        if(!hold || !img) return;
+        const colW = Math.floor(img.naturalWidth / 4);
+        const bodyH = hold.bodyHeight;
+        const capH = hold.capHeight;
+        const sx = (note.lane % 4) * colW;
+        const scale = 3.45;
+        const bodyW = colW * scale;
+        const bodyTop = topY + 12;
+        const capPx = capH * scale;
+        const bodyBottom = tailY - capPx * 0.55;
+        if(bodyBottom > bodyTop){
+            drawPerseverancePixelSlice(img, sx, 0, colW, bodyH, x - bodyW / 2, bodyTop, bodyW, bodyBottom - bodyTop, alpha * 0.94);
+        }
+        drawPerseverancePixelSlice(img, sx, bodyH, colW, capH, x - bodyW / 2, tailY - capPx / 2, bodyW, capPx, alpha);
+        return;
+    }
+    const dir = sportingLaneKey(note.lane);
+    const hold = skin.hold && skin.hold[dir];
+    if(!hold || !hold.piece || !hold.end) return;
+    const bodyScale = 0.68;
+    const bodyTop = topY + 30;
+    const endH = (hold.end.fh || hold.end.h) * bodyScale;
+    const bodyBottom = tailY - endH * 0.45;
+    const bodyW = (hold.piece.fw || hold.piece.w) * bodyScale;
+    // glow behind hold trail
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.18;
+    const laneColor = COLORS[note.lane];
+    ctx.shadowBlur = 14;
+    ctx.shadowColor = laneColor;
+    ctx.fillStyle = laneColor;
+    const glowW = bodyW * 0.6;
+    if(bodyBottom > bodyTop){
+        ctx.beginPath();
+        ctx.roundRect(x - glowW / 2, bodyTop, glowW, bodyBottom - bodyTop + endH * 0.5, glowW / 2);
+        ctx.fill();
+    }
+    ctx.restore();
+    if(bodyBottom > bodyTop){
+        drawAtlasStretchVertical(perseveranceSpriteState.images.notesDefault, hold.piece, x, bodyTop, bodyW, bodyBottom - bodyTop, alpha * 0.88);
+    }
+    drawAtlasCentered(perseveranceSpriteState.images.notesDefault, hold.end, x, tailY, bodyScale, alpha);
+}
+function drawPerseveranceReceptor(lane, x, y){
+    const skin = perseveranceCurrentSkin();
+    const age = performance.now() / 1000 - state.receptorFx[lane].time;
+    const dir = sportingLaneKey(lane);
+    if(skin.cell){
+        const idx = lane % 4;
+        if(age < 0.16){ const seq = skin.confirm[idx]; const frameIndex = seq[Math.min(seq.length - 1, Math.floor(age * 20))]; drawPerseverancePixelCell(perseveranceSpriteState.images.notesPixel, frameIndex, x, y, 4.1, 1 - age / 0.16); return; }
+        if(state.keysDown[lane]){ const seq = skin.press[idx]; const frameIndex = seq[Math.floor(performance.now() / 100) % seq.length]; drawPerseverancePixelCell(perseveranceSpriteState.images.notesPixel, frameIndex, x, y, 3.9, lane < 4 ? 0.88 : 1); return; }
+        drawPerseverancePixelCell(perseveranceSpriteState.images.notesPixel, skin.static[idx], x, y, 3.9, lane < 4 ? 0.88 : 1);
+        return;
+    }
+    if(age < 0.16){ const frame = frameFromList(skin.confirm[dir], age, 24, false); if(frame){ ctx.save(); ctx.shadowBlur = 24 + perseveranceBloomStrength(perseveranceTime()) * 50; ctx.shadowColor = COLORS[lane]; drawAtlasCentered(perseveranceSpriteState.images.notesDefault, frame, x, y, 0.72 + (0.16 - age) * 0.6, 1 - age / 0.16); ctx.restore(); return; } }
+    const pressed = state.keysDown[lane] ? frameFromList(skin.press[dir], performance.now() / 1000, 24, true) : skin.static[dir];
+    if(pressed){ ctx.save(); ctx.shadowBlur = 16 + perseveranceBloomStrength(perseveranceTime()) * 40; ctx.shadowColor = COLORS[lane]; drawAtlasCentered(perseveranceSpriteState.images.notesDefault, pressed, x, y, 0.68, lane < 4 ? 0.88 : 1); ctx.restore(); }
+}
+function drawPerseveranceNote(lane, x, y, scale, alpha=1){
+    const skin = perseveranceCurrentSkin();
+    if(skin.cell){ drawPerseverancePixelCell(perseveranceSpriteState.images.notesPixel, skin.gem[lane % 4], x, y, 3.8 * scale, alpha); return; }
+    const frame = skin.gem[sportingLaneKey(lane)];
+    if(frame){
+        ctx.save();
+        ctx.shadowBlur = 18 + perseveranceBloomStrength(perseveranceTime()) * 45;
+        ctx.shadowColor = COLORS[lane];
+        drawAtlasCentered(perseveranceSpriteState.images.notesDefault, frame, x, y, 0.7 * scale, alpha);
+        ctx.restore();
+    }
+}
+function updatePerseveranceState(t){
+    if(state.selectedSong !== 'perseverance' || !window.PERSEVERANCE_DATA) return;
+    const m = window.PERSEVERANCE_DATA.mechanics;
+    const p = state.perseverance;
+    p.canDodge = t >= m.dodgeReady && t < m.dodgeFire && !p.resolved;
+    p.prompt = t >= m.dodgeWarn && t < m.dodgeFire && !p.resolved;
+    if(p.dodging && t > p.dodgeStart + 0.8) p.dodging = false;
+    if(!p.resolved && t >= m.dodgeFire){
+        p.resolved = true;
+        p.flashTime = t;
+        if(!p.dodged){ state.health = Math.min(state.health, 0.05); pose('player', 1, 'miss'); }
+    }
+    if(t >= m.dodgeEnd) p.prompt = false;
+    p.gfAlpha = t >= m.dodgeEnd ? Math.min(0.7, (t - m.dodgeEnd) * 0.35) : 0;
+    if(p.prompt && !p.dodged) { ui.statusText.textContent = 'Dodge'; ui.statusSub.textContent = 'Press Space before the blaster fires.'; }
+}
+initPerseveranceSprites();
+initSportingSprites();
+const state = {
+    settings: loadSettings(), selectedSong: "sporting", binding: null, keyMap: {}, keysDown: {}, mode: "solo",
+    playing: false, chart: null, songStart: 0, nextStep: 0, nextStepTime: 0, health: 0.65, lastFrame: performance.now(), currentSong: SONGS.sporting,
+    stats: null, feeds: { player:{text:"",time:-10,color:"#56d7ff"}, opp:{text:"",time:-10,color:"#ff9c48"} },
+    poses: { player:{lane:2,time:-10}, dad:{lane:1,time:-10}, matt:{lane:1,time:-10}, sans:{lane:1,time:-10}, skid:{lane:0,time:-10}, pump:{lane:3,time:-10}, pico:{lane:1,time:-10}, monster:{lane:2,time:-10} },
+    receptorFx: Array.from({length:8}, () => ({ time:-10, lane:0 })),
+    perseverance: { canDodge:false, prompt:false, dodging:false, dodged:false, resolved:false, dodgeStart:-10, flashTime:-10, gfAlpha:0 },
+    audio: { ctx:null, noise:null, inst:null, voices:null, inst2:null, voices2a:null, voices2b:null },
+    shake: { time: -10, intensity: 0 }, _flashWhiteSilhouette: false,
+    camera: { zoom: 1, focusX: 640, focusY: 324, sideTime: 0, lastSide: "both" },
+    hitGlow: []
+};
+function copy(v){ return JSON.parse(JSON.stringify(v)); }
+function loadSettings(){ try { const s = JSON.parse(localStorage.getItem(STORAGE)); return s ? { solo:{...DEFAULTS.solo,...s.solo}, p1:{...DEFAULTS.p1,...s.p1}, p2:{...DEFAULTS.p2,...s.p2} } : copy(DEFAULTS); } catch { return copy(DEFAULTS); } }
+function saveSettings(){ localStorage.setItem(STORAGE, JSON.stringify(state.settings)); }
+function keyName(k){ if(k === " ") return "Space"; if(k.startsWith("arrow")) return "Arrow " + k.slice(5,6).toUpperCase() + k.slice(6); return k.length === 1 ? k.toUpperCase() : k.replace(/^\w/, c => c.toUpperCase()); }
+function clamp(v,a,b){ return Math.min(b, Math.max(a, v)); }
+function midiToFreq(m){ return 440 * Math.pow(2, (m - 69) / 12); }
+function degree(root, scale, deg, oct=0){ const len = scale.length; const i = ((deg % len) + len) % len; return root + scale[i] + (Math.floor(deg / len) + oct) * 12; }
+function mulberry32(seed){ return function(){ let t = seed += 0x6D2B79F5; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function formatTime(s){ s = Math.max(0, s); const m = Math.floor(s / 60); const sec = Math.floor(s % 60).toString().padStart(2, "0"); return `${m}:${sec}`; }
+function accuracy(stats){ return stats.judged ? stats.points / stats.judged : 1; }
+function rating(acc){ if(acc >= .995) return "SS Sick"; if(acc >= .96) return "S Clean"; if(acc >= .9) return "A Fresh"; if(acc >= .82) return "B Funky"; if(acc >= .72) return "C Shaky"; return "D Scramble"; }
+function grade(acc){ if(acc >= .995) return "SS"; if(acc >= .96) return "S"; if(acc >= .9) return "A"; if(acc >= .82) return "B"; if(acc >= .72) return "C"; return "D"; }
+function rebuildKeyMap(){
+    const map = {};
+    Object.entries(state.settings.solo).forEach(([dir,key]) => map[key] = 4 + DIRS.indexOf(dir));
+    if(state.mode === "versus"){
+        Object.entries(state.settings.p1).forEach(([dir,key]) => map[key] = DIRS.indexOf(dir));
+        Object.entries(state.settings.p2).forEach(([dir,key]) => map[key] = 4 + DIRS.indexOf(dir));
+    }
+    state.keyMap = map;
+}
+function bindButton(container, group, title){
+    if(title){ const t = document.createElement("div"); t.className = "eyebrow"; t.style.marginBottom = "6px"; t.textContent = title; container.appendChild(t); }
+    DIRS.forEach(dir => {
+        const b = document.createElement("button");
+        b.className = "bind";
+        b.innerHTML = `<span>${dir[0].toUpperCase() + dir.slice(1)}</span><strong>${keyName(state.settings[group][dir])}</strong>`;
+        b.onclick = () => { clearBinding(); state.binding = { group, dir, el:b }; b.classList.add("waiting"); b.querySelector("strong").textContent = "Press a key"; };
+        container.appendChild(b);
+    });
+}
+function renderBinds(){ ui.soloBinds.innerHTML = ""; ui.p1Binds.innerHTML = ""; ui.p2Binds.innerHTML = ""; bindButton(ui.soloBinds, "solo"); bindButton(ui.p1Binds, "p1", "Player 1"); bindButton(ui.p2Binds, "p2", "Player 2"); }
+function clearBinding(){ if(!state.binding) return; state.binding.el.classList.remove("waiting"); state.binding.el.querySelector("strong").textContent = keyName(state.settings[state.binding.group][state.binding.dir]); state.binding = null; }
+function selectSong(id){
+    state.selectedSong = id; state.currentSong = SONGS[id];
+    ui.songList.querySelectorAll(".songCard").forEach(el => el.classList.toggle("selected", el.dataset.id === id));
+    ui.songTitle.textContent = state.currentSong.title; ui.songSub.textContent = state.currentSong.subtitle; ui.difficulty.textContent = `Difficulty: ${state.currentSong.diff}`;
+    if(!state.playing){ ui.statusText.textContent = `Selected: ${state.currentSong.title}`; ui.statusSub.textContent = state.currentSong.blurb; }
+}
+function renderSongs(){
+    ui.songList.innerHTML = "";
+    Object.entries(SONGS).forEach(([id, song]) => {
+        const card = document.createElement("button");
+        card.className = "songCard"; card.dataset.id = id;
+        card.innerHTML = `<div class="name">${song.title}</div><div class="meta"><span>${song.subtitle}</span><span>${song.tempo} BPM</span></div><div class="desc">${song.blurb}</div>`;
+        card.onclick = () => selectSong(id);
+        ui.songList.appendChild(card);
+    });
+    selectSong(state.selectedSong);
+}
+function note(notes, beat, side, lane, character){ notes.push({ beat, lane: side === "player" ? lane + 4 : lane, side, character, time: 0, judged:false, hit:false, played:false }); }
+function phrase(notes, rng, startBeat, beats, side, motif, intensity, chars){
+    const stepSize = intensity >= .86 ? .25 : intensity >= .56 ? .5 : 1;
+    const steps = Math.max(1, Math.floor(beats / stepSize));
+    const rot = Math.floor(rng() * motif.length);
+    for(let i=0;i<steps;i++){
+        const beat = startBeat + i * stepSize;
+        const local = i * stepSize;
+        const anchor = local === 0 || Math.abs(local - beats / 2) < .01 || Math.abs(local - (beats - stepSize)) < .01;
+        const chance = anchor ? .95 : clamp(.3 + intensity * .58, 0, .92);
+        if(rng() > chance) continue;
+        let lane = motif[(i + rot) % motif.length];
+        if(rng() < intensity * .15) lane = (lane + 1 + Math.floor(rng() * 2)) % 4;
+        const char = side === "player" ? "player" : chars[Math.floor(rng() * chars.length)];
+        note(notes, beat, side, lane, char);
+        if(stepSize <= .5 && intensity > .76 && rng() < .15){ const grace = beat + stepSize / 2; if(grace < startBeat + beats) note(notes, grace, side, (lane + 1) % 4, char); }
+    }
+}
+function isImportedSong(song){ return !!song && (song.chartSource === "sporting" || song.chartSource === "perseverance"); }
+function makeChart(song){ if(song.chartSource === "sporting" && window.SPORTING_CHART){ return { ...window.SPORTING_CHART, notes: window.SPORTING_CHART.notes.map(n => ({...n})), timeline: window.SPORTING_CHART.timeline.map(s => ({...s})) }; }
+    if(song.chartSource === "perseverance" && window.PERSEVERANCE_DATA){ return { ...window.PERSEVERANCE_DATA.chart, notes: window.PERSEVERANCE_DATA.chart.notes.map(n => ({...n})), timeline: window.PERSEVERANCE_DATA.chart.timeline.map(s => ({...s})) }; }
+    const rng = mulberry32(song.seed); const notes = []; const timeline = []; let beat = song.introBeats ?? 4;
+    song.sections.forEach((section, idx) => {
+        const start = beat;
+        for(let bar=0; bar<section.bars; bar++){
+            const startBeat = beat + bar * 4;
+            const motif = MOTIFS[(idx + bar) % MOTIFS.length];
+            const reply = [...motif].reverse();
+            if(section.turn === "opp") phrase(notes, rng, startBeat, 4, "opp", motif, section.int, section.chars);
+            else if(section.turn === "player") phrase(notes, rng, startBeat, 4, "player", reply, section.int, section.chars);
+            else if(section.turn === "trade") { phrase(notes, rng, startBeat, 2, "opp", motif, section.int, section.chars); phrase(notes, rng, startBeat + 2, 2, "player", reply, section.int + .06, section.chars); }
+            else { phrase(notes, rng, startBeat, 4, "opp", motif, section.int, section.chars); phrase(notes, rng, startBeat + .5, 3.5, "player", reply, section.int + .05, section.chars); }
+        }
+        beat += section.bars * 4;
+        timeline.push({ ...section, startBeat:start, endBeat:beat });
+    });
+    const outroBeats = song.outroBeats ?? 4;
+    const totalBeats = beat + outroBeats;
+    const spb = 60 / song.tempo;
+    notes.forEach(n => n.time = n.beat * spb);
+    notes.sort((a,b) => a.time - b.time);
+    return { notes, timeline, totalBeats, totalTime: totalBeats * spb, spb };
+}
+function currentSection(beat){ return state.chart.timeline.find(s => beat >= s.startBeat && beat < s.endBeat) || state.chart.timeline[state.chart.timeline.length - 1]; }
+function blankSide(){ return { score:0, combo:0, maxCombo:0, points:0, judged:0, judgments:{ perfect:0, good:0, bad:0, miss:0 } }; }
+function resetStats(){ state.stats = { player: blankSide(), opp: blankSide() }; }
+function ensureAudio(){
+    if(state.audio.ctx) return state.audio.ctx;
+    const a = new (window.AudioContext || window.webkitAudioContext)();
+    const buffer = a.createBuffer(1, a.sampleRate, a.sampleRate);
+    const data = buffer.getChannelData(0); for(let i=0;i<data.length;i++) data[i] = Math.random() * 2 - 1;
+    state.audio.ctx = a; state.audio.noise = buffer; return a;
+}
+function ensureSportingAudio(){
+    if(!state.audio.inst){ state.audio.inst = new Audio("sporting-inst.ogg"); state.audio.inst.preload = "auto"; state.audio.inst.volume = 0.9; }
+    if(!state.audio.voices){ state.audio.voices = new Audio("sporting-voices.ogg"); state.audio.voices.preload = "auto"; state.audio.voices.volume = 0.82; }
+}
+function ensurePerseveranceAudio(){
+    if(!state.audio.inst2){ state.audio.inst2 = new Audio("perseverance-inst.ogg"); state.audio.inst2.preload = "auto"; state.audio.inst2.volume = 0.92; }
+    if(!state.audio.voices2a){ state.audio.voices2a = new Audio("perseverance-voices-bf.ogg"); state.audio.voices2a.preload = "auto"; state.audio.voices2a.volume = 0.82; }
+    if(!state.audio.voices2b){ state.audio.voices2b = new Audio("perseverance-voices-opp.ogg"); state.audio.voices2b.preload = "auto"; state.audio.voices2b.volume = 0.84; }
+}
+function stopExternalAudio(){
+    [state.audio.inst, state.audio.voices, state.audio.inst2, state.audio.voices2a, state.audio.voices2b].forEach(track => {
+        if(!track) return;
+        track.pause();
+        track.currentTime = 0;
+    });
+}
+function kick(time, power=1){ const a = state.audio.ctx, o = a.createOscillator(), g = a.createGain(); o.type = "sine"; o.frequency.setValueAtTime(160, time); o.frequency.exponentialRampToValueAtTime(38, time + .18); g.gain.setValueAtTime(.0001, time); g.gain.exponentialRampToValueAtTime(.6 * power, time + .01); g.gain.exponentialRampToValueAtTime(.0001, time + .2); o.connect(g); g.connect(a.destination); o.start(time); o.stop(time + .24); }
+function snare(time, power=1){ const a = state.audio.ctx, n = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain(); n.buffer = state.audio.noise; f.type = "bandpass"; f.frequency.setValueAtTime(1800, time); g.gain.setValueAtTime(.0001, time); g.gain.exponentialRampToValueAtTime(.24 * power, time + .002); g.gain.exponentialRampToValueAtTime(.0001, time + .18); n.connect(f); f.connect(g); g.connect(a.destination); n.start(time); n.stop(time + .2); }
+function hat(time, open=false){ const a = state.audio.ctx, n = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain(); n.buffer = state.audio.noise; f.type = "highpass"; f.frequency.setValueAtTime(5500, time); g.gain.setValueAtTime(.0001, time); g.gain.exponentialRampToValueAtTime(open ? .09 : .05, time + .002); g.gain.exponentialRampToValueAtTime(.0001, time + (open ? .18 : .05)); n.connect(f); f.connect(g); g.connect(a.destination); n.start(time); n.stop(time + (open ? .18 : .05)); }
+function bass(time, midi, len, vol=.2){ const a = state.audio.ctx, o = a.createOscillator(), s = a.createOscillator(), g = a.createGain(); o.type = "sawtooth"; s.type = "triangle"; o.frequency.setValueAtTime(midiToFreq(midi), time); s.frequency.setValueAtTime(midiToFreq(midi - 12), time); g.gain.setValueAtTime(.0001, time); g.gain.linearRampToValueAtTime(.25 * vol, time + .01); g.gain.exponentialRampToValueAtTime(.08 * vol, time + .08); g.gain.exponentialRampToValueAtTime(.0001, time + Math.max(.16, len)); o.connect(g); s.connect(g); g.connect(a.destination); o.start(time); s.start(time); o.stop(time + len + .08); s.stop(time + len + .08); }
+function chord(time, notes, len, vol=.12){ const a = state.audio.ctx, g = a.createGain(); g.gain.setValueAtTime(.0001, time); g.gain.linearRampToValueAtTime(vol, time + .02); g.gain.exponentialRampToValueAtTime(.0001, time + len + .08); g.connect(a.destination); notes.forEach((m,i) => { const o = a.createOscillator(); o.type = i ? "sawtooth" : "triangle"; o.frequency.setValueAtTime(midiToFreq(m), time); o.connect(g); o.start(time); o.stop(time + len + .08); }); }
+function lead(time, midi, len, vol=.14){ const a = state.audio.ctx, o = a.createOscillator(), g = a.createGain(); o.type = "square"; o.frequency.setValueAtTime(midiToFreq(midi), time); g.gain.setValueAtTime(.0001, time); g.gain.linearRampToValueAtTime(vol, time + .004); g.gain.exponentialRampToValueAtTime(.0001, time + Math.max(.08, len)); o.connect(g); g.connect(a.destination); o.start(time); o.stop(time + len + .05); }
+function voice(time, side, lane, vol=1, char="player"){ const a = state.audio.ctx, o = a.createOscillator(), g = a.createGain(); o.type = char === "monster" ? "sawtooth" : char === "pico" ? "square" : char === "dad" ? "triangle" : "square"; const base = side === "player" ? 330 : char === "monster" ? 130 : char === "dad" ? 190 : 220; o.frequency.setValueAtTime(base + lane * 55, time); o.frequency.exponentialRampToValueAtTime(base + lane * 55 + 18, time + .06); g.gain.setValueAtTime(.0001, time); g.gain.exponentialRampToValueAtTime(.12 * vol, time + .003); g.gain.exponentialRampToValueAtTime(.0001, time + .09); o.connect(g); g.connect(a.destination); o.start(time); o.stop(time + .1); }
+function scheduleStep(step, time, section){
+    const p = PATTERNS[section.style], s16 = step % 16, s8 = Math.floor(s16 / 2), beat = step / 4, bar = Math.floor(step / 16), root = state.currentSong.root + state.currentSong.prog[bar % state.currentSong.prog.length];
+    const useSporting = false;
+    if(useSporting){
+        if(SPORTING_BEAT.kicks.includes(s16)) kick(time, .92 + section.int * .3);
+        if(SPORTING_BEAT.snares.includes(s16)) snare(time, .95 + section.int * .2);
+        if(SPORTING_BEAT.hats.includes(s16)) hat(time, SPORTING_BEAT.openHats.includes(s16));
+    } else {
+        if(p.kick.includes(s16)) kick(time, .8 + section.int * .35);
+        if(p.snare.includes(s16)) snare(time, .8 + section.int * .2);
+        if(p.hat.includes(s16)) hat(time, section.int > .8 && s16 % 4 === 3);
+    }
+    const b = p.bass[s8]; if(b !== null && s16 % 2 === 0) bass(time, degree(root - 12, state.currentSong.scale, b), state.chart.spb * .48, .8 + section.int * .4);
+    if(p.chords.includes(s16)){ const r = degree(root, state.currentSong.scale, 0); chord(time, [r, degree(root, state.currentSong.scale, 2), degree(root, state.currentSong.scale, 4)], state.chart.spb * .72, .1 + section.int * .06); }
+    if(useSporting){
+        const phaseBar = Math.floor((beat - section.startBeat) / 4) % SPORTING_BEAT.riff.length;
+        const midi = SPORTING_BEAT.riff[phaseBar][s16];
+        if(midi !== null) lead(time, midi + 12, state.chart.spb * .22, .14 + section.int * .05);
+    } else {
+        const l = p.lead[s16]; if(l !== null) lead(time, degree(root + 12, state.currentSong.scale, l), state.chart.spb * .18, .08 + section.int * .06);
+    }
+}
+function scheduleMusic(){
+    const a = state.audio.ctx, look = .14;
+    while(state.nextStepTime < a.currentTime + look){
+        const beat = state.nextStep / 4; if(beat > state.chart.totalBeats + 1) break;
+        scheduleStep(state.nextStep, state.nextStepTime, currentSection(beat));
+        state.nextStep++; state.nextStepTime += state.chart.spb / 4;
+    }
+}
+function songTime(){ if(!state.playing) return 0; if(state.currentSong.chartSource === "sporting" && state.audio.inst) return state.audio.inst.currentTime; if(state.currentSong.chartSource === "perseverance" && state.audio.inst2) return state.audio.inst2.currentTime; return !state.audio.ctx ? 0 : state.audio.ctx.currentTime - state.songStart; }
+function feed(side, text, color){ state.feeds[side] = { text, color, time: performance.now() / 1000 }; }
+function pose(char, lane, kind="hit"){
+    if(!state.poses[char]) return;
+    state.poses[char].lane = lane;
+    state.poses[char].time = performance.now() / 1000;
+    state.poses[char].kind = kind;
+}
+function judge(side, kind, lane, char){
+    const stats = side === "player" ? state.stats.player : state.stats.opp;
+    const points = { perfect:1, good:.75, bad:.4, miss:0 }[kind];
+    const gain = { perfect:350, good:220, bad:90, miss:0 }[kind];
+    const color = { perfect:"#67ff9a", good:"#4de3ff", bad:"#ffd35b", miss:"#ff6d7a" }[kind];
+    const label = { perfect:"SICK", good:"GOOD", bad:"BAD", miss:"MISS" }[kind];
+    if(kind === "miss") stats.combo = 0; else { stats.combo++; stats.maxCombo = Math.max(stats.maxCombo, stats.combo); stats.score += gain + stats.combo * 12; if(!isImportedSong(state.currentSong)) voice(state.audio.ctx.currentTime, side, lane % 4, kind === "perfect" ? 1.15 : .95, char); }
+    stats.points += points; stats.judged++; stats.judgments[kind]++;
+    if(side === "player"){
+        if(kind === "perfect") state.health = clamp(state.health + .028, 0, 1);
+        if(kind === "good") state.health = clamp(state.health + .016, 0, 1);
+        if(kind === "bad") state.health = clamp(state.health - .018, 0, 1);
+        if(kind === "miss") state.health = clamp(state.health - .11, 0, 1);
+    }
+    if(kind !== "miss"){
+        state.receptorFx[lane] = { time: performance.now() / 1000, lane };
+        if(kind === "perfect" || kind === "good"){
+            state.hitGlow.push({ time: performance.now() / 1000, lane, color });
+            if(state.hitGlow.length > 12) state.hitGlow.shift();
+        }
+    } else {
+        state.shake = { time: performance.now() / 1000, intensity: 4 };
+    }
+    feed(side, label, color); pose(char, lane % 4, kind === "miss" ? "miss" : "hit");
+}
+function handlePress(lane){
+    if(!state.playing || !state.chart) return;
+    const t = songTime(); const side = lane < 4 ? "opp" : "player";
+    if(side === "opp" && state.mode !== "versus") return;
+    let best = null, bestDiff = Infinity;
+    for(const n of state.chart.notes){
+        if(n.judged || n.side !== side || n.lane !== lane) continue;
+        const d = Math.abs(n.time - t); if(d < bestDiff){ bestDiff = d; best = n; }
+        if(n.time - t > .2) break;
+    }
+    if(!best || bestDiff > .155) return;
+    best.judged = true; best.played = true; best.hit = true;
+    if(isHoldNote(best)){
+        best.holdActive = true;
+        best.holdDone = false;
+        best.played = false;
+    }
+    if(bestDiff <= .045) judge(side, "perfect", lane, best.character); else if(bestDiff <= .09) judge(side, "good", lane, best.character); else judge(side, "bad", lane, best.character);
+}
+function handleMisses(t){
+    for(const n of state.chart.notes){
+        if(n.judged) continue;
+        if(n.side === "opp" && state.mode === "solo" && t >= n.time){
+            n.judged = true; n.played = true; n.hit = true;
+            if(isHoldNote(n)){
+                n.holdActive = true;
+                n.holdDone = false;
+                n.played = false;
+            }
+            if(!isImportedSong(state.currentSong)) voice(state.audio.ctx.currentTime, "opp", n.lane % 4, .95, n.character);
+            pose(n.character, n.lane % 4, "hit");
+            continue;
+        }
+        if(t > n.time + .16){ n.judged = true; n.played = true; judge(n.side, "miss", n.lane, n.character); }
+    }
+}
+function updateHoldNotes(t){
+    if(!state.chart) return;
+    for(const n of state.chart.notes){
+        if(!n.holdActive || n.holdDone || !isHoldNote(n)) continue;
+        const end = holdEndTime(n);
+        if(t >= end - 0.02){
+            n.holdDone = true;
+            n.played = true;
+            continue;
+        }
+        if(n.side === "opp") continue;
+        if(t > n.time + 0.09 && !state.keysDown[n.lane]){
+            n.holdDone = true;
+            n.played = true;
+            judge(n.side, "miss", n.lane, n.character);
+        }
+    }
+}
+function perseveranceSection(t){ return window.PERSEVERANCE_DATA?.chart.timeline.find(sec => t >= sec.startTime && t < sec.endTime); }
+function updateCamera(t, dt){
+    const mode = ui.cameraMode ? ui.cameraMode.value : "off";
+    if(mode === "off"){ state.camera.zoom = 1; state.camera.focusX = canvas.width / 2; state.camera.focusY = canvas.height * 0.45; return; }
+    if(!state.chart) return;
+    // determine who's playing by looking at notes in a 2s window
+    let hasOpp = false, hasPlayer = false;
+    for(const n of state.chart.notes){
+        if(n.time < t - 0.5) continue;
+        if(n.time > t + 2) break;
+        if(n.side === "opp") hasOpp = true;
+        if(n.side === "player") hasPlayer = true;
+    }
+    let side = hasOpp && hasPlayer ? "both" : hasOpp ? "opp" : hasPlayer ? "player" : state.camera.lastSide;
+    if(side !== state.camera.lastSide){ state.camera.sideTime = t; state.camera.lastSide = side; }
+    const elapsed = t - state.camera.sideTime;
+    // focus points for perseverance: sans ~486, bf ~854, center ~670
+    // for sporting/default: similar positions
+    const sansX = 486, bfX = 854, midX = canvas.width / 2, midY = canvas.height * 0.45;
+    let targetZoom = 1, targetX = midX, targetY = midY;
+    if(elapsed >= 2){
+        if(mode === "center"){
+            targetZoom = side === "both" ? 1 : 1.12;
+            targetX = side === "opp" ? sansX : side === "player" ? bfX : midX;
+        } else {
+            targetZoom = side === "both" ? 1 : 1.15;
+            targetX = side === "opp" ? sansX : side === "player" ? bfX : midX;
+        }
+    }
+    // smooth lerp
+    const speed = Math.min(1, dt * 1.8);
+    state.camera.zoom += (targetZoom - state.camera.zoom) * speed;
+    state.camera.focusX += (targetX - state.camera.focusX) * speed;
+    state.camera.focusY += (targetY - state.camera.focusY) * speed;
+}
+function refreshHUD(t){
+    const acc = accuracy(state.stats.player), sec = currentSection(t / state.chart.spb), p = state.stats.player;
+    ui.score.textContent = p.score.toLocaleString(); ui.combo.textContent = `Max Combo ${p.maxCombo}`; ui.accuracy.textContent = (acc * 100).toFixed(2) + "%"; ui.rating.textContent = rating(acc); ui.healthFill.style.width = (state.health * 100).toFixed(1) + "%"; ui.timer.textContent = `${formatTime(t)} / ${formatTime(state.chart.totalTime)}`;
+    if(state.mode === "versus"){ ui.p1Score.textContent = state.stats.opp.score.toLocaleString(); ui.p1Combo.textContent = `Combo ${state.stats.opp.combo}`; }
+    if(state.selectedSong === "perseverance" && window.PERSEVERANCE_DATA){ const sec = perseveranceSection(t); if(sec && !state.perseverance.prompt){ ui.statusText.textContent = sec.label; ui.statusSub.textContent = sec.mode === "pixel" ? "Sans swaps into the original pixel phase and the noteskin changes with him." : sec.mode === "forest-dodge" ? "Keep playing. The gaster blaster dodge is scripted near the end." : "Imported Friday Night Dustin chart and stage are active."; } return; }
+    if(sec){ ui.statusText.textContent = sec.label; ui.statusSub.textContent = state.mode === "solo" ? (sec.turn === "player" ? "Your phrase. Hold the right lane and keep the combo alive." : sec.turn === "opp" ? "Opponent verse. Watch the left side perform before your answer." : sec.turn === "trade" ? "Trade bars. Each side gets a clean reply window." : "Both sides are active. Expect denser patterns.") : "Versus mode active. Player 1 owns the left lane, Player 2 owns the right lane."; }
+}
+function finish(failed=false){
+    state.playing = false; const acc = accuracy(state.stats.player), g = failed ? "F" : grade(acc), j = state.stats.player.judgments;
+    ui.resultTitle.textContent = state.currentSong.title; ui.resultGrade.textContent = g; ui.resultSummary.textContent = failed ? "Health dropped to zero before the song ended." : rating(acc); ui.rScore.textContent = state.stats.player.score.toLocaleString(); ui.rAccuracy.textContent = (acc * 100).toFixed(2) + "%"; ui.rCombo.textContent = state.stats.player.maxCombo; ui.rJudge.textContent = `${j.perfect} / ${j.good} / ${j.bad} / ${j.miss}`;
+    ui.resultsWrap.classList.add("show");
+}
+function laneX(i){ return 224 + i * 104; }
+function receptorY(){ return 118; }
+function arrow(x, y, size, angle, fill, stroke, alpha=1){
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = fill;
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(0, -size * 0.9);
+    ctx.lineTo(size * 0.48, -size * 0.18);
+    ctx.lineTo(size * 0.18, -size * 0.18);
+    ctx.lineTo(size * 0.18, size * 0.84);
+    ctx.lineTo(-size * 0.18, size * 0.84);
+    ctx.lineTo(-size * 0.18, -size * 0.18);
+    ctx.lineTo(-size * 0.48, -size * 0.18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,0.18)";
+    ctx.beginPath();
+    ctx.moveTo(0, -size * 0.58);
+    ctx.lineTo(size * 0.22, -size * 0.24);
+    ctx.lineTo(size * 0.06, -size * 0.24);
+    ctx.lineTo(size * 0.06, size * 0.56);
+    ctx.lineTo(-size * 0.06, size * 0.56);
+    ctx.lineTo(-size * 0.06, -size * 0.24);
+    ctx.lineTo(-size * 0.22, -size * 0.24);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+}
+function bg(song, t){
+    if(state.selectedSong === "sporting" && sportingSpritesReady()){
+        ctx.fillStyle = "#05070b";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        return;
+    }
+    if(state.selectedSong === "perseverance" && perseveranceSpritesReady()){
+        ctx.fillStyle = perseveranceIsPixelPhase(t) ? "#020202" : "#05070b";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        return;
+    }
+    const p = (Math.sin(t * 1.8) + 1) * .5, pal = song.palette;
+    const g = ctx.createLinearGradient(0, 0, 0, canvas.height); g.addColorStop(0, pal[0]); g.addColorStop(.45, pal[1]); g.addColorStop(1, pal[2]); ctx.fillStyle = g; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const glow = ctx.createRadialGradient(canvas.width * .5, 160, 40, canvas.width * .5, 160, 520); glow.addColorStop(0, pal[4] + "55"); glow.addColorStop(1, "rgba(0,0,0,0)"); ctx.fillStyle = glow; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    for(let i=0;i<5;i++){ const x = (i + .8) * canvas.width / 5 + Math.sin(t * .7 + i * 1.6) * 60; ctx.fillStyle = "rgba(255,255,255," + (.04 + p * .03) + ")"; ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x - 130, canvas.height); ctx.lineTo(x + 130, canvas.height); ctx.closePath(); ctx.fill(); }
+    ctx.fillStyle = pal[3]; ctx.beginPath(); ctx.moveTo(0,455); ctx.lineTo(canvas.width,455); ctx.lineTo(canvas.width,canvas.height); ctx.lineTo(0,canvas.height); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 2; for(let i=0;i<18;i++){ const y = 470 + i * 18; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width, y + i * 2.5); ctx.stroke(); }
+}
+function speaker(x,y,accent){ ctx.save(); ctx.translate(x,y); ctx.fillStyle = "rgba(8,10,18,0.9)"; ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.roundRect(-84,-124,168,248,22); ctx.fill(); ctx.stroke(); [-58,22].forEach(off => { ctx.fillStyle = "#111725"; ctx.beginPath(); ctx.arc(0,off,42,0,Math.PI*2); ctx.fill(); ctx.strokeStyle = accent + "44"; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(0,off,28,0,Math.PI*2); ctx.stroke(); }); ctx.restore(); }
+function actor(x,y,c,t){
+    const p = state.poses[c.id], dt = performance.now() / 1000 - p.time, hitRaw = dt < .2 ? 1 - dt / .2 : 0, hit = hitRaw * hitRaw, bop = Math.sin(t * 6 + c.phase) * 5, dx = p.lane === 0 ? -10 : p.lane === 3 ? 10 : 0, dy = p.lane === 2 ? -18 : p.lane === 1 ? 14 : 0;
+    ctx.save(); ctx.translate(x + dx * hit, y + bop - dy * hit); ctx.scale(c.scale, c.scale);
+    ctx.fillStyle = "rgba(0,0,0,0.26)"; ctx.beginPath(); ctx.ellipse(0,72,54,16,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = c.body; ctx.beginPath(); ctx.roundRect(-28,-8,56,74,20); ctx.fill();
+    ctx.fillStyle = c.head; ctx.beginPath(); ctx.arc(0,-36,32,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = c.detail; ctx.beginPath(); ctx.roundRect(-18,-67,36,12,8); ctx.fill(); ctx.fillRect(-18,-28,8,8); ctx.fillRect(10,-28,8,8);
+    ctx.strokeStyle = c.detail; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(0,-10,14,.15*Math.PI,.85*Math.PI); ctx.stroke();
+    ctx.fillStyle = c.accent; ctx.beginPath(); ctx.arc(38,18,16,0,Math.PI*2); ctx.fill(); ctx.fillRect(24,2,12,16);
+    ctx.fillStyle = "rgba(255,255,255,0.76)"; ctx.font = "700 16px Trebuchet MS, sans-serif"; ctx.textAlign = "center"; ctx.fillText(c.label,0,-88);
+    ctx.restore();
+}
+function stage(t){
+    if(state.selectedSong === "perseverance" && perseveranceSpritesReady()){
+        const px = perseveranceIsPixelPhase(t);
+        const stageScale = px ? 1 : 0.382;
+        const originX = px ? 90 : 95;
+        const originY = px ? 40 : 18;
+        if(t < 18){
+            const fade = t < 16 ? 1 : 1 - (t - 16) / 2;
+            // always draw the normal stage as the base
+            const bgX = originX, bgY = originY;
+            const bgW = perseveranceSpriteState.images.bgA.naturalWidth * stageScale;
+            const bgH = perseveranceSpriteState.images.bgA.naturalHeight * stageScale;
+            ctx.save();
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = "high";
+            ctx.drawImage(perseveranceSpriteState.images.bgA, bgX - 22, bgY, bgW, bgH);
+            ctx.drawImage(perseveranceSpriteState.images.bgB, bgX - 15, bgY, bgW, bgH);
+            ctx.drawImage(perseveranceSpriteState.images.bgMid, bgX, bgY, bgW, bgH);
+            if(fade < 1){
+                // transition: characters already visible under overlay
+                drawPerseveranceCharacter("gf", 630, 604, 0.53, t);
+                drawPerseveranceCharacter("sans", 486, 630, 0.43, t);
+                drawPerseveranceCharacter("boyfriend", 854, 638, 0.47, t);
+            }
+            // overlay the dark intro on top, fading out
+            ctx.globalAlpha = fade;
+            ctx.fillStyle = "#050505";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            const glow = ctx.createRadialGradient(canvas.width * 0.5, canvas.height * 0.38, 20, canvas.width * 0.5, canvas.height * 0.38, 400);
+            glow.addColorStop(0, "rgba(180,160,120,0.08)");
+            glow.addColorStop(0.5, "rgba(120,100,80,0.03)");
+            glow.addColorStop(1, "rgba(0,0,0,0)");
+            ctx.fillStyle = glow;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // fog
+            for(let i = 0; i < 4; i++){
+                const fogY = canvas.height * (0.65 + i * 0.08);
+                const fogDrift = Math.sin(t * 0.3 + i * 1.8) * 60 + Math.cos(t * 0.15 + i * 2.5) * 40;
+                const fogG = ctx.createRadialGradient(
+                    canvas.width * (0.15 + i * 0.25) + fogDrift, fogY, 10,
+                    canvas.width * (0.15 + i * 0.25) + fogDrift, fogY, 220 + i * 40
+                );
+                fogG.addColorStop(0, "rgba(200,190,170," + (0.12 - i * 0.015) + ")");
+                fogG.addColorStop(0.6, "rgba(150,140,120," + (0.06 - i * 0.008) + ")");
+                fogG.addColorStop(1, "rgba(0,0,0,0)");
+                ctx.fillStyle = fogG;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+            const bottomFog = ctx.createLinearGradient(0, canvas.height * 0.75, 0, canvas.height);
+            bottomFog.addColorStop(0, "rgba(0,0,0,0)");
+            bottomFog.addColorStop(0.4, "rgba(160,150,130,0.06)");
+            bottomFog.addColorStop(1, "rgba(180,170,150,0.1)");
+            ctx.fillStyle = bottomFog;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // vignette
+            const vig = ctx.createRadialGradient(canvas.width * 0.5, canvas.height * 0.5, canvas.width * 0.25, canvas.width * 0.5, canvas.height * 0.5, canvas.width * 0.75);
+            vig.addColorStop(0, "rgba(0,0,0,0)");
+            vig.addColorStop(1, "rgba(0,0,0,0.7)");
+            ctx.fillStyle = vig;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.globalAlpha = 1;
+            // draw silhouette characters on top of the dark overlay during intro
+            if(fade >= 1){
+                drawPerseveranceCharacter("sans", 486, 630, 0.43, t);
+                drawPerseveranceCharacter("boyfriend", 854, 638, 0.47, t);
+            }
+            drawSnow(t);
+            ctx.restore();
+            return;
+        }
+        if(px){
+            ctx.save();
+            ctx.fillStyle = "#050505";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(perseveranceSpriteState.images.pillars, originX, originY + 60, perseveranceSpriteState.images.pillars.naturalWidth * 2.25, perseveranceSpriteState.images.pillars.naturalHeight * 2.25);
+            drawPerseveranceCharacter("sans", 672, 790, 1, t);
+            drawSnow(t);
+            ctx.restore();
+            return;
+        }
+        const bgX = originX, bgY = originY;
+        const bgW = perseveranceSpriteState.images.bgA.naturalWidth * stageScale;
+        const bgH = perseveranceSpriteState.images.bgA.naturalHeight * stageScale;
+        ctx.save();
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(perseveranceSpriteState.images.bgA, bgX - 22, bgY, bgW, bgH);
+        ctx.drawImage(perseveranceSpriteState.images.bgB, bgX - 15, bgY, bgW, bgH);
+        ctx.drawImage(perseveranceSpriteState.images.bgMid, bgX, bgY, bgW, bgH);
+        drawPerseveranceCharacter("gf", 630, 604, 0.53, t);
+        drawPerseveranceCharacter("sans", 486, 630, 0.43, t);
+        drawPerseveranceCharacter("boyfriend", 854, 638, 0.47, t);
+        const p = state.perseverance; const m = window.PERSEVERANCE_DATA.mechanics;
+        if(t >= m.dodgeWarn - 0.4){
+            const progY = Math.max(0, Math.min(1, (t - m.dodgeWarn) / 0.75));
+            const progX = Math.max(0, Math.min(1, (t - m.dodgeWarn) / 0.975));
+            const frame = t >= m.dodgeFire ? frameFromList(window.PERSEVERANCE_DATA.stage.blaster.blast, t - m.dodgeFire, 24, false) : frameFromList(window.PERSEVERANCE_DATA.stage.blaster.idle, t * 1.3, 14, true);
+            if(frame){ drawAtlasFrame(perseveranceSpriteState.images.blaster, frame, 60 + progX * 930, 170 + progY * 335, 0.46, 1); }
+        }
+        if(p.prompt){ const frame = frameFromList(window.PERSEVERANCE_DATA.stage.prompt.idle, t * 1.5, 12, true); if(frame) drawAtlasFrame(perseveranceSpriteState.images.prompt, frame, 970, 640, 0.44, 0.95); }
+        const flashAge = t - p.flashTime;
+        if(flashAge >= 0 && flashAge < 0.2){ ctx.save(); ctx.globalAlpha = 0.92 - flashAge * 3.5; ctx.fillStyle = "#fff"; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.restore(); }
+        if(flashAge >= 0 && flashAge < 0.08) ctx.drawImage(perseveranceSpriteState.images.impact1, 340, 242, perseveranceSpriteState.images.impact1.naturalWidth * 0.9, perseveranceSpriteState.images.impact1.naturalHeight * 0.9);
+        else if(flashAge >= 0 && flashAge < 0.18) ctx.drawImage(perseveranceSpriteState.images.impact2, 334, 246, perseveranceSpriteState.images.impact2.naturalWidth * 0.84, perseveranceSpriteState.images.impact2.naturalHeight * 0.84);
+        drawSnow(t);
+        return;
+    }
+    if(state.selectedSong === "sporting" && sportingSpritesReady()){
+        const bgScale = 0.68;
+        const charScale = 0.66;
+        const bgW = spriteState.images.arenaBack.naturalWidth * bgScale;
+        const bgH = spriteState.images.arenaBack.naturalHeight * bgScale;
+        const bgX = (canvas.width - bgW) / 2;
+        const bgY = 28;
+        const crowdFrame = sportingCrowdFrame(t);
+        ctx.save();
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.filter = "contrast(1.08) saturate(1.06)";
+        ctx.drawImage(spriteState.images.arenaBack, bgX, bgY, bgW, bgH);
+        ctx.restore();
+        if(crowdFrame && spriteState.images.arenaCrowd){
+            ctx.save();
+            ctx.globalAlpha = 0.96;
+            drawAtlasTopLeft(spriteState.images.arenaCrowd, crowdFrame, bgX, bgY + 170, bgScale);
+            ctx.restore();
+        }
+        ctx.save();
+        ctx.globalAlpha = 0.92;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(spriteState.images.railing, bgX - 4, 540, spriteState.images.railing.naturalWidth * bgScale, spriteState.images.railing.naturalHeight * bgScale);
+        ctx.restore();
+        drawSportingSprite("matt", 286, 392, charScale, t);
+        drawSportingSprite("boyfriend", 742, 408, charScale, t);
+        return;
+    }
+    speaker(106,455,state.currentSong.palette[5]);
+    speaker(canvas.width - 106,455,state.currentSong.palette[4]);
+    const left = [];
+    if(state.selectedSong === "sporting") left.push({id:"matt",label:"Matt",body:"#ff8a3d",head:"#ffd4aa",detail:"#4d2508",accent:"#4de3ff",scale:1.08,phase:.55,x:314});
+    else if(state.selectedSong === "perseverance") left.push({id:"sans",label:"Sans",body:"#dce7ff",head:"#f7fbff",detail:"#232a36",accent:"#8ec8ff",scale:1.02,phase:.55,x:314});
+    left.forEach(c => actor(c.x, 482, c, t));
+    actor(962, 486, {id:"player",label:state.mode === "versus" ? "P2" : "Boyfriend",body:"#4de3ff",head:"#ffd9cf",detail:"#0d2a6c",accent:"#ff4fa0",scale:1.02,phase:.4}, t);
+}
+function receptors(t){
+    const pulse = .5 + Math.sin(t * 5) * .5, y = receptorY();
+    ctx.strokeStyle = "rgba(255,255,255,0.1)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(canvas.width * .5, 72); ctx.lineTo(canvas.width * .5, 452); ctx.stroke();
+    for(let lane=0; lane<8; lane++){
+        const x = laneX(lane);
+        if(state.selectedSong === "sporting" && sportingSpritesReady()){
+            drawSportingReceptor(lane, x, y);
+        } else if(state.selectedSong === "perseverance" && perseveranceSpritesReady()){
+            drawPerseveranceReceptor(lane, x, y);
+        } else {
+            const on = !!state.keysDown[lane], fill = on ? COLORS[lane] : "rgba(13,20,36,0.88)", stroke = on ? "#fff" : "rgba(255,255,255,0.18)";
+            ctx.save(); ctx.shadowBlur = on ? 18 : 8 + pulse * 4; ctx.shadowColor = COLORS[lane]; arrow(x, y, 48, [Math.PI, Math.PI/2, -Math.PI/2, 0][lane % 4], fill, stroke); ctx.restore();
+        }
+        ctx.strokeStyle = "rgba(255,255,255,0.06)"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x, y + 26); ctx.lineTo(x, 448); ctx.stroke();
+    }
+}
+function notes(t){
+    if(!state.chart) return;
+    for(const n of state.chart.notes){
+        if(n.played && n.hit && (!isHoldNote(n) || n.holdDone)) continue;
+        if(n.judged && n.side !== "opp" && (!isHoldNote(n) || n.holdDone || !n.hit)) continue;
+        const scroll = state.selectedSong === "perseverance" ? perseveranceScrollBasePx() * perseveranceScrollSpeed(t) : state.currentSong.scroll;
+        const diff = n.time - t;
+        const y = receptorY() + diff * scroll;
+        const tailY = receptorY() + (holdEndTime(n) - t) * scroll;
+        if(y < -120 && tailY < -120) continue;
+        if(y > canvas.height + 120 && tailY > canvas.height + 120) continue;
+        const lane = n.lane, rawScale = clamp(1 - Math.pow(Math.abs(diff), 0.7) * .45, .75, 1.12), scale = rawScale, alpha = n.side === "opp" ? .84 : 1;
+        if(state.selectedSong === "perseverance" && perseveranceSpritesReady() && isHoldNote(n)){
+            drawPerseveranceSustain(n, laneX(lane), n.hit ? receptorY() : y, tailY, alpha * (n.hit ? 0.94 : 1));
+        }
+        if(n.hit && isHoldNote(n) && t > n.time) continue;
+        if(state.selectedSong === "sporting" && sportingSpritesReady()){
+            drawSportingNote(lane, laneX(lane), y, 0.76 * scale, alpha);
+        } else if(state.selectedSong === "perseverance" && perseveranceSpritesReady()){
+            drawPerseveranceNote(lane, laneX(lane), y, scale, alpha);
+        } else {
+            const angle = [Math.PI, Math.PI/2, -Math.PI/2, 0][lane % 4];
+            ctx.save(); ctx.shadowBlur = 18; ctx.shadowColor = COLORS[lane]; arrow(laneX(lane), y, 42 * scale, angle, COLORS[lane], "rgba(255,255,255,0.8)", alpha); ctx.restore();
+        }
+    }
+}
+function drawFeed(el, data, right){ const age = performance.now() / 1000 - data.time; if(!data.text || age > .55){ el.style.opacity = "0"; return; } const t = age / .55, eased = 1 - Math.pow(1 - t, 3); el.textContent = data.text; el.style.color = data.color; el.style.opacity = String(1 - eased); el.style.transform = `translateY(${-26 * eased}px) scale(${1 + (1 - t) * .16})`; el.style.textAlign = right ? "right" : "left"; el.style.textShadow = `0 0 ${12 * (1 - t)}px ${data.color}`; }
+function renderScene(songT, previewT){
+    const t = state.playing ? songT : previewT;
+    ctx.save();
+    if(state.selectedSong === "perseverance"){
+        const gray = perseveranceGrayness(t);
+        if(gray > 0.001) ctx.filter = `grayscale(${gray}) saturate(${1 - gray * 0.35}) brightness(${1 - gray * 0.16})`;
+    }
+    bg(state.currentSong, t);
+    const camZ = state.camera.zoom;
+    if(camZ > 1.001){
+        const fx = state.camera.focusX, fy = state.camera.focusY;
+        ctx.translate(fx * (1 - camZ), fy * (1 - camZ));
+        ctx.scale(camZ, camZ);
+    }
+    stage(t);
+    ctx.restore();
+    if(state.selectedSong === "perseverance"){
+        const gray = perseveranceGrayness(t);
+        const vignette = perseveranceSpriteState.images.vignette;
+        if(vignette && vignette.complete && vignette.naturalWidth && gray > 0.001 && t >= 16){
+            ctx.save();
+            ctx.globalAlpha = Math.min(1, gray * 1.15);
+            ctx.drawImage(vignette, 0, 0, canvas.width, canvas.height);
+            ctx.restore();
+        }
+        /* intro cover removed — sans & bf silhouettes (t<16) handle the darkened-character effect */
+        // post-blaster scroll tween flashes — black screen, white chars, blur out
+        for(const ft of PERSEVERANCE_POST_BLASTER_FLASHES){
+            const age = t - ft;
+            if(age >= 0 && age < 0.5){
+                const p = age / 0.5;
+                const ease = 1 - p * p;
+                ctx.save();
+                ctx.globalAlpha = Math.min(ease, 0.85);
+                ctx.filter = "blur(" + (p * 18).toFixed(1) + "px)";
+                ctx.fillStyle = "#000";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                try {
+                    state._flashWhiteSilhouette = true;
+                    drawPerseveranceCharacter("sans", 486, 630, 0.43, t);
+                    drawPerseveranceCharacter("boyfriend", 854, 638, 0.47, t);
+                } finally { state._flashWhiteSilhouette = false; }
+                ctx.restore();
+                break;
+            }
+        }
+    }
+    ctx.save();
+    if(state.selectedSong === "perseverance"){
+        const gray2 = perseveranceGrayness(t);
+        if(gray2 > 0.001) ctx.filter = `grayscale(${gray2}) saturate(${1 - gray2 * 0.35}) brightness(${1 - gray2 * 0.16})`;
+    }
+    receptors(t);
+    notes(songT);
+    ctx.restore();
+    drawFeed(ui.playerFeed, state.feeds.player, true);
+    drawFeed(ui.oppFeed, state.feeds.opp, false);
+}
+function drawHitGlows(){
+    const now = performance.now() / 1000;
+    for(let i = state.hitGlow.length - 1; i >= 0; i--){
+        const g = state.hitGlow[i], age = now - g.time;
+        if(age > 0.3){ state.hitGlow.splice(i, 1); continue; }
+        const p = age / 0.3, ease = 1 - Math.pow(1 - p, 2);
+        ctx.save();
+        ctx.globalAlpha = (1 - ease) * 0.6;
+        const x = laneX(g.lane), y = receptorY();
+        const r = 20 + ease * 40;
+        const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+        grad.addColorStop(0, g.color);
+        grad.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+        ctx.restore();
+    }
+}
+function frame(now){
+    const dt = (now - state.lastFrame) / 1000; state.lastFrame = now; const preview = now / 1000; ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // screen shake
+    const shakeAge = now / 1000 - state.shake.time;
+    if(shakeAge < 0.15 && shakeAge >= 0){
+        const s = state.shake.intensity * (1 - shakeAge / 0.15);
+        ctx.save();
+        ctx.translate(Math.random() * s * 2 - s, Math.random() * s * 2 - s);
+    }
+    if(state.playing && (state.audio.ctx || state.audio.inst || state.audio.inst2)){ const t = songTime(); if(t >= 0){ if(!isImportedSong(state.currentSong)) scheduleMusic(); if(state.selectedSong === "perseverance") updatePerseveranceState(Math.max(0, t)); handleMisses(t); updateHoldNotes(t); updateCamera(Math.max(0, t), dt); } refreshHUD(Math.max(0, t)); renderScene(Math.max(0, t), preview); drawHitGlows(); if(state.health <= 0) finish(true); else if(t >= state.chart.totalTime + .4) finish(false); }
+    else renderScene(0, preview);
+    if(shakeAge < 0.15 && shakeAge >= 0) ctx.restore();
+    requestAnimationFrame(frame);
+}
+function startSong(id=state.selectedSong){
+    const a = ensureAudio();
+    if(a.state === "suspended") a.resume();
+    stopExternalAudio();
+    state.selectedSong = id; state.currentSong = SONGS[id]; state.mode = ui.versusToggle.checked ? "versus" : "solo"; ui.modeLabel.textContent = state.mode === "versus" ? "1v1 Versus" : "Solo Battle"; rebuildKeyMap(); state.chart = makeChart(state.currentSong); state.chart.notes = state.chart.notes.map(n => ({...n})); resetStats(); state.health = .65;
+    if(state.currentSong.chartSource === "sporting"){
+        ensureSportingAudio();
+        state.audio.inst.currentTime = 0;
+        state.audio.voices.currentTime = 0;
+        state.songStart = 0;
+        state.nextStep = 0;
+        state.nextStepTime = 0;
+        state.playing = true;
+        state.audio.inst.play();
+        state.audio.voices.play();
+    } else if(state.currentSong.chartSource === "perseverance"){
+        ensurePerseveranceAudio();
+        state.audio.inst2.currentTime = 0;
+        state.audio.voices2a.currentTime = 0;
+        state.audio.voices2b.currentTime = 0;
+        state.songStart = 0;
+        state.nextStep = 0;
+        state.nextStepTime = 0;
+        state.playing = true;
+        state.audio.inst2.play();
+        state.audio.voices2a.play();
+        state.audio.voices2b.play();
+    } else {
+        state.songStart = a.currentTime + .12;
+        state.nextStep = 0;
+        state.nextStepTime = state.songStart;
+        state.playing = true;
+    }
+    state.feeds.player.time = -10; state.feeds.opp.time = -10; Object.values(state.poses).forEach(p => { p.time = -10; p.kind = "hit"; }); state.receptorFx.forEach(fx => fx.time = -10); state.perseverance = { canDodge:false, prompt:false, dodging:false, dodged:false, resolved:false, dodgeStart:-10, flashTime:-10, gfAlpha:0 }; state.camera = { x: 0, target: 0, sideTime: 0, lastSide: "both" }; ui.p1Box.style.display = state.mode === "versus" ? "block" : "none"; ui.songTitle.textContent = state.currentSong.title; ui.songSub.textContent = state.currentSong.subtitle; ui.statusText.textContent = "Get ready"; ui.statusSub.textContent = state.currentSong.chartSource === "sporting" ? "Sporting is using the original beat and vocal track at full speed." : state.currentSong.chartSource === "perseverance" ? "Perseverance is using the original hard chart, split vocals, pixel section, and dodge mechanic." : "Song starts on the next phrase. Hit right-side notes in solo, or both lanes in versus."; ui.timer.textContent = `0:00 / ${formatTime(state.chart.totalTime)}`; ui.menu.classList.remove("show"); ui.settings.classList.remove("show"); ui.resultsWrap.classList.remove("show");
+}
+function keydown(e){
+    const key = e.key.toLowerCase();
+    if(state.binding){ e.preventDefault(); if(key === "escape"){ clearBinding(); return; } state.settings[state.binding.group][state.binding.dir] = key; saveSettings(); renderBinds(); clearBinding(); rebuildKeyMap(); return; }
+    if(key === "escape" && ui.settings.classList.contains("show")){ ui.settings.classList.remove("show"); clearBinding(); return; }
+    if(state.selectedSong === "perseverance" && state.playing && key === " " && state.perseverance.canDodge && !state.perseverance.dodging && !state.perseverance.resolved){ e.preventDefault(); state.perseverance.dodging = true; state.perseverance.dodged = true; state.perseverance.dodgeStart = songTime(); return; }
+    const lane = state.keyMap[key]; if(lane !== undefined){ e.preventDefault(); if(!state.keysDown[lane]){ state.keysDown[lane] = true; handlePress(lane); } }
+}
+function keyup(e){ const key = e.key.toLowerCase(), lane = state.keyMap[key]; if(lane !== undefined) state.keysDown[lane] = false; }
+ui.playBtn.onclick = () => startSong();
+ui.settingsBtn.onclick = () => ui.settings.classList.add("show");
+ui.closeSettings.onclick = () => { clearBinding(); ui.settings.classList.remove("show"); };
+ui.resetBtn.onclick = () => { state.settings = copy(DEFAULTS); saveSettings(); renderBinds(); rebuildKeyMap(); };
+ui.menuBtn.onclick = () => { stopExternalAudio(); ui.resultsWrap.classList.remove("show"); ui.menu.classList.add("show"); ui.statusText.textContent = "Pick a track and start the battle."; ui.statusSub.textContent = "Four-lane charts, synth backing, health, results, and local keybind saves in one HTML file."; };
+ui.replayBtn.onclick = () => startSong(state.selectedSong);
+ui.versusToggle.onchange = () => { state.mode = ui.versusToggle.checked ? "versus" : "solo"; rebuildKeyMap(); };
+window.addEventListener("keydown", keydown); window.addEventListener("keyup", keyup);
+renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo Battle"; requestAnimationFrame(frame);
+</script>
+<script>
+(function(){
+  const onlineCard = document.querySelector(".onlineCard");
+  if (onlineCard) onlineCard.remove();
+  const authWrap = document.getElementById("authWrap");
+  if (authWrap) authWrap.remove();
+  const heroEyebrow = document.querySelector("#menu .hero .eyebrow");
+  if (heroEyebrow) heroEyebrow.textContent = "Offline rhythm battle";
+  const heroText = document.querySelector("#menu .hero p");
+  if (heroText) heroText.textContent = "This build is the offline version. Open it locally, pick a song, and play solo or local versus without any server setup.";
+  const featureNodes = Array.from(document.querySelectorAll("#menu .feature .name"));
+  const featureDescNodes = Array.from(document.querySelectorAll("#menu .feature .desc"));
+  if (featureNodes[0]) featureNodes[0].textContent = "Offline play";
+  if (featureDescNodes[0]) featureDescNodes[0].textContent = "Runs directly from local files with imported charts, sprites, and audio already bundled.";
+  if (featureNodes[1]) featureNodes[1].textContent = "Solo + local versus";
+  if (featureDescNodes[1]) featureDescNodes[1].textContent = "Use solo mode or local 1v1 on the same machine with the built-in keybind system.";
+  if (featureNodes[2]) featureNodes[2].textContent = "No server needed";
+  if (featureDescNodes[2]) featureDescNodes[2].textContent = "Everything runs locally, so you can just open the file or launch the offline app.";
+  const pills = Array.from(document.querySelectorAll(".help .pill"));
+  if (pills[0]) pills[0].innerHTML = "<strong>Solo:</strong> WASD or Arrows";
+  if (pills[1]) pills[1].innerHTML = "<strong>Versus:</strong> P1 WASD, P2 Arrows";
+  if (pills[2]) pills[2].innerHTML = "<strong>Offline:</strong> No server required";
+  const statusText = document.getElementById("statusText");
+  const statusSub = document.getElementById("statusSub");
+  if (statusText) statusText.textContent = "Pick a track and start the battle.";
+  if (statusSub) statusSub.textContent = "Offline build: solo and local versus are available with no server setup.";
+})();
+</script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+

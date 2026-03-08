@@ -1,0 +1,31 @@
+{
+  "appId": "com.matth.fnfbrowserjam.offline",
+  "productName": "FNF Browser Jam Offline",
+  "extraMetadata": {
+    "main": "main-offline.js"
+  },
+  "files": [
+    "main-offline.js",
+    "FNF - Offline.html",
+    "sprite-data.js",
+    "sporting-chart.js",
+    "perseverance-data.js",
+    "assets/**/*",
+    "*.ogg",
+    "package.json"
+  ],
+  "directories": {
+    "output": "dist-offline"
+  },
+  "win": {
+    "target": [
+      "portable"
+    ],
+    "artifactName": "FNF-Browser-Jam-offline-1.0.0-portable.${ext}",
+    "signAndEditExecutable": false,
+    "verifyUpdateCodeSignature": false,
+    "icon": "assets/bf-logo-256.png"
+  },
+  "npmRebuild": false,
+  "icon": "assets/bf-logo-256.png"
+}

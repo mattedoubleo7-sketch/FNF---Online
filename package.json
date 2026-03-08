@@ -1,0 +1,57 @@
+{
+  "name": "friday-night-funkin-game",
+  "version": "1.0.0",
+  "description": "Standalone Friday Night Funkin' style desktop game with server-based online rooms.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable",
+    "server": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "electron": "^40.8.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.matth.fnfbrowserjam",
+    "productName": "FNF Browser Jam",
+    "files": [
+      "main.js",
+      "server.js",
+      "downloads.html",
+      "FNF - Online.html",
+      "online-mode.js",
+      "sprite-data.js",
+      "sporting-chart.js",
+      "perseverance-data.js",
+      "assets/**/*",
+      "*.ogg",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "artifactName": "FNF-Browser-Jam-${version}-portable.${ext}",
+      "signAndEditExecutable": false,
+      "verifyUpdateCodeSignature": false,
+      "icon": "assets/bf-logo-256.png"
+    },
+    "npmRebuild": false,
+    "icon": "assets/bf-logo-256.png"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
