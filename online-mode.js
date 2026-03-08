@@ -20,6 +20,7 @@ Object.assign(ui, {
 });
 
 state.startTimer = null;
+state.endTimer = null;
 state.network = { socket: null, connected: false, roomId: "", role: null, peerConnected: false, user: null, matchStartAt: 0, pendingStartAt: 0, lastTrackSync: 0, ready: { host: false, guest: false } };
 
 let socketClientPromise = null;
@@ -168,6 +169,21 @@ function syncModeUI() {
   ui.p1Box.style.display = "block";
 }
 
+function returnToOnlineLobby(status = "Match complete", hint = "Room is still open. Both players can press Ready Up again for a rematch.") {
+  stopExternalAudio();
+  if (state.endTimer) clearTimeout(state.endTimer);
+  state.endTimer = null;
+  state.playing = false;
+  state.network.pendingStartAt = 0;
+  state.network.matchStartAt = 0;
+  ui.resultsWrap.classList.remove("show");
+  ui.menu.classList.add("show");
+  ui.statusText.textContent = status;
+  ui.statusSub.textContent = hint;
+  syncModeUI();
+  updateOnlinePanel();
+}
+
 function updateOnlinePanel() {
   ui.onlineAccount.textContent = state.network.user ? state.network.user.username : "Anonymous";
   if (state.network.roomId && document.activeElement !== ui.roomCodeInput) ui.roomCodeInput.value = state.network.roomId;
@@ -232,6 +248,8 @@ async function ensureOnlineSocket() {
     updateOnlinePanel();
   });
   socket.on("disconnect", () => {
+    if (state.endTimer) clearTimeout(state.endTimer);
+    state.endTimer = null;
     state.network.connected = false;
     state.network.peerConnected = false;
     state.network.roomId = "";
@@ -292,6 +310,8 @@ async function joinOnlineRoom() {
 }
 
 function leaveOnlineRoom() {
+  if (state.endTimer) clearTimeout(state.endTimer);
+  state.endTimer = null;
   if (state.network.socket && state.network.roomId) state.network.socket.emit("room:leave");
   state.network.roomId = "";
   state.network.role = null;
@@ -407,10 +427,10 @@ judge = function(side, kind, lane, char, timingError = 0.155){
   stats.accuracyTotal += kind === "miss" ? 0 : clamp(1 - timingError / 0.155, 0, 1);
   const healthSide = localSideKey();
   if (side === healthSide) {
-    if (kind === "perfect") state.health = clamp(state.health + 0.028, 0, 1);
-    if (kind === "good") state.health = clamp(state.health + 0.016, 0, 1);
-    if (kind === "bad") state.health = clamp(state.health - 0.018, 0, 1);
-    if (kind === "miss") state.health = clamp(state.health - 0.11, 0, 1);
+    if (kind === "perfect") state.health = clamp(state.health + 0.028, 0.02, 1);
+    if (kind === "good") state.health = clamp(state.health + 0.016, 0.02, 1);
+    if (kind === "bad") state.health = clamp(state.health - 0.018, 0.02, 1);
+    if (kind === "miss") state.health = clamp(state.health - 0.11, 0.02, 1);
   }
   if (kind !== "miss") {
     state.receptorFx[lane] = { time: performance.now() / 1000, lane };
@@ -521,18 +541,26 @@ refreshHUD = function(t){
 };
 
 finish = function(failed = false){
+  stopExternalAudio();
   state.playing = false;
+  state.network.pendingStartAt = 0;
+  state.network.matchStartAt = 0;
+  if (state.endTimer) clearTimeout(state.endTimer);
+  state.endTimer = null;
   const stats = localStats();
   const acc = accuracy(stats);
   const j = stats.judgments;
   ui.resultTitle.textContent = state.currentSong.title;
-  ui.resultGrade.textContent = failed ? "F" : grade(acc);
-  ui.resultSummary.textContent = failed ? "Health dropped to zero before the song ended." : rating(acc);
+  ui.resultGrade.textContent = grade(acc);
+  ui.resultSummary.textContent = failed ? "Online matches do not fail on health. Returning to the room lobby now." : rating(acc);
   ui.rScore.textContent = stats.score.toLocaleString();
   ui.rAccuracy.textContent = (acc * 100).toFixed(2) + "%";
   ui.rCombo.textContent = stats.maxCombo;
   ui.rJudge.textContent = j.perfect + " / " + j.good + " / " + j.bad + " / " + j.miss;
   ui.resultsWrap.classList.add("show");
+  state.endTimer = setTimeout(() => {
+    returnToOnlineLobby("Match complete", "Room is still open. Both players can press Ready Up again for a rematch.");
+  }, 1800);
 };
 
 startSong = function(id = state.selectedSong, options = {}){
@@ -541,6 +569,8 @@ startSong = function(id = state.selectedSong, options = {}){
   stopExternalAudio();
   if (state.startTimer) clearTimeout(state.startTimer);
   state.startTimer = null;
+  if (state.endTimer) clearTimeout(state.endTimer);
+  state.endTimer = null;
   state.selectedSong = id;
   state.currentSong = SONGS[id];
   state.mode = "online";
@@ -619,6 +649,8 @@ ui.replayBtn.onclick = () => {
 };
 
 ui.menuBtn.onclick = () => {
+  if (state.endTimer) clearTimeout(state.endTimer);
+  state.endTimer = null;
   stopExternalAudio();
   ui.resultsWrap.classList.remove("show");
   ui.menu.classList.add("show");
