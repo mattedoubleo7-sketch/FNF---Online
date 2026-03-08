@@ -30,15 +30,16 @@ html, body {
     color: var(--text);
     font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
 }
-body { display: flex; align-items: center; justify-content: center; padding: 18px; }
+body { display: block; min-height: 100vh; padding: 0; overflow: hidden; }
 #app {
     position: relative;
-    width: min(1280px, 100%);
-    aspect-ratio: 16 / 9;
+    width: 100vw;
+    height: 100vh;
+    aspect-ratio: auto;
     overflow: hidden;
-    border-radius: 28px;
-    border: 1px solid rgba(255,255,255,0.1);
-    box-shadow: 0 28px 90px rgba(0,0,0,0.45);
+    border-radius: 0;
+    border: 0;
+    box-shadow: none;
     background: linear-gradient(180deg, rgba(6, 12, 24, 0.7), rgba(5, 8, 20, 0.95));
 }
 canvas { display: block; width: 100%; height: 100%; }
@@ -46,14 +47,15 @@ canvas { display: block; width: 100%; height: 100%; }
 .hud { pointer-events: none; }
 .top, .bottom {
     position: absolute;
-    left: 18px;
-    right: 18px;
+    left: 12px;
+    right: 12px;
     display: flex;
-    gap: 14px;
+    flex-wrap: wrap;
+    gap: 10px;
     justify-content: space-between;
 }
-.top { top: 18px; align-items: flex-start; }
-.bottom { bottom: 18px; align-items: flex-end; }
+.top { top: 12px; align-items: flex-start; }
+.bottom { bottom: 12px; align-items: flex-end; }
 .panel {
     background: var(--panel);
     border: 1px solid var(--line);
@@ -61,16 +63,16 @@ canvas { display: block; width: 100%; height: 100%; }
     backdrop-filter: blur(12px);
     box-shadow: 0 12px 30px rgba(0,0,0,0.16);
 }
-.now { min-width: 280px; padding: 14px 16px; }
+.now { min-width: 220px; padding: 12px 14px; }
 .eyebrow, .muted, .mini .label {
     color: var(--muted);
     text-transform: uppercase;
     letter-spacing: 0.16em;
     font-size: 11px;
 }
-.now .title { font-size: 24px; font-weight: 900; line-height: 1; margin-top: 4px; }
-.now .sub { font-size: 13px; color: #dbe2fb; margin-top: 8px; }
-.health { flex: 1; max-width: 500px; padding: 14px 16px; }
+.now .title { font-size: 20px; font-weight: 900; line-height: 1; margin-top: 4px; }
+.now .sub { font-size: 12px; color: #dbe2fb; margin-top: 6px; }
+.health { flex: 1 1 360px; max-width: 460px; padding: 12px 14px; }
 .row { display: flex; gap: 12px; align-items: center; }
 .bar { flex: 1; height: 18px; background: rgba(255,255,255,0.08); border-radius: 999px; overflow: hidden; }
 .bar > div {
@@ -81,13 +83,13 @@ canvas { display: block; width: 100%; height: 100%; }
     box-shadow: 0 0 18px rgba(255, 130, 84, 0.35);
     transition: width 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
-.stats { display: flex; gap: 12px; padding: 12px; }
-.mini { min-width: 150px; padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,0.04); }
-.mini .value { font-size: 28px; font-weight: 900; margin-top: 4px; }
-.mini .sub { color: #d7dff8; font-size: 12px; margin-top: 3px; }
-.status { min-width: 340px; padding: 14px 16px; }
-#statusText { font-size: 26px; font-weight: 900; line-height: 1; }
-#statusSub { margin-top: 8px; font-size: 13px; color: #d7dff8; }
+.stats { display: flex; gap: 10px; padding: 10px; margin-left: auto; }
+.mini { min-width: 128px; padding: 9px 10px; border-radius: 14px; background: rgba(255,255,255,0.04); }
+.mini .value { font-size: 22px; font-weight: 900; margin-top: 4px; }
+.mini .sub { color: #d7dff8; font-size: 11px; margin-top: 2px; }
+.status { min-width: 260px; max-width: 420px; padding: 12px 14px; }
+#statusText { font-size: 22px; font-weight: 900; line-height: 1; }
+#statusSub { margin-top: 6px; font-size: 12px; color: #d7dff8; }
 .help { display: flex; gap: 10px; flex-wrap: wrap; }
 .pill {
     padding: 10px 14px;
@@ -100,7 +102,7 @@ canvas { display: block; width: 100%; height: 100%; }
 #judgments { position: absolute; inset: 0; pointer-events: none; }
 .feed {
     position: absolute;
-    top: 248px;
+    top: 304px;
     font-size: 42px;
     font-weight: 900;
     opacity: 0;
@@ -235,11 +237,12 @@ body.fullViewport #app { width: 100vw; height: 100vh; aspect-ratio: auto; border
 .rStat { padding: 16px; border-radius: 16px; background: rgba(255,255,255,0.05); border: 1px solid var(--line); }
 .rStat .value { margin-top: 6px; font-size: 30px; font-weight: 900; }
 @media (max-width: 1100px) {
-    body { padding: 12px; }
-    #app { aspect-ratio: auto; min-height: calc(100vh - 24px); }
+    body { padding: 0; }
+    #app { width: 100vw; height: 100vh; aspect-ratio: auto; min-height: 100vh; }
     #menu, .features, .grid2, .resultGrid { flex-direction: column; grid-template-columns: 1fr; }
-    .top, .bottom { flex-direction: column; align-items: stretch; }
+    .top, .bottom { left: 8px; right: 8px; gap: 8px; }
     .stats, .help { flex-wrap: wrap; }
+    .now, .health, .stats, .status { min-width: 0; }
 }
 </style>
 </head>
@@ -1297,7 +1300,7 @@ function finish(failed=false){
     ui.resultsWrap.classList.add("show");
 }
 function laneX(i){ return 224 + i * 104; }
-function receptorY(){ return 118; }
+function receptorY(){ return 186; }
 function arrow(x, y, size, angle, fill, stroke, alpha=1){
     ctx.save();
     ctx.translate(x, y);
