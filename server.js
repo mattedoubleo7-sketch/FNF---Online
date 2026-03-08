@@ -5,6 +5,7 @@ const { Server } = require("socket.io");
 
 const ROOT = __dirname;
 const rooms = new Map();
+const MATCH_START_DELAY_MS = 8000;
 
 function makePlayerName() {
   return "Player " + Math.floor(1000 + Math.random() * 9000);
@@ -25,11 +26,22 @@ function snapshotFor(room, socketId) {
     roomId: room.id,
     role,
     songId: room.songId,
+    ready: {
+      host: !!room.hostReady,
+      guest: !!room.guestReady
+    },
+    startAt: Number(room.startAt || 0),
     players: {
       host: room.hostUser,
       guest: room.guestUser
     }
   };
+}
+
+function resetReady(room) {
+  room.hostReady = false;
+  room.guestReady = false;
+  room.startAt = 0;
 }
 
 function broadcastRoom(io, room) {
@@ -62,6 +74,7 @@ function leaveRoom(io, socket) {
     rooms.delete(roomId);
     return;
   }
+  resetReady(room);
   broadcastRoom(io, room);
 }
 
@@ -113,7 +126,10 @@ function createGameServer({ port = Number(process.env.PORT) || 3000, host = proc
         hostId: socket.id,
         hostUser: socket.data.user,
         guestId: null,
-        guestUser: null
+        guestUser: null,
+        hostReady: false,
+        guestReady: false,
+        startAt: 0
       };
       rooms.set(room.id, room);
       socket.data.roomId = room.id;
@@ -139,31 +155,53 @@ function createGameServer({ port = Number(process.env.PORT) || 3000, host = proc
       socket.data.roomId = room.id;
       socket.data.role = "guest";
       socket.join(room.id);
+      resetReady(room);
       broadcastRoom(io, room);
     });
 
     socket.on("room:leave", () => {
       leaveRoom(io, socket);
-      socket.emit("room:update", { roomId: "", role: null, songId: null, players: { host: null, guest: null } });
+      socket.emit("room:update", {
+        roomId: "",
+        role: null,
+        songId: null,
+        ready: { host: false, guest: false },
+        startAt: 0,
+        players: { host: null, guest: null }
+      });
     });
 
     socket.on("room:set-song", payload => {
       const room = rooms.get(socket.data.roomId || "");
       if (!room || socket.data.role !== "host") return;
       room.songId = payload?.songId || room.songId;
+      resetReady(room);
       broadcastRoom(io, room);
     });
-
-    socket.on("game:start", payload => {
+    socket.on("game:ready", payload => {
       const room = rooms.get(socket.data.roomId || "");
-      if (!room || socket.data.role !== "host") return;
+      if (!room || (socket.data.role !== "host" && socket.data.role !== "guest")) return;
       if (!room.hostId || !room.guestId) {
         socket.emit("room:error", { message: "A second player has to join before you can start." });
         return;
       }
-      room.songId = payload?.songId || room.songId;
-      const startAt = Date.now() + 5000;
-      io.to(room.id).emit("game:start", { roomId: room.id, songId: room.songId, startAt });
+      if (socket.data.role === "host" && payload?.songId) {
+        room.songId = payload.songId;
+      }
+      if (socket.data.role === "host") room.hostReady = !!payload?.ready;
+      if (socket.data.role === "guest") room.guestReady = !!payload?.ready;
+      room.startAt = 0;
+      if (room.hostReady && room.guestReady) {
+        const startAt = Date.now() + MATCH_START_DELAY_MS;
+        resetReady(room);
+        room.startAt = startAt;
+        io.to(room.id).emit("game:start", {
+          roomId: room.id,
+          songId: room.songId,
+          startAt,
+          delayMs: MATCH_START_DELAY_MS
+        });
+      }
       broadcastRoom(io, room);
     });
 

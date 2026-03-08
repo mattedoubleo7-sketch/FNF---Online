@@ -20,7 +20,7 @@ Object.assign(ui, {
 });
 
 state.startTimer = null;
-state.network = { socket: null, connected: false, roomId: "", role: null, peerConnected: false, user: null, matchStartAt: 0, lastTrackSync: 0 };
+state.network = { socket: null, connected: false, roomId: "", role: null, peerConnected: false, user: null, matchStartAt: 0, pendingStartAt: 0, lastTrackSync: 0, ready: { host: false, guest: false } };
 
 let socketClientPromise = null;
 const originalVoice = voice;
@@ -114,6 +114,37 @@ function remoteStats() {
   return state.stats ? state.stats[remoteSideKey()] : blankSide();
 }
 
+function localReady() {
+  if (state.network.role === "host") return !!state.network.ready.host;
+  if (state.network.role === "guest") return !!state.network.ready.guest;
+  return false;
+}
+
+function peerReady() {
+  if (state.network.role === "host") return !!state.network.ready.guest;
+  if (state.network.role === "guest") return !!state.network.ready.host;
+  return false;
+}
+
+function onlineCountdownSeconds() {
+  if (!state.network.pendingStartAt || state.network.pendingStartAt <= Date.now()) return 0;
+  return Math.ceil((state.network.pendingStartAt - Date.now()) / 1000);
+}
+
+function syncReadyButton() {
+  if (!ui.playBtn) return;
+  if (state.network.pendingStartAt && state.network.pendingStartAt > Date.now()) {
+    ui.playBtn.textContent = "Loading Match";
+    return;
+  }
+  ui.playBtn.textContent = localReady() ? "Unready" : "Ready Up";
+}
+
+function emitReadyState(ready) {
+  if (!state.network.socket || !state.network.roomId) return;
+  state.network.socket.emit("game:ready", { ready: !!ready, songId: state.selectedSong });
+}
+
 function setOnlineMessage(title, hint) {
   if (ui.onlineStatus) ui.onlineStatus.textContent = title;
   if (ui.onlineHint) ui.onlineHint.textContent = hint || "";
@@ -140,6 +171,7 @@ function syncModeUI() {
 function updateOnlinePanel() {
   ui.onlineAccount.textContent = state.network.user ? state.network.user.username : "Anonymous";
   if (state.network.roomId && document.activeElement !== ui.roomCodeInput) ui.roomCodeInput.value = state.network.roomId;
+  syncReadyButton();
   if (!onlineSupported()) {
     setOnlineMessage("Server mode required", "Open the game through the server URL to use online rooms.");
     return;
@@ -149,14 +181,32 @@ function updateOnlinePanel() {
     return;
   }
   if (!state.network.roomId) {
+    state.network.pendingStartAt = 0;
+    state.network.ready = { host: false, guest: false };
     setOnlineMessage("Server ready", "Host a room or enter a room code to join one.");
     return;
   }
-  if (state.network.role === "host") {
-    setOnlineMessage(state.network.peerConnected ? "Room " + state.network.roomId + " ready" : "Room " + state.network.roomId + " waiting", state.network.peerConnected ? "Pick a song and press Start Online Match." : "Share the room code and wait for your friend.");
-  } else {
-    setOnlineMessage("Joined room " + state.network.roomId, "The host controls song select and match start.");
+  if (state.network.pendingStartAt && state.network.pendingStartAt > Date.now()) {
+    setOnlineMessage("Loading match", "Both players are ready. Match starts in " + onlineCountdownSeconds() + " seconds so both games can finish loading.");
+    return;
   }
+  if (!state.network.peerConnected) {
+    setOnlineMessage("Room " + state.network.roomId + " waiting", "Share the room code and wait for your friend.");
+    return;
+  }
+  if (localReady() && peerReady()) {
+    setOnlineMessage("Both players ready", "The server is preparing the match now.");
+    return;
+  }
+  if (localReady()) {
+    setOnlineMessage("You are ready", "Waiting for the other player to ready up.");
+    return;
+  }
+  if (peerReady()) {
+    setOnlineMessage("Opponent ready", "Press Ready Up when your game is loaded.");
+    return;
+  }
+  setOnlineMessage("Room " + state.network.roomId + " ready check", "Both players have to press Ready Up. The match starts with an 8 second load window.");
 }
 
 async function ensureOnlineSocket() {
@@ -186,6 +236,9 @@ async function ensureOnlineSocket() {
     state.network.peerConnected = false;
     state.network.roomId = "";
     state.network.role = null;
+    state.network.ready = { host: false, guest: false };
+    state.network.pendingStartAt = 0;
+    state.network.matchStartAt = 0;
     syncModeUI();
     updateOnlinePanel();
   });
@@ -199,6 +252,8 @@ async function ensureOnlineSocket() {
   socket.on("room:update", payload => {
     state.network.roomId = payload && payload.roomId ? payload.roomId : "";
     state.network.role = payload && payload.role ? payload.role : null;
+    state.network.ready = payload && payload.ready ? { host: !!payload.ready.host, guest: !!payload.ready.guest } : { host: false, guest: false };
+    state.network.pendingStartAt = Number(payload?.startAt || 0);
     const other = state.network.role === "host" ? payload?.players?.guest : payload?.players?.host;
     state.network.peerConnected = !!other;
     if (payload && payload.songId) selectSong(payload.songId, true);
@@ -207,8 +262,11 @@ async function ensureOnlineSocket() {
   });
   socket.on("game:start", payload => {
     if (payload && payload.songId) selectSong(payload.songId, true);
-    const startAt = payload && payload.startAt ? payload.startAt : Date.now() + 1200;
-    setOnlineMessage("Match starting", "Both players are syncing to the same server clock now.");
+    const delayMs = Number(payload?.delayMs || 8000);
+    const startAt = payload && payload.startAt ? payload.startAt : Date.now() + delayMs;
+    state.network.pendingStartAt = startAt;
+    state.network.ready = { host: false, guest: false };
+    setOnlineMessage("Match starting", "Both players are ready. The match will start in " + Math.ceil(delayMs / 1000) + " seconds so audio can finish loading on both machines.");
     startSong(payload && payload.songId ? payload.songId : state.selectedSong, { forceMode: "online", startAt });
   });
   socket.on("game:judgment", payload => applyRemoteJudgment(payload));
@@ -238,6 +296,9 @@ function leaveOnlineRoom() {
   state.network.roomId = "";
   state.network.role = null;
   state.network.peerConnected = false;
+  state.network.ready = { host: false, guest: false };
+  state.network.pendingStartAt = 0;
+  state.network.matchStartAt = 0;
   syncModeUI();
   updateOnlinePanel();
 }
@@ -438,6 +499,13 @@ refreshHUD = function(t){
   ui.timer.textContent = formatTime(t) + " / " + formatTime(state.chart.totalTime);
   ui.p1Score.textContent = secondary.score.toLocaleString();
   ui.p1Combo.textContent = "Combo " + secondary.combo;
+  const waitMs = state.network.matchStartAt - Date.now();
+  if (waitMs > 0) {
+    const seconds = waitMs > 1000 ? String(Math.ceil(waitMs / 1000)) : (waitMs / 1000).toFixed(1);
+    ui.statusText.textContent = "Loading match";
+    ui.statusSub.textContent = "Both players are ready. Starting in " + seconds + " seconds so both clients can finish loading.";
+    return;
+  }
   if (state.selectedSong === "perseverance" && window.PERSEVERANCE_DATA) {
     const section = perseveranceSection(t);
     if (section && !state.perseverance.prompt) {
@@ -491,12 +559,14 @@ startSong = function(id = state.selectedSong, options = {}){
   state.receptorFx.forEach(fx => fx.time = -10);
   state.perseverance = { canDodge: false, prompt: false, dodging: false, dodged: false, resolved: false, dodgeStart: -10, flashTime: -10, gfAlpha: 0 };
   state.camera = { x: 0, target: 0, sideTime: 0, lastSide: "both" };
-  state.network.matchStartAt = Number(options.startAt || Date.now() + 1200);
+  state.network.matchStartAt = Number(options.startAt || Date.now() + 8000);
+  state.network.pendingStartAt = state.network.matchStartAt;
   state.network.lastTrackSync = 0;
+  state.network.ready = { host: false, guest: false };
   ui.songTitle.textContent = state.currentSong.title;
   ui.songSub.textContent = state.currentSong.subtitle;
   ui.statusText.textContent = "Match syncing";
-  ui.statusSub.textContent = "Both players are locked to the same server clock. Audio will auto-correct if a browser starts late.";
+  ui.statusSub.textContent = "Both players readied up. The server is giving the match 8 seconds to preload before audio starts.";
   ui.timer.textContent = "0:00 / " + formatTime(state.chart.totalTime);
   ui.menu.classList.remove("show");
   ui.settings.classList.remove("show");
@@ -526,27 +596,34 @@ startSong = function(id = state.selectedSong, options = {}){
 };
 
 ui.playBtn.onclick = () => {
-  if (state.network.role !== "host") {
-    setOnlineMessage("Waiting for host", "Only the host can start the online match.");
+  if (!state.network.roomId) {
+    setOnlineMessage("Join a room first", "Host a room or enter a room code before readying up.");
     return;
   }
   if (!state.network.peerConnected) {
     setOnlineMessage("Need another player", "A second player has to join before the match can start.");
     return;
   }
-  if (state.network.socket) state.network.socket.emit("game:start", { songId: state.selectedSong });
+  if (state.network.pendingStartAt && state.network.pendingStartAt > Date.now()) {
+    setOnlineMessage("Loading match", "Both players are already ready. Waiting for the 8 second load countdown.");
+    return;
+  }
+  emitReadyState(!localReady());
 };
 
 ui.replayBtn.onclick = () => {
-  if (state.network.socket && state.network.role === "host") state.network.socket.emit("game:start", { songId: state.selectedSong });
+  if (!state.network.socket || !state.network.roomId) return;
+  ui.resultsWrap.classList.remove("show");
+  emitReadyState(true);
+  updateOnlinePanel();
 };
 
 ui.menuBtn.onclick = () => {
   stopExternalAudio();
   ui.resultsWrap.classList.remove("show");
   ui.menu.classList.add("show");
-  ui.statusText.textContent = "Join a room and start the battle.";
-  ui.statusSub.textContent = "This build is server-based only. Host or join a room, then let the host start the match.";
+  ui.statusText.textContent = "Join a room and ready up.";
+  ui.statusSub.textContent = "This build is server-based only. Host or join a room, then both players press Ready Up to start.";
 };
 
 ui.versusToggle.onchange = () => {
@@ -571,27 +648,27 @@ document.addEventListener("fullscreenchange", syncViewportMode);
 
 renderSongs();
 renderBinds();
-if (ui.playBtn) ui.playBtn.textContent = "Start Online Match";
+if (ui.playBtn) ui.playBtn.textContent = "Ready Up";
 if (ui.statusText) ui.statusText.textContent = "Connect and join a room.";
-if (ui.statusSub) ui.statusSub.textContent = "This build is server-based only. Host or join a room, then let the host start the match.";
+if (ui.statusSub) ui.statusSub.textContent = "This build is server-based only. Host or join a room, then both players press Ready Up to start.";
 const onlineMetaLabels = Array.from(document.querySelectorAll(".onlineMeta .eyebrow"));
 if (onlineMetaLabels[1]) onlineMetaLabels[1].textContent = "Player";
 const heroEyebrow = document.querySelector("#menu .hero .eyebrow");
 if (heroEyebrow) heroEyebrow.textContent = "Online rhythm battle";
 const heroText = document.querySelector("#menu .hero p");
-if (heroText) heroText.textContent = "This build is server-based only. Open the shared URL, host or join a room, and play synced matches with your friends.";
+if (heroText) heroText.textContent = "This build is server-based only. Open the shared URL, host or join a room, then have both players press Ready Up so the match gets an 8 second preload before starting.";
 const featureNodes = Array.from(document.querySelectorAll("#menu .feature .name"));
 const featureDescNodes = Array.from(document.querySelectorAll("#menu .feature .desc"));
 if (featureNodes[0]) featureNodes[0].textContent = "Server-based rooms";
 if (featureDescNodes[0]) featureDescNodes[0].textContent = "Everyone connects through the same room server, so there is no account setup anymore.";
 if (featureNodes[1]) featureNodes[1].textContent = "Synced matches";
-if (featureDescNodes[1]) featureDescNodes[1].textContent = "The host controls the song and match start, while both clients judge their own side in the same room.";
+if (featureDescNodes[1]) featureDescNodes[1].textContent = "Both players have to ready up before the server starts an 8 second preload, which keeps everyone on the same part of the song.";
 if (featureNodes[2]) featureNodes[2].textContent = "One shared link";
 if (featureDescNodes[2]) featureDescNodes[2].textContent = "Deploy the server once, send your friends the URL, and they can join a room immediately.";
 const pills = Array.from(document.querySelectorAll(".help .pill"));
 if (pills[0]) pills[0].innerHTML = "<strong>Connect:</strong> Open the shared URL";
-if (pills[1]) pills[1].innerHTML = "<strong>Host:</strong> Pick song, share room code";
-if (pills[2]) pills[2].innerHTML = "<strong>Join:</strong> Enter room code";
+if (pills[1]) pills[1].innerHTML = "<strong>Host:</strong> Pick song, then ready up";
+if (pills[2]) pills[2].innerHTML = "<strong>Join:</strong> Enter room code, then ready up";
 const settingsBlocks = Array.from(document.querySelectorAll("#settings .block"));
 if (settingsBlocks[1]) settingsBlocks[1].style.display = "none";
 const controlsTitle = document.querySelector("#settings .block h3");
@@ -599,4 +676,7 @@ if (controlsTitle) controlsTitle.textContent = "Room Controls";
 syncModeUI();
 syncViewportMode();
 updateOnlinePanel();
+setInterval(() => {
+  if (state.network.pendingStartAt && state.network.pendingStartAt > Date.now()) updateOnlinePanel();
+}, 250);
 ensureOnlineSocket();
