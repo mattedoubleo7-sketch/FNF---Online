@@ -8,6 +8,33 @@
     const lerp = (a, b, t) => a + (b - a) * clamp01(t);
     const nowSec = () => performance.now() / 1000;
     const ce = { ready: false, images: {} };
+    Object.assign(CE.stage.layout, {
+      speakerX: 640,
+      speakerY: 538,
+      gfX: 640,
+      gfY: 424,
+      gfScale: 0.66,
+      oppX: 430,
+      oppY: 642,
+      oppScale: 0.58,
+      playerX: 1016,
+      playerY: 644,
+      playerScale: 0.66,
+      mattX: 1118,
+      mattY: 590,
+      mattScale: 0.62,
+      tordbotX: 925,
+      tordbotY: 616,
+      tordbotScale: 0.38,
+      tomRunX: 1184,
+      tomRunY: 612,
+      tomRunScale: 0.56,
+      toomArponX: 1124,
+      toomArponY: 616,
+      toomArponScale: 0.56
+    });
+    const DEFAULT_HOLD = window.PERSEVERANCE_DATA?.sprites?.notes?.default?.hold || null;
+    const ROCKET_FRAME = { x: 0, y: 0, w: 314, h: 538, fx: 0, fy: 0, fw: 314, fh: 538, rotated: false };
 
     ["edd", "eddT", "eddV", "tord", "bft", "bfv", "bfsl", "eddsl", "none"].forEach(key => {
       state.poses[key] = state.poses[key] || { lane: 1, time: -10, kind: "hit" };
@@ -70,6 +97,8 @@
         bft: CE.sprites.player.bft.image,
         bfv: CE.sprites.player.bfv.image,
         bfBase: window.CHALLENGE_EDD_BF_DATA?.image,
+        defaultNotes: window.PERSEVERANCE_DATA?.sprites?.notes?.default?.image,
+        rocket: "assets/challenge-edd-note-rocket.png",
         bfsl: CE.sprites.player.bfsl.image,
         eddsl: CE.sprites.player.eddsl.image,
         matt: CE.sprites.extras.matt.image,
@@ -93,6 +122,144 @@
     function stageImagesReady() {
       initAssets();
       return imageReady(ce.images.sky) && imageReady(ce.images.patio) && imageReady(ce.images.fence);
+    }
+
+    function defaultHoldReady() {
+      return !!DEFAULT_HOLD && imageReady(ce.images.defaultNotes);
+    }
+
+    function drawPlainFallbackSustain(note, headY, tailY, alpha, x = laneX(note.lane)) {
+      const top = Math.min(headY, tailY);
+      const bottom = Math.max(headY, tailY);
+      const cap = 34;
+      const bodyTop = top + cap * 0.44;
+      const bodyBottom = bottom - cap * 0.44;
+      if (bodyBottom > bodyTop) {
+        ctx.save();
+        ctx.globalAlpha = alpha * 0.7;
+        ctx.shadowBlur = 18;
+        ctx.shadowColor = COLORS[note.lane];
+        ctx.fillStyle = COLORS[note.lane];
+        ctx.fillRect(x - 14, bodyTop, 28, bodyBottom - bodyTop);
+        ctx.globalAlpha = alpha * 0.4;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(x - 5, bodyTop + 2, 10, Math.max(0, bodyBottom - bodyTop - 4));
+        ctx.restore();
+      }
+      drawSportingNote(note.lane, x, tailY, 0.52, alpha * 0.94);
+    }
+
+    function drawDefaultHoldSustain(note, headY, tailY, alpha, x = laneX(note.lane)) {
+      const hold = DEFAULT_HOLD?.[laneDir(note.lane)];
+      const img = ce.images.defaultNotes;
+      if (!hold || !imageReady(img)) return drawPlainFallbackSustain(note, headY, tailY, alpha, x);
+      const bodyScale = 0.86;
+      const top = Math.min(headY, tailY);
+      const bottom = Math.max(headY, tailY);
+      const endH = (hold.end.fh || hold.end.h) * bodyScale;
+      const bodyW = (hold.piece.fw || hold.piece.w) * bodyScale;
+      const bodyTop = top + endH * 0.44;
+      const bodyBottom = bottom - endH * 0.44;
+      if (bodyBottom > bodyTop) drawAtlasStretchVertical(img, hold.piece, x, bodyTop, bodyW, bodyBottom - bodyTop, alpha * 0.9);
+      drawAtlasCentered(img, hold.end, x, tailY, bodyScale, alpha);
+    }
+
+    function rocketRotation(lane) {
+      return ({ left: -Math.PI / 2, down: Math.PI, up: 0, right: Math.PI / 2 })[laneDir(lane)] || 0;
+    }
+
+    function drawRocketNote(note, x, y, scale, alpha) {
+      const img = ce.images.rocket;
+      if (!imageReady(img)) {
+        drawSportingNote(note.lane, x, y, 0.62 * scale, alpha);
+        return;
+      }
+      const drawScale = 0.18 * scale;
+      const width = ROCKET_FRAME.fw * drawScale;
+      const height = ROCKET_FRAME.fh * drawScale;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(x, y);
+      ctx.rotate(rocketRotation(note.lane));
+      ctx.shadowBlur = 26;
+      ctx.shadowColor = "rgba(255,132,92,0.95)";
+      ctx.drawImage(img, ROCKET_FRAME.x, ROCKET_FRAME.y, ROCKET_FRAME.w, ROCKET_FRAME.h, -width / 2, -height / 2, width, height);
+      ctx.restore();
+    }
+
+    function activeChallengeSection(t) {
+      return state.chart?.timeline?.find(entry => t >= entry.startTime && t < entry.endTime) || null;
+    }
+
+    function currentChallengeTurn(t) {
+      return activeChallengeSection(t)?.turn || "both";
+    }
+
+    function challengeTordShake(t, phase = currentState(t)) {
+      if (phase.stageMode !== "tord" || phase.opp !== "tord") return { x: 0, y: 0 };
+      const pose = state.poses.tord || { time: -10 };
+      const age = nowSec() - pose.time;
+      if (age < 0 || age > 0.24) return { x: 0, y: 0 };
+      const amount = 10 * (1 - age / 0.24);
+      return { x: Math.sin(t * 90) * amount, y: Math.cos(t * 66) * amount * 0.58 };
+    }
+
+    function drawSidePortraitBackdrop(side) {
+      const width = 272;
+      ctx.save();
+      if (side === "left") {
+        const grad = ctx.createLinearGradient(0, 0, width, 0);
+        grad.addColorStop(0, "rgba(145,12,28,0.84)");
+        grad.addColorStop(0.75, "rgba(145,12,28,0.36)");
+        grad.addColorStop(1, "rgba(145,12,28,0)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, width, canvas.height);
+      } else {
+        const grad = ctx.createLinearGradient(canvas.width - width, 0, canvas.width, 0);
+        grad.addColorStop(0, "rgba(145,12,28,0)");
+        grad.addColorStop(0.25, "rgba(145,12,28,0.36)");
+        grad.addColorStop(1, "rgba(145,12,28,0.84)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(canvas.width - width, 0, width, canvas.height);
+      }
+      ctx.restore();
+    }
+
+    function sidePortraitState(t, key) {
+      if (!key || key === "none") return null;
+      if (key === "player") return challengeBfSpriteState(t);
+      if (CE.sprites.player?.[key]) {
+        const sprite = CE.sprites.player[key];
+        const image = imageForVariant(key);
+        if (!sprite || !imageReady(image)) return null;
+        const stateInfo = poseInfoForSprite(sprite, key, t, null);
+        return stateInfo ? { state: stateInfo, image, scale: variantScale(key, "player"), flipX: !!sprite.flipX } : null;
+      }
+      return null;
+    }
+
+    function drawTordTurnPortraits(t, phase) {
+      if (phase.stageMode !== "tord") return;
+      if (!["player", "both"].includes(currentChallengeTurn(t))) return;
+      const playerKey = phase.player;
+      if (!playerKey || playerKey === "none") return;
+      const info = sidePortraitState(t, playerKey);
+      if (!info) return;
+      const side = playerKey.startsWith("edd") ? "left" : "right";
+      drawSidePortraitBackdrop(side);
+      ctx.save();
+      if (side === "left") {
+        ctx.beginPath();
+        ctx.rect(0, 0, 290, canvas.height);
+        ctx.clip();
+        drawSpriteState(info.state, info.image, 132, canvas.height - 16, info.scale * 1.92, false, 0.96);
+      } else {
+        ctx.beginPath();
+        ctx.rect(canvas.width - 290, 0, 290, canvas.height);
+        ctx.clip();
+        drawSpriteState(info.state, info.image, canvas.width - 124, canvas.height - 12, info.scale * 1.8, info.flipX, 0.96);
+      }
+      ctx.restore();
     }
 
     function challengeUsesSportingNotes() {
@@ -232,11 +399,12 @@
 
     function variantScale(key, role = "opp") {
       const base = CE.stage.layout[role === "opp" ? "oppScale" : "playerScale"];
-      if (key === "tord") return 0.34;
-      if (key === "bfsl") return 0.42;
-      if (key === "eddsl") return 0.42;
-      if (key === "bft") return 0.62;
-      if (key === "bfv") return 0.64;
+      if (key === "tord") return 0.54;
+      if (key === "bfsl") return 0.5;
+      if (key === "eddsl") return 0.5;
+      if (key === "bft") return 0.72;
+      if (key === "bfv") return 0.68;
+      if (key === "eddT") return 0.62;
       return base;
     }
 
@@ -319,11 +487,11 @@
       ctx.restore();
     }
 
-    function drawChallengeSustain(note, headY, tailY, alpha) {
-      if (!CE.sprites?.notes?.hold) return;
+    function drawChallengeSustain(note, headY, tailY, alpha, x = laneX(note.lane)) {
+      if (!CE.sprites?.notes?.hold) return drawDefaultHoldSustain(note, headY, tailY, alpha, x);
       const img = ce.images.notes;
       const hold = CE.sprites.notes.hold?.[laneDir(note.lane)];
-      if (!imageReady(img) || !hold) return;
+      if (!imageReady(img) || !hold) return drawDefaultHoldSustain(note, headY, tailY, alpha, x);
       const bodyScale = 0.82;
       const top = Math.min(headY, tailY);
       const bottom = Math.max(headY, tailY);
@@ -331,50 +499,37 @@
       const bodyW = (hold.piece.fw || hold.piece.w) * bodyScale;
       const bodyTop = top + endH * 0.45;
       const bodyBottom = bottom - endH * 0.45;
-      if (bodyBottom > bodyTop) drawAtlasStretchVertical(img, hold.piece, laneX(note.lane), bodyTop, bodyW, bodyBottom - bodyTop, alpha * 0.86);
-      drawAtlasCentered(img, hold.end, laneX(note.lane), tailY, bodyScale, alpha);
+      if (bodyBottom > bodyTop) drawAtlasStretchVertical(img, hold.piece, x, bodyTop, bodyW, bodyBottom - bodyTop, alpha * 0.86);
+      drawAtlasCentered(img, hold.end, x, tailY, bodyScale, alpha);
     }
 
-    function drawSportingFallbackSustain(note, headY, tailY, alpha) {
-      const x = laneX(note.lane);
-      const top = Math.min(headY, tailY);
-      const bottom = Math.max(headY, tailY);
-      const cap = 34;
-      const bodyTop = top + cap * 0.44;
-      const bodyBottom = bottom - cap * 0.44;
-      if (bodyBottom > bodyTop) {
-        ctx.save();
-        ctx.globalAlpha = alpha * 0.7;
-        ctx.shadowBlur = 18;
-        ctx.shadowColor = COLORS[note.lane];
-        ctx.fillStyle = COLORS[note.lane];
-        ctx.fillRect(x - 14, bodyTop, 28, bodyBottom - bodyTop);
-        ctx.globalAlpha = alpha * 0.4;
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(x - 5, bodyTop + 2, 10, Math.max(0, bodyBottom - bodyTop - 4));
-        ctx.restore();
+    function drawSportingFallbackSustain(note, headY, tailY, alpha, x = laneX(note.lane)) {
+      if (defaultHoldReady()) {
+        drawDefaultHoldSustain(note, headY, tailY, alpha, x);
+        return;
       }
-      drawSportingNote(note.lane, x, tailY, 0.52, alpha * 0.94);
+      drawPlainFallbackSustain(note, headY, tailY, alpha, x);
     }
 
     function drawChallengeNote(note, x, y, scale, alpha) {
-      if (!CE.sprites?.notes?.gem) return;
+      if (note.rocket) {
+        drawRocketNote(note, x, y, scale, alpha);
+        return;
+      }
+      if (!CE.sprites?.notes?.gem) {
+        drawSportingNote(note.lane, x, y, 0.62 * scale, alpha);
+        return;
+      }
       const img = ce.images.notes;
       const frame = CE.sprites.notes.gem?.[laneDir(note.lane)];
-      if (!imageReady(img) || !frame) return;
-      ctx.save();
-      ctx.shadowBlur = note.rocket ? 26 : 16;
-      ctx.shadowColor = note.rocket ? "#ff5c38" : COLORS[note.lane];
-      if (note.rocket) ctx.filter = "saturate(1.35) hue-rotate(-28deg)";
-      drawAtlasCentered(img, frame, x, y, 0.74 * scale, alpha);
-      if (note.rocket) {
-        ctx.filter = "none";
-        ctx.strokeStyle = "rgba(255,160,120,0.95)";
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.arc(x, y, 24 * scale, 0, Math.PI * 2);
-        ctx.stroke();
+      if (!imageReady(img) || !frame) {
+        drawSportingNote(note.lane, x, y, 0.62 * scale, alpha);
+        return;
       }
+      ctx.save();
+      ctx.shadowBlur = 16;
+      ctx.shadowColor = COLORS[note.lane];
+      drawAtlasCentered(img, frame, x, y, 0.74 * scale, alpha);
       ctx.restore();
     }
 
@@ -383,11 +538,14 @@
       const sky = ce.images.sky;
       const patio = ce.images.patio;
       const fence = ce.images.fence;
+      const bot = tordbotState(t, phase.stageMode);
+      const botBehindHouse = !!(bot && bot.state?.animName === "enter");
       if (imageReady(sky)) {
         const skyW = sky.naturalWidth * layout.skyScale;
         const skyX = (canvas.width - skyW) / 2;
         drawSimpleImage("sky", skyX, -122, layout.skyScale);
       }
+      if (botBehindHouse) drawSpriteState(bot.state, ce.images.tordbot, bot.x, bot.y, bot.scale, false, 1);
       if (imageReady(patio)) {
         const patioW = patio.naturalWidth * layout.patioScale;
         const patioX = (canvas.width - patioW) / 2;
@@ -404,8 +562,7 @@
         drawSpriteState(gfState, spriteState.images.gf, layout.gfX, layout.gfY, layout.gfScale, false, 1);
       }
 
-      const bot = tordbotState(t, phase.stageMode);
-      if (bot) drawSpriteState(bot.state, ce.images.tordbot, bot.x, bot.y, bot.scale, false, 1);
+      if (bot && !botBehindHouse) drawSpriteState(bot.state, ce.images.tordbot, bot.x, bot.y, bot.scale, false, 1);
 
       const matt = mattState(t, phase.stageMode);
       if (matt) drawSpriteState(matt.state, ce.images.matt, matt.x, matt.y, matt.scale, false, 1);
@@ -429,13 +586,18 @@
         drawNormalStage(t, phase);
         return;
       }
+      const shake = challengeTordShake(t, phase);
       const width = img.naturalWidth * layout.tordBgScale;
       const height = img.naturalHeight * layout.tordBgScale;
       const x = (canvas.width - width) / 2;
       const y = (canvas.height - height) / 2;
+      ctx.save();
+      ctx.translate(shake.x, shake.y);
       drawSimpleImage("tordBg", x, y, layout.tordBgScale);
       const oppState = opponentSpriteState(t, phase.opp);
-      if (oppState) drawSpriteState(oppState.state, oppState.image, canvas.width * 0.5, 632, oppState.scale, oppState.flipX, 1);
+      if (oppState) drawSpriteState(oppState.state, oppState.image, canvas.width * 0.5, 646, oppState.scale, oppState.flipX, 1);
+      ctx.restore();
+      drawTordTurnPortraits(t, phase);
     }
 
     function opponentSpriteState(t, oppKey) {
@@ -466,7 +628,7 @@
       if (t >= mattIdleTime) {
         return { state: { sprite, animName: "idle", elapsed: t - mattIdleTime, loop: true }, x: CE.stage.layout.mattX, y: CE.stage.layout.mattY, scale: CE.stage.layout.mattScale };
       }
-      return { state: { sprite, animName: "enter", elapsed: t - mattWalkTime, loop: true }, x: lerp(canvas.width + 200, CE.stage.layout.mattX, (t - mattWalkTime) / 8), y: CE.stage.layout.mattY, scale: CE.stage.layout.mattScale };
+      return { state: { sprite, animName: "enter", elapsed: t - mattWalkTime, loop: true }, x: lerp(canvas.width + 860, CE.stage.layout.mattX, (t - mattWalkTime) / 8), y: CE.stage.layout.mattY, scale: CE.stage.layout.mattScale };
     }
 
     function tordbotState(t, stageMode) {
@@ -663,22 +825,24 @@
     receptors = function(t) {
       if (state.selectedSong !== "challengeEdd") return baseReceptors(t);
       initAssets();
-      const y = receptorY();
+      const phase = currentState(t);
+      const shake = challengeTordShake(t, phase);
+      const y = receptorY() + shake.y;
       if (challengeUsesSportingNotes()) {
         ctx.strokeStyle = "rgba(255,255,255,0.1)";
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.moveTo(canvas.width * .5, 72);
-        ctx.lineTo(canvas.width * .5, 452);
+        ctx.moveTo(canvas.width * .5 + shake.x, 72 + shake.y);
+        ctx.lineTo(canvas.width * .5 + shake.x, 452 + shake.y);
         ctx.stroke();
         for (let lane = 0; lane < 8; lane++) {
-          const x = laneX(lane);
+          const x = laneX(lane) + shake.x;
           drawSportingReceptor(lane, x, y);
           ctx.strokeStyle = "rgba(255,255,255,0.06)";
           ctx.lineWidth = 1.5;
           ctx.beginPath();
           ctx.moveTo(x, y + 26);
-          ctx.lineTo(x, 448);
+          ctx.lineTo(x, 448 + shake.y);
           ctx.stroke();
         }
         return;
@@ -687,17 +851,17 @@
       ctx.strokeStyle = "rgba(255,255,255,0.1)";
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.moveTo(canvas.width * .5, 72);
-      ctx.lineTo(canvas.width * .5, 452);
+      ctx.moveTo(canvas.width * .5 + shake.x, 72 + shake.y);
+      ctx.lineTo(canvas.width * .5 + shake.x, 452 + shake.y);
       ctx.stroke();
       for (let lane = 0; lane < 8; lane++) {
-        const x = laneX(lane);
+        const x = laneX(lane) + shake.x;
         drawChallengeReceptor(lane, x, y);
         ctx.strokeStyle = "rgba(255,255,255,0.06)";
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.moveTo(x, y + 26);
-        ctx.lineTo(x, 448);
+        ctx.lineTo(x, 448 + shake.y);
         ctx.stroke();
       }
     };
@@ -706,6 +870,8 @@
       if (state.selectedSong !== "challengeEdd") return baseNotes(t);
       if (!state.chart) return;
       initAssets();
+      const phase = currentState(t);
+      const shake = challengeTordShake(t, phase);
       if (challengeUsesSportingNotes()) {
         const scroll = state.currentSong.scroll;
         for (const note of state.chart.notes) {
@@ -713,15 +879,17 @@
           if (note.judged && note.side !== "opp" && (!isHoldNote(note) || note.holdDone || !note.hit)) continue;
           if (note.invisible) continue;
           const diff = note.time - t;
-          const y = receptorY() + diff * scroll;
-          const tailY = receptorY() + (holdEndTime(note) - t) * scroll;
+          const x = laneX(note.lane) + shake.x;
+          const y = receptorY() + diff * scroll + shake.y;
+          const tailY = receptorY() + (holdEndTime(note) - t) * scroll + shake.y;
           if (y < -120 && tailY < -120) continue;
           if (y > canvas.height + 120 && tailY > canvas.height + 120) continue;
           const scale = clamp(1 - Math.pow(Math.abs(diff), 0.7) * .45, .75, 1.12);
           const alpha = note.side === "opp" ? .84 : 1;
-          if (isHoldNote(note)) drawSportingFallbackSustain(note, note.hit ? receptorY() : y, tailY, alpha * (note.hit ? 0.94 : 1));
+          if (isHoldNote(note)) drawSportingFallbackSustain(note, note.hit ? receptorY() + shake.y : y, tailY, alpha * (note.hit ? 0.94 : 1), x);
           if (note.hit && isHoldNote(note) && t > note.time) continue;
-          drawSportingNote(note.lane, laneX(note.lane), y, 0.62 * scale, alpha);
+          if (note.rocket) drawRocketNote(note, x, y, scale, alpha);
+          else drawSportingNote(note.lane, x, y, 0.62 * scale, alpha);
         }
         return;
       }
@@ -732,15 +900,16 @@
         if (note.judged && note.side !== "opp" && (!isHoldNote(note) || note.holdDone || !note.hit)) continue;
         if (note.invisible) continue;
         const diff = note.time - t;
-        const y = receptorY() + diff * scroll;
-        const tailY = receptorY() + (holdEndTime(note) - t) * scroll;
+        const x = laneX(note.lane) + shake.x;
+        const y = receptorY() + diff * scroll + shake.y;
+        const tailY = receptorY() + (holdEndTime(note) - t) * scroll + shake.y;
         if (y < -120 && tailY < -120) continue;
         if (y > canvas.height + 120 && tailY > canvas.height + 120) continue;
         const scale = clamp(1 - Math.pow(Math.abs(diff), 0.7) * .45, .75, 1.12);
         const alpha = note.side === "opp" ? .84 : 1;
-        if (isHoldNote(note)) drawChallengeSustain(note, note.hit ? receptorY() : y, tailY, alpha * (note.hit ? 0.94 : 1));
+        if (isHoldNote(note)) drawChallengeSustain(note, note.hit ? receptorY() + shake.y : y, tailY, alpha * (note.hit ? 0.94 : 1), x);
         if (note.hit && isHoldNote(note) && t > note.time) continue;
-        drawChallengeNote(note, laneX(note.lane), y, scale, alpha);
+        drawChallengeNote(note, x, y, scale, alpha);
       }
     };
 
