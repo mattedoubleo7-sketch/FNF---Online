@@ -64,7 +64,7 @@
     "publish": [
       {
         "provider": "generic",
-        "url": "https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/fnf"
+        "url": "https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/ONLINE"
       }
     ],
     "nsis": {
