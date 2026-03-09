@@ -1334,6 +1334,11 @@ function cameraTargets(){
     if(state.selectedSong === "brokenReality") return { oppX: canvas.width * 0.838, playerX: canvas.width * 0.288, focusY: canvas.height * 0.46 };
     return { oppX: 314, playerX: 962, focusY: canvas.height * 0.46 };
 }
+function cameraPanProfile(){
+    if(state.selectedSong === "perseverance") return { zoom: 1.18, bias: 1.18, hud: 0.24, hudClamp: 74 };
+    if(state.selectedSong === "brokenReality") return { zoom: 1.2, bias: 1.12, hud: 0.24, hudClamp: 80 };
+    return { zoom: 1.1, bias: 1, hud: 0.18, hudClamp: 56 };
+}
 function cameraActiveSide(t){
     if(!state.chart?.notes) return "both";
     let hasOpp = false, hasPlayer = false;
@@ -1358,23 +1363,24 @@ function updateCamera(t, dt){
     const side = mode === "center" ? "both" : cameraActiveSide(t);
     state.camera.lastSide = side;
     const targets = cameraTargets();
+    const profile = cameraPanProfile();
     let targetZoom = 1;
     let targetX = midX;
     let targetY = targets.focusY;
     if(mode === "pan"){
         if(side === "opp"){
-            targetZoom = 1.1;
-            targetX = targets.oppX;
+            targetZoom = profile.zoom;
+            targetX = midX + (targets.oppX - midX) * profile.bias;
         } else if(side === "player"){
-            targetZoom = 1.1;
-            targetX = targets.playerX;
+            targetZoom = profile.zoom;
+            targetX = midX + (targets.playerX - midX) * profile.bias;
         }
     }
     const speed = Math.min(1, dt * 3.2);
     state.camera.zoom += (targetZoom - state.camera.zoom) * speed;
     state.camera.focusX += (targetX - state.camera.focusX) * speed;
     state.camera.focusY += (targetY - state.camera.focusY) * speed;
-    const targetHudX = mode === "pan" ? clamp((targetX - midX) * 0.18, -56, 56) : 0;
+    const targetHudX = mode === "pan" ? clamp((targetX - midX) * profile.hud, -profile.hudClamp, profile.hudClamp) : 0;
     state.camera.highwayX += (targetHudX - state.camera.highwayX) * speed;
     state.camera.highwayY += (0 - state.camera.highwayY) * speed;
 }
