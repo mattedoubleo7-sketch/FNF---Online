@@ -94,6 +94,14 @@
       return imageReady(ce.images.sky) && imageReady(ce.images.patio) && imageReady(ce.images.fence);
     }
 
+    function challengeUsesSportingNotes() {
+      return !CE.sprites?.notes
+        && typeof sportingSpritesReady === "function"
+        && sportingSpritesReady()
+        && !!window.SPORTING_SPRITES?.notes
+        && imageReady(spriteState.images?.notes);
+    }
+
     function ensureAudioTracks() {
       if (!state.audio.challengeInst) {
         state.audio.challengeInst = new Audio(CE.audio.inst);
@@ -105,8 +113,6 @@
         state.audio.challengeVoices.preload = "auto";
         state.audio.challengeVoices.volume = 0.92;
       }
-      state.audio.inst = state.audio.challengeInst;
-      state.audio.voices = state.audio.challengeVoices;
     }
     window.ensureChallengeEddAudio = ensureAudioTracks;
 
@@ -117,7 +123,7 @@
     function totalTime() {
       const noteEnd = noteEndTime();
       const timelineEnd = (CE.chart?.timeline || []).reduce((max, section) => Math.max(max, Number(section.endTime || 0)), 0);
-      const durations = [state.audio.inst?.duration, state.audio.voices?.duration].filter(value => Number.isFinite(value) && value > 0);
+      const durations = [state.audio.challengeInst?.duration, state.audio.challengeVoices?.duration].filter(value => Number.isFinite(value) && value > 0);
       const chartEnd = Math.max(Number(CE.chart?.totalTime || 0), timelineEnd, noteEnd + 2);
       return durations.length ? Math.max(chartEnd, ...durations) : chartEnd;
     }
@@ -248,26 +254,30 @@
       const y = CE.stage.layout.speakerY;
       ctx.save();
       ctx.translate(x, y);
-      ctx.fillStyle = "#161922";
-      ctx.strokeStyle = "rgba(255,255,255,0.1)";
-      ctx.lineWidth = 4;
+      ctx.fillStyle = "#3a3d49";
+      ctx.strokeStyle = "rgba(15,18,26,0.78)";
+      ctx.lineWidth = 5;
       ctx.beginPath();
-      ctx.roundRect(-120, -142, 240, 192, 20);
+      ctx.roundRect(-106, -120, 212, 176, 18);
       ctx.fill();
       ctx.stroke();
       ctx.beginPath();
-      ctx.roundRect(-178, -112, 52, 138, 16);
-      ctx.roundRect(126, -112, 52, 138, 16);
+      ctx.roundRect(-156, -92, 46, 118, 14);
+      ctx.roundRect(110, -92, 46, 118, 14);
       ctx.fill();
       ctx.stroke();
-      [[0, -70, 52], [0, 10, 62], [-152, -42, 22], [152, -42, 22]].forEach(([cx, cy, radius]) => {
-        ctx.fillStyle = "#0e1118";
+      [[0, -54, 45], [0, 18, 56], [-133, -34, 18], [133, -34, 18]].forEach(([cx, cy, radius], index) => {
+        ctx.fillStyle = index < 2 ? "#11141e" : "#161a25";
         ctx.beginPath();
         ctx.arc(cx, cy, radius, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = "rgba(255,255,255,0.08)";
-        ctx.lineWidth = 3;
+        ctx.strokeStyle = "rgba(255,255,255,0.07)";
+        ctx.lineWidth = 2.5;
         ctx.stroke();
+        ctx.fillStyle = "rgba(255,255,255,0.06)";
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius * 0.32, 0, Math.PI * 2);
+        ctx.fill();
       });
       ctx.restore();
     }
@@ -316,6 +326,25 @@
       drawAtlasCentered(img, hold.end, laneX(note.lane), tailY, bodyScale, alpha);
     }
 
+    function drawSportingFallbackSustain(note, headY, tailY, alpha) {
+      const x = laneX(note.lane);
+      const top = Math.min(headY, tailY);
+      const bottom = Math.max(headY, tailY);
+      const cap = 28;
+      const bodyTop = top + cap * 0.45;
+      const bodyBottom = bottom - cap * 0.45;
+      if (bodyBottom > bodyTop) {
+        ctx.save();
+        ctx.globalAlpha = alpha * 0.5;
+        ctx.shadowBlur = 14;
+        ctx.shadowColor = COLORS[note.lane];
+        ctx.fillStyle = COLORS[note.lane];
+        ctx.fillRect(x - 8, bodyTop, 16, bodyBottom - bodyTop);
+        ctx.restore();
+      }
+      drawSportingNote(note.lane, x, tailY, 0.62, alpha);
+    }
+
     function drawChallengeNote(note, x, y, scale, alpha) {
       if (!CE.sprites?.notes?.gem) return;
       const img = ce.images.notes;
@@ -342,7 +371,6 @@
       const sky = ce.images.sky;
       const patio = ce.images.patio;
       const fence = ce.images.fence;
-      const car = ce.images.car;
       if (imageReady(sky)) {
         const skyW = sky.naturalWidth * layout.skyScale;
         const skyX = (canvas.width - skyW) / 2;
@@ -358,7 +386,6 @@
         const fenceX = (canvas.width - fenceW) / 2;
         drawSimpleImage("fence", fenceX, 254, layout.fenceScale, 0.98);
       }
-      drawSpeakerStack();
 
       if (phase.gf !== "none") {
         const gfState = sportingSpriteState("gf", t);
@@ -381,8 +408,6 @@
       if (tom) drawSpriteState(tom.state, ce.images.tomRun, tom.x, tom.y, tom.scale, false, 1);
       const arpon = arponState(t, phase.stageMode);
       if (arpon) drawSpriteState(arpon.state, ce.images.toomArpon, arpon.x, arpon.y, arpon.scale, false, 1);
-
-      if (imageReady(car)) drawSimpleImage("car", -84, 530, layout.carScale, 0.96);
     }
 
     function drawTordStage(t, phase) {
@@ -489,6 +514,8 @@
     };
 
     stopExternalAudio = function() {
+      const leakedInst = state.audio.inst === state.audio.challengeInst;
+      const leakedVoices = state.audio.voices === state.audio.challengeVoices;
       baseStopExternalAudio();
       [state.audio.challengeInst, state.audio.challengeVoices].forEach(track => {
         if (!track) return;
@@ -497,18 +524,26 @@
           track.currentTime = 0;
         } catch {}
       });
+      if (leakedInst) state.audio.inst = null;
+      if (leakedVoices) state.audio.voices = null;
     };
 
-    songTime = () => state.currentSong?.chartSource === "challengeEdd" && state.audio.inst ? state.audio.inst.currentTime : baseSongTime();
+    songTime = () => state.currentSong?.chartSource === "challengeEdd" && state.audio.challengeInst ? state.audio.challengeInst.currentTime : baseSongTime();
 
     startSong = function(id = state.selectedSong, options = {}) {
       const song = SONGS[id] || state.currentSong;
-      if (song?.chartSource !== "challengeEdd") return baseStartSong(id, options);
+      if (song?.chartSource !== "challengeEdd") {
+        if (state.audio.inst === state.audio.challengeInst) state.audio.inst = null;
+        if (state.audio.voices === state.audio.challengeVoices) state.audio.voices = null;
+        return baseStartSong(id, options);
+      }
       const audioContext = ensureAudio();
       if (audioContext.state === "suspended") audioContext.resume();
       stopExternalAudio();
       initAssets();
       ensureAudioTracks();
+      const inst = state.audio.challengeInst;
+      const voices = state.audio.challengeVoices;
       if (typeof initSportingSprites === "function") initSportingSprites();
       state.selectedSong = id;
       state.currentSong = SONGS[id];
@@ -519,20 +554,20 @@
       state.chart.notes = state.chart.notes.map(note => ({ ...note }));
       resetStats();
       state.health = 0.65;
-      state.audio.inst.currentTime = 0;
-      state.audio.voices.currentTime = 0;
+      inst.currentTime = 0;
+      voices.currentTime = 0;
       state.songStart = 0;
       state.nextStep = 0;
       state.nextStepTime = 0;
       state.playing = true;
       if (state.mode === "online" && state.network?.matchStartAt) {
-        state.audio.inst.pause();
-        state.audio.voices.pause();
-        state.audio.inst.load();
-        state.audio.voices.load();
+        inst.pause();
+        voices.pause();
+        inst.load();
+        voices.load();
       } else {
-        state.audio.inst.play().catch(() => {});
-        state.audio.voices.play().catch(() => {});
+        inst.play().catch(() => {});
+        voices.play().catch(() => {});
       }
       state.feeds.player.time = -10;
       state.feeds.opp.time = -10;
@@ -586,7 +621,7 @@
 
     finish = function(failed = false) {
       if (state.currentSong?.chartSource === "challengeEdd") {
-        [state.audio.inst, state.audio.voices].forEach(track => {
+        [state.audio.challengeInst, state.audio.challengeVoices].forEach(track => {
           if (!track) return;
           try { track.pause(); } catch {}
         });
@@ -619,8 +654,27 @@
     receptors = function(t) {
       if (state.selectedSong !== "challengeEdd") return baseReceptors(t);
       initAssets();
-      if (!CE.sprites?.notes || !imageReady(ce.images.notes)) return baseReceptors(t);
       const y = receptorY();
+      if (challengeUsesSportingNotes()) {
+        ctx.strokeStyle = "rgba(255,255,255,0.1)";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(canvas.width * .5, 72);
+        ctx.lineTo(canvas.width * .5, 452);
+        ctx.stroke();
+        for (let lane = 0; lane < 8; lane++) {
+          const x = laneX(lane);
+          drawSportingReceptor(lane, x, y);
+          ctx.strokeStyle = "rgba(255,255,255,0.06)";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(x, y + 26);
+          ctx.lineTo(x, 448);
+          ctx.stroke();
+        }
+        return;
+      }
+      if (!CE.sprites?.notes || !imageReady(ce.images.notes)) return baseReceptors(t);
       ctx.strokeStyle = "rgba(255,255,255,0.1)";
       ctx.lineWidth = 3;
       ctx.beginPath();
@@ -643,6 +697,25 @@
       if (state.selectedSong !== "challengeEdd") return baseNotes(t);
       if (!state.chart) return;
       initAssets();
+      if (challengeUsesSportingNotes()) {
+        const scroll = state.currentSong.scroll;
+        for (const note of state.chart.notes) {
+          if (note.played && note.hit && (!isHoldNote(note) || note.holdDone)) continue;
+          if (note.judged && note.side !== "opp" && (!isHoldNote(note) || note.holdDone || !note.hit)) continue;
+          if (note.invisible) continue;
+          const diff = note.time - t;
+          const y = receptorY() + diff * scroll;
+          const tailY = receptorY() + (holdEndTime(note) - t) * scroll;
+          if (y < -120 && tailY < -120) continue;
+          if (y > canvas.height + 120 && tailY > canvas.height + 120) continue;
+          const scale = clamp(1 - Math.pow(Math.abs(diff), 0.7) * .45, .75, 1.12);
+          const alpha = note.side === "opp" ? .84 : 1;
+          if (isHoldNote(note)) drawSportingFallbackSustain(note, note.hit ? receptorY() : y, tailY, alpha * (note.hit ? 0.94 : 1));
+          if (note.hit && isHoldNote(note) && t > note.time) continue;
+          drawSportingNote(note.lane, laneX(note.lane), y, 0.62 * scale, alpha);
+        }
+        return;
+      }
       if (!CE.sprites?.notes || !imageReady(ce.images.notes)) return baseNotes(t);
       const scroll = state.currentSong.scroll;
       for (const note of state.chart.notes) {
