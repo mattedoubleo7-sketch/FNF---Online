@@ -372,6 +372,8 @@ const ctx = canvas.getContext("2d");
 const DUSTIN_SHADER_SOURCES = Object.freeze({ bloom: "shaders/dustin-bloom.frag", bloomNew: "shaders/dustin-bloom_new.frag" });
 const postFxCanvas = document.createElement("canvas");
 const postFxCtx = postFxCanvas.getContext("2d");
+const bloomMaskCanvas = document.createElement("canvas");
+const bloomMaskCtx = bloomMaskCanvas.getContext("2d");
 function setRenderQuality(context){
     if(!context) return;
     context.imageSmoothingEnabled = true;
@@ -382,11 +384,16 @@ function syncPostFxCanvas(){
         postFxCanvas.width = canvas.width;
         postFxCanvas.height = canvas.height;
     }
+    if(bloomMaskCanvas.width !== canvas.width || bloomMaskCanvas.height !== canvas.height){
+        bloomMaskCanvas.width = canvas.width;
+        bloomMaskCanvas.height = canvas.height;
+    }
     setRenderQuality(postFxCtx);
+    setRenderQuality(bloomMaskCtx);
 }
 function importedBloomStrength(t){
     if(typeof state === "undefined") return 0;
-    if(state.selectedSong === "brokenReality") return Math.max(0, Number(state.br?.bloom || 1) - 1);
+    if(state.selectedSong === "brokenReality") return Math.max(0, (Number(state.br?.bloom || 1) - 1) * 1.55);
     if(state.selectedSong === "perseverance" && typeof perseveranceBloomStrength === "function") return Math.max(0, perseveranceBloomStrength(t));
     return 0;
 }
@@ -394,18 +401,39 @@ function applyDustinBloom(t){
     const strength = importedBloomStrength(t);
     if(strength <= 0.02) return;
     syncPostFxCanvas();
+    const brokenRealityBloom = typeof state !== "undefined" && state.selectedSong === "brokenReality";
     postFxCtx.clearRect(0, 0, postFxCanvas.width, postFxCanvas.height);
-    postFxCtx.filter = "brightness(" + (1.08 + strength * 0.42).toFixed(2) + ") saturate(" + (1.08 + strength * 0.2).toFixed(2) + ")";
+    bloomMaskCtx.clearRect(0, 0, bloomMaskCanvas.width, bloomMaskCanvas.height);
+    postFxCtx.filter = brokenRealityBloom
+        ? "brightness(" + (1.18 + strength * 0.6).toFixed(2) + ") contrast(" + (1.28 + strength * 0.45).toFixed(2) + ") saturate(" + (1.12 + strength * 0.28).toFixed(2) + ")"
+        : "brightness(" + (1.08 + strength * 0.42).toFixed(2) + ") saturate(" + (1.08 + strength * 0.2).toFixed(2) + ")";
     postFxCtx.drawImage(canvas, 0, 0, postFxCanvas.width, postFxCanvas.height);
     postFxCtx.filter = "none";
+    bloomMaskCtx.filter = brokenRealityBloom
+        ? "brightness(" + (1.22 + strength * 0.72).toFixed(2) + ") contrast(" + (1.36 + strength * 0.52).toFixed(2) + ") saturate(" + (1.18 + strength * 0.3).toFixed(2) + ")"
+        : "brightness(" + (1.05 + strength * 0.25).toFixed(2) + ") contrast(" + (1.06 + strength * 0.14).toFixed(2) + ")";
+    bloomMaskCtx.drawImage(postFxCanvas, 0, 0, bloomMaskCanvas.width, bloomMaskCanvas.height);
+    bloomMaskCtx.filter = "none";
     ctx.save();
     ctx.globalCompositeOperation = "screen";
-    ctx.globalAlpha = Math.min(0.32, 0.05 + strength * 0.08);
-    ctx.filter = "blur(" + (6 + strength * 8).toFixed(2) + "px)";
-    ctx.drawImage(postFxCanvas, 0, 0, canvas.width, canvas.height);
-    ctx.globalAlpha = Math.min(0.22, 0.025 + strength * 0.055);
-    ctx.filter = "blur(" + (14 + strength * 14).toFixed(2) + "px)";
-    ctx.drawImage(postFxCanvas, 0, 0, canvas.width, canvas.height);
+    if(brokenRealityBloom){
+        ctx.globalAlpha = Math.min(0.46, 0.11 + strength * 0.15);
+        ctx.filter = "blur(" + (10 + strength * 12).toFixed(2) + "px) brightness(" + (1.08 + strength * 0.16).toFixed(2) + ")";
+        ctx.drawImage(bloomMaskCanvas, 0, 0, canvas.width, canvas.height);
+        ctx.globalAlpha = Math.min(0.28, 0.07 + strength * 0.11);
+        ctx.filter = "blur(" + (22 + strength * 20).toFixed(2) + "px) brightness(" + (1.12 + strength * 0.2).toFixed(2) + ")";
+        ctx.drawImage(bloomMaskCanvas, 0, 0, canvas.width, canvas.height);
+        ctx.globalAlpha = Math.min(0.14, 0.025 + strength * 0.06);
+        ctx.filter = "blur(" + (38 + strength * 28).toFixed(2) + "px)";
+        ctx.drawImage(bloomMaskCanvas, 0, 0, canvas.width, canvas.height);
+    } else {
+        ctx.globalAlpha = Math.min(0.32, 0.05 + strength * 0.08);
+        ctx.filter = "blur(" + (6 + strength * 8).toFixed(2) + "px)";
+        ctx.drawImage(postFxCanvas, 0, 0, canvas.width, canvas.height);
+        ctx.globalAlpha = Math.min(0.22, 0.025 + strength * 0.055);
+        ctx.filter = "blur(" + (14 + strength * 14).toFixed(2) + "px)";
+        ctx.drawImage(postFxCanvas, 0, 0, canvas.width, canvas.height);
+    }
     ctx.restore();
     setRenderQuality(ctx);
 }
