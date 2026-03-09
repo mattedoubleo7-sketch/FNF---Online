@@ -523,10 +523,10 @@
     ctx.restore();
   }
 
-  function drawCharacter(kind, t, alpha = 1, shadow = false, forcedPack = null, forcedLayout = null) {
+  function characterDrawState(kind, t, shadow = false, forcedPack = null, forcedLayout = null) {
     const info = animationFrameInfo(kind, t, forcedPack);
     if (!info) {
-      return;
+      return null;
     }
 
     const layout = forcedLayout || STAGE_LAYOUT[info.pack.id] || STAGE_LAYOUT[kind === "opp" ? "sans" : "boyfriend"];
@@ -566,6 +566,22 @@
       }
     }
 
+    return {
+      info,
+      x,
+      y,
+      scale,
+      flipX,
+      stableFeet
+    };
+  }
+
+  function drawCharacter(kind, t, alpha = 1, shadow = false, forcedPack = null, forcedLayout = null) {
+    const draw = characterDrawState(kind, t, shadow, forcedPack, forcedLayout);
+    if (!draw) {
+      return;
+    }
+
     ctx.save();
     if (shadow) {
       ctx.filter = "blur(10px)";
@@ -573,11 +589,59 @@
     } else if (alpha !== 1) {
       ctx.globalAlpha = alpha;
     }
-    if (stableFeet) {
-      drawVisibleFrame(info.pack.image, info.frame, x, y, scale, shadow ? alpha * 0.22 : alpha, flipX);
-    } else {
-      drawVisibleFrame(info.pack.image, info.frame, x, y, scale, shadow ? alpha * 0.22 : alpha, flipX);
+    drawVisibleFrame(
+      draw.info.pack.image,
+      draw.info.frame,
+      draw.x,
+      draw.y,
+      draw.scale,
+      shadow ? alpha * 0.22 : alpha,
+      draw.flipX
+    );
+    ctx.restore();
+  }
+
+  function drawCharacterReflection(kind, t, alpha = 0.1, forcedPack = null, forcedLayout = null) {
+    const draw = characterDrawState(kind, t, false, forcedPack, forcedLayout);
+    if (!draw) {
+      return;
     }
+
+    const frame = draw.info.frame;
+    const frameH = (frame.rotated ? frame.w : frame.h) * draw.scale;
+    const clipTop = draw.y - 12;
+    const clipBottom = Math.min(canvas.height, draw.y + frameH * 0.86 + 120);
+    if (clipBottom <= clipTop) {
+      return;
+    }
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, clipTop, canvas.width, clipBottom - clipTop);
+    ctx.clip();
+    ctx.translate(0, draw.y * 2 + 14);
+    ctx.scale(1, -1);
+    ctx.filter = "blur(2.6px) saturate(0.95)";
+    drawVisibleFrame(
+      draw.info.pack.image,
+      draw.info.frame,
+      draw.x,
+      draw.y,
+      draw.scale,
+      alpha,
+      draw.flipX
+    );
+    ctx.restore();
+
+    ctx.save();
+    const fade = ctx.createLinearGradient(0, clipTop, 0, clipBottom);
+    fade.addColorStop(0, "rgba(10,8,18,0)");
+    fade.addColorStop(0.16, "rgba(10,8,18,0.16)");
+    fade.addColorStop(0.58, "rgba(10,8,18,0.5)");
+    fade.addColorStop(1, "rgba(10,8,18,0.84)");
+    ctx.globalCompositeOperation = "multiply";
+    ctx.fillStyle = fade;
+    ctx.fillRect(0, clipTop, canvas.width, clipBottom - clipTop);
     ctx.restore();
   }
 
@@ -990,6 +1054,12 @@
       drawHallWindowBloom(rect, t, bloom);
       drawHallDust(rect, t, bloom);
     }
+
+    drawCharacterReflection("opp", t, usePapyrusStage ? 0.08 : 0.11);
+    if (papyrusDuetActiveAt(t)) {
+      drawCharacterReflection("opp", t, 0.07, packById("papyrusBody", "papyrus"), STAGE_LAYOUT.papyrusBody);
+    }
+    drawCharacterReflection("player", t, usePapyrusStage ? 0.09 : 0.12);
 
     drawCharacter("opp", t, 0.22, true);
     if (papyrusDuetActiveAt(t)) {
