@@ -63,7 +63,6 @@
         fence: CE.stage.images.fence,
         car: CE.stage.images.car,
         tordBg: CE.stage.images.tordBg,
-        notes: CE.sprites.notes.image,
         edd: CE.sprites.opponent.edd.image,
         eddT: CE.sprites.opponent.eddT.image,
         eddV: CE.sprites.opponent.eddV.image,
@@ -77,6 +76,7 @@
         tomRun: CE.sprites.extras.tomRun.image,
         toomArpon: CE.sprites.extras.toomArpon.image
       };
+      if (CE.sprites?.notes?.image) sources.notes = CE.sprites.notes.image;
       Object.entries(sources).forEach(([key, src]) => {
         const img = new Image();
         img.src = src;
@@ -273,6 +273,7 @@
     }
 
     function drawChallengeReceptor(lane, x, y) {
+      if (!CE.sprites?.notes) return;
       const img = ce.images.notes;
       if (!imageReady(img)) return;
       const fx = state.receptorFx[lane];
@@ -300,6 +301,7 @@
     }
 
     function drawChallengeSustain(note, headY, tailY, alpha) {
+      if (!CE.sprites?.notes?.hold) return;
       const img = ce.images.notes;
       const hold = CE.sprites.notes.hold?.[laneDir(note.lane)];
       if (!imageReady(img) || !hold) return;
@@ -315,6 +317,7 @@
     }
 
     function drawChallengeNote(note, x, y, scale, alpha) {
+      if (!CE.sprites?.notes?.gem) return;
       const img = ce.images.notes;
       const frame = CE.sprites.notes.gem?.[laneDir(note.lane)];
       if (!imageReady(img) || !frame) return;
@@ -616,7 +619,7 @@
     receptors = function(t) {
       if (state.selectedSong !== "challengeEdd") return baseReceptors(t);
       initAssets();
-      if (!imageReady(ce.images.notes)) return baseReceptors(t);
+      if (!CE.sprites?.notes || !imageReady(ce.images.notes)) return baseReceptors(t);
       const y = receptorY();
       ctx.strokeStyle = "rgba(255,255,255,0.1)";
       ctx.lineWidth = 3;
@@ -640,7 +643,7 @@
       if (state.selectedSong !== "challengeEdd") return baseNotes(t);
       if (!state.chart) return;
       initAssets();
-      if (!imageReady(ce.images.notes)) return baseNotes(t);
+      if (!CE.sprites?.notes || !imageReady(ce.images.notes)) return baseNotes(t);
       const scroll = state.currentSong.scroll;
       for (const note of state.chart.notes) {
         if (note.played && note.hit && (!isHoldNote(note) || note.holdDone)) continue;
