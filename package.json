@@ -23,10 +23,13 @@
     "productName": "FNF Onliine",
     "files": [
       "main.js",
+      "preload.js",
+      "desktop-mode.js",
       "remote-server-url.txt",
       "server.js",
       "downloads.html",
       "FNF - Online.html",
+      "FNF - Offline.html",
       "online-mode.js",
       "sprite-data.js",
       "sporting-chart.js",
@@ -39,7 +42,10 @@
       "broken-reality-fix.js",
       "broken-reality-soul-data.js",
       "*.mp4",
-      "auto-update.js"
+      "auto-update.js",
+      "challenge-edd-data.js",
+      "challenge-edd-mode.js",
+      "challenge-edd-bf-data.js"
     ],
     "directories": {
       "output": "dist"
@@ -75,5 +81,6 @@
   },
   "engines": {
     "node": ">=20"
-  }
+  },
+  "fnfDefaultDesktopMode": "online"
 }

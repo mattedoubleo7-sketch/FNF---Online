@@ -5,6 +5,7 @@ const { Server } = require("socket.io");
 
 const ROOT = __dirname;
 const rooms = new Map();
+const matchmakingQueue = [];
 const MATCH_START_DELAY_MS = 8000;
 
 function makePlayerName() {
@@ -44,12 +45,85 @@ function resetReady(room) {
   room.startAt = 0;
 }
 
+function queueSnapshot(position) {
+  return {
+    queued: position > 0,
+    position,
+    status: position > 0
+      ? (position === 1 ? "Searching for another player now." : "Searching for another player. Queue position " + position + ".")
+      : ""
+  };
+}
+
 function broadcastRoom(io, room) {
   if (room.hostId) io.to(room.hostId).emit("room:update", snapshotFor(room, room.hostId));
   if (room.guestId) io.to(room.guestId).emit("room:update", snapshotFor(room, room.guestId));
 }
 
+function refreshMatchmakingQueue(io) {
+  for (let index = matchmakingQueue.length - 1; index >= 0; index--) {
+    const socketId = matchmakingQueue[index];
+    const socket = io.sockets.sockets.get(socketId);
+    if (!socket || !socket.connected || socket.data.roomId) {
+      matchmakingQueue.splice(index, 1);
+    }
+  }
+  matchmakingQueue.forEach((socketId, index) => {
+    const socket = io.sockets.sockets.get(socketId);
+    if (!socket) return;
+    socket.data.matchmaking = true;
+    socket.emit("matchmaking:update", queueSnapshot(index + 1));
+  });
+}
+
+function removeFromMatchmaking(io, socketOrId, notify = true) {
+  const socketId = typeof socketOrId === "string" ? socketOrId : socketOrId?.id;
+  if (!socketId) return;
+  for (let index = matchmakingQueue.length - 1; index >= 0; index--) {
+    if (matchmakingQueue[index] === socketId) matchmakingQueue.splice(index, 1);
+  }
+  const socket = typeof socketOrId === "string" ? io.sockets.sockets.get(socketId) : socketOrId;
+  if (socket) {
+    socket.data.matchmaking = false;
+    if (notify) socket.emit("matchmaking:update", queueSnapshot(0));
+  }
+  refreshMatchmakingQueue(io);
+}
+
+function nextQueuedSocket(io) {
+  while (matchmakingQueue.length) {
+    const socketId = matchmakingQueue.shift();
+    const socket = io.sockets.sockets.get(socketId);
+    if (socket && socket.connected && !socket.data.roomId) {
+      socket.data.matchmaking = false;
+      refreshMatchmakingQueue(io);
+      return socket;
+    }
+  }
+  return null;
+}
+
+function makeRoomForHost(socket, songId) {
+  const room = {
+    id: makeRoomCode(),
+    songId: songId || socket.data.lastSongId || "sporting",
+    hostId: socket.id,
+    hostUser: socket.data.user,
+    guestId: null,
+    guestUser: null,
+    hostReady: false,
+    guestReady: false,
+    startAt: 0
+  };
+  rooms.set(room.id, room);
+  socket.data.roomId = room.id;
+  socket.data.role = "host";
+  socket.join(room.id);
+  return room;
+}
+
 function leaveRoom(io, socket) {
+  removeFromMatchmaking(io, socket, false);
   const roomId = socket.data.roomId;
   if (!roomId) return;
   const room = rooms.get(roomId);
@@ -86,7 +160,7 @@ function createGameServer({ port = Number(process.env.PORT) || 3000, host = proc
   app.use(express.json({ limit: "256kb" }));
 
   app.get("/health", (_req, res) => {
-    res.json({ ok: true, rooms: rooms.size });
+    res.json({ ok: true, rooms: rooms.size, queue: matchmakingQueue.length });
   });
 
   app.use("/assets", express.static(path.join(ROOT, "assets")));
@@ -105,6 +179,8 @@ function createGameServer({ port = Number(process.env.PORT) || 3000, host = proc
     socket.data.user = { id: socket.id, username: makePlayerName() };
     socket.data.roomId = null;
     socket.data.role = null;
+    socket.data.matchmaking = false;
+    socket.data.lastSongId = "sporting";
     socket.emit("session:ready", { user: socket.data.user });
 
     socket.on("session:set-name", payload => {
@@ -120,21 +196,9 @@ function createGameServer({ port = Number(process.env.PORT) || 3000, host = proc
 
     socket.on("room:host", payload => {
       leaveRoom(io, socket);
-      const room = {
-        id: makeRoomCode(),
-        songId: payload?.songId || "sporting",
-        hostId: socket.id,
-        hostUser: socket.data.user,
-        guestId: null,
-        guestUser: null,
-        hostReady: false,
-        guestReady: false,
-        startAt: 0
-      };
-      rooms.set(room.id, room);
-      socket.data.roomId = room.id;
-      socket.data.role = "host";
-      socket.join(room.id);
+      const songId = payload?.songId || socket.data.lastSongId || "sporting";
+      socket.data.lastSongId = songId;
+      const room = makeRoomForHost(socket, songId);
       broadcastRoom(io, room);
     });
 
@@ -154,6 +218,7 @@ function createGameServer({ port = Number(process.env.PORT) || 3000, host = proc
       room.guestUser = socket.data.user;
       socket.data.roomId = room.id;
       socket.data.role = "guest";
+      socket.data.lastSongId = room.songId;
       socket.join(room.id);
       resetReady(room);
       broadcastRoom(io, room);
@@ -175,9 +240,40 @@ function createGameServer({ port = Number(process.env.PORT) || 3000, host = proc
       const room = rooms.get(socket.data.roomId || "");
       if (!room || socket.data.role !== "host") return;
       room.songId = payload?.songId || room.songId;
+      socket.data.lastSongId = room.songId;
       resetReady(room);
       broadcastRoom(io, room);
     });
+
+    socket.on("matchmaking:join", payload => {
+      const songId = payload?.songId || socket.data.lastSongId || "sporting";
+      socket.data.lastSongId = songId;
+      leaveRoom(io, socket);
+      removeFromMatchmaking(io, socket, false);
+      const waiting = nextQueuedSocket(io);
+      if (waiting && waiting.id !== socket.id) {
+        const room = makeRoomForHost(waiting, waiting.data.lastSongId || songId || "sporting");
+        room.guestId = socket.id;
+        room.guestUser = socket.data.user;
+        socket.data.roomId = room.id;
+        socket.data.role = "guest";
+        socket.data.lastSongId = room.songId;
+        socket.join(room.id);
+        resetReady(room);
+        waiting.emit("matchmaking:update", { queued: false, position: 0, status: "Match found. Ready up when you load in." });
+        socket.emit("matchmaking:update", { queued: false, position: 0, status: "Match found. Ready up when you load in." });
+        broadcastRoom(io, room);
+        return;
+      }
+      matchmakingQueue.push(socket.id);
+      socket.data.matchmaking = true;
+      refreshMatchmakingQueue(io);
+    });
+
+    socket.on("matchmaking:leave", () => {
+      removeFromMatchmaking(io, socket, true);
+    });
+
     socket.on("game:ready", payload => {
       const room = rooms.get(socket.data.roomId || "");
       if (!room || (socket.data.role !== "host" && socket.data.role !== "guest")) return;
@@ -187,6 +283,7 @@ function createGameServer({ port = Number(process.env.PORT) || 3000, host = proc
       }
       if (socket.data.role === "host" && payload?.songId) {
         room.songId = payload.songId;
+        socket.data.lastSongId = room.songId;
       }
       if (socket.data.role === "host") room.hostReady = !!payload?.ready;
       if (socket.data.role === "guest") room.guestReady = !!payload?.ready;
@@ -218,6 +315,7 @@ function createGameServer({ port = Number(process.env.PORT) || 3000, host = proc
     });
 
     socket.on("disconnect", () => {
+      removeFromMatchmaking(io, socket, false);
       leaveRoom(io, socket);
     });
   });

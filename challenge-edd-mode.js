@@ -381,7 +381,7 @@
       const image = ce.images.bfBase;
       if (!sprite || !imageReady(image)) return null;
       const stateInfo = poseInfoForSprite(sprite, "player", t, null);
-      return stateInfo ? { state: stateInfo, image, scale: variantScale("player", "player"), flipX: !!sprite.flipX } : null;
+      return stateInfo ? { state: stateInfo, image, scale: variantScale("player", "player"), flipX: false } : null;
     }
 
     function currentState(t) {
@@ -616,7 +616,7 @@
       const image = imageForVariant(playerKey);
       if (!sprite || !imageReady(image)) return null;
       const stateInfo = poseInfoForSprite(sprite, playerKey, t, null);
-      return stateInfo ? { state: stateInfo, image, scale: variantScale(playerKey, "player"), flipX: !!sprite.flipX } : null;
+      return stateInfo ? { state: stateInfo, image, scale: variantScale(playerKey, "player"), flipX: playerKey.startsWith("bf") ? false : !!sprite.flipX } : null;
     }
 
     function mattState(t, stageMode) {
