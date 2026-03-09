@@ -369,6 +369,50 @@ body.fullViewport #app { width: 100vw; height: 100vh; aspect-ratio: auto; border
 <script>
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
+const DUSTIN_SHADER_SOURCES = Object.freeze({ bloom: "shaders/dustin-bloom.frag", bloomNew: "shaders/dustin-bloom_new.frag" });
+const postFxCanvas = document.createElement("canvas");
+const postFxCtx = postFxCanvas.getContext("2d");
+function setRenderQuality(context){
+    if(!context) return;
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+}
+function syncPostFxCanvas(){
+    if(postFxCanvas.width !== canvas.width || postFxCanvas.height !== canvas.height){
+        postFxCanvas.width = canvas.width;
+        postFxCanvas.height = canvas.height;
+    }
+    setRenderQuality(postFxCtx);
+}
+function importedBloomStrength(t){
+    if(typeof state === "undefined") return 0;
+    if(state.selectedSong === "brokenReality") return Math.max(0, Number(state.br?.bloom || 1) - 1);
+    if(state.selectedSong === "perseverance" && typeof perseveranceBloomStrength === "function") return Math.max(0, perseveranceBloomStrength(t));
+    return 0;
+}
+function applyDustinBloom(t){
+    const strength = importedBloomStrength(t);
+    if(strength <= 0.02) return;
+    syncPostFxCanvas();
+    postFxCtx.clearRect(0, 0, postFxCanvas.width, postFxCanvas.height);
+    postFxCtx.filter = "brightness(" + (1.08 + strength * 0.42).toFixed(2) + ") saturate(" + (1.08 + strength * 0.2).toFixed(2) + ")";
+    postFxCtx.drawImage(canvas, 0, 0, postFxCanvas.width, postFxCanvas.height);
+    postFxCtx.filter = "none";
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    ctx.globalAlpha = Math.min(0.32, 0.05 + strength * 0.08);
+    ctx.filter = "blur(" + (6 + strength * 8).toFixed(2) + "px)";
+    ctx.drawImage(postFxCanvas, 0, 0, canvas.width, canvas.height);
+    ctx.globalAlpha = Math.min(0.22, 0.025 + strength * 0.055);
+    ctx.filter = "blur(" + (14 + strength * 14).toFixed(2) + "px)";
+    ctx.drawImage(postFxCanvas, 0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    setRenderQuality(ctx);
+}
+canvas.style.imageRendering = "auto";
+canvas.style.transform = "translateZ(0)";
+canvas.style.backfaceVisibility = "hidden";
+setRenderQuality(ctx);
 const ui = {
     menu: document.getElementById("menu"), settings: document.getElementById("settings"), resultsWrap: document.getElementById("resultsWrap"), songList: document.getElementById("songList"),
     versusToggle: document.getElementById("versusToggle"), cameraMode: document.getElementById("cameraMode"), difficulty: document.getElementById("difficulty"), playBtn: document.getElementById("playBtn"), storyBtn: document.getElementById("storyBtn"), settingsBtn: document.getElementById("settingsBtn"),
@@ -1633,7 +1677,7 @@ function drawHitGlows(){
     }
 }
 function frame(now){
-    const dt = (now - state.lastFrame) / 1000; state.lastFrame = now; const preview = now / 1000; ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const dt = (now - state.lastFrame) / 1000; state.lastFrame = now; const preview = now / 1000; setRenderQuality(ctx); ctx.clearRect(0, 0, canvas.width, canvas.height);
     // screen shake
     const shakeAge = now / 1000 - state.shake.time;
     if(shakeAge < 0.15 && shakeAge >= 0){
@@ -1641,7 +1685,7 @@ function frame(now){
         ctx.save();
         ctx.translate(Math.random() * s * 2 - s, Math.random() * s * 2 - s);
     }
-    if(state.playing && (state.audio.ctx || state.audio.inst || state.audio.inst2)){ const t = songTime(); if(t >= 0){ if(!isImportedSong(state.currentSong)) scheduleMusic(); if(state.selectedSong === "perseverance") updatePerseveranceState(Math.max(0, t)); handleMisses(t); updateHoldNotes(t); updateCamera(Math.max(0, t), dt); } refreshHUD(Math.max(0, t)); renderScene(Math.max(0, t), preview); drawHitGlows(); if(state.health <= 0) finish(true); else if(t >= state.chart.totalTime + .4) finish(false); }
+    if(state.playing && (state.audio.ctx || state.audio.inst || state.audio.inst2)){ const t = songTime(); if(t >= 0){ if(!isImportedSong(state.currentSong)) scheduleMusic(); if(state.selectedSong === "perseverance") updatePerseveranceState(Math.max(0, t)); handleMisses(t); updateHoldNotes(t); updateCamera(Math.max(0, t), dt); } refreshHUD(Math.max(0, t)); renderScene(Math.max(0, t), preview); drawHitGlows(); applyDustinBloom(Math.max(0, t)); if(state.health <= 0) finish(true); else if(t >= state.chart.totalTime + .4) finish(false); }
     else renderScene(0, preview);
     if(shakeAge < 0.15 && shakeAge >= 0) ctx.restore();
     requestAnimationFrame(window.frame || frame);

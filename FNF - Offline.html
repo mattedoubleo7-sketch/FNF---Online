@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -291,7 +291,7 @@ body.fullViewport #app { width: 100vw; height: 100vh; aspect-ratio: auto; border
             <p>This is a self-contained Friday Night Funkin' style browser game with procedural charts, synthesized music, judgments, health, rebindable controls, and a proper results screen.</p>
             <div class="features">
                 <div class="feature"><div class="name">Four-lane highway</div><div class="desc">Classic left, down, up, right note lanes with timing windows, combo tracking, and misses.</div></div>
-                <div class="feature"><div class="name">Week-style tracks</div><div class="desc">Battle Matt in Sporting or Sans in Perseverance.</div></div>
+                <div class="feature"><div class="name">Week-style tracks</div><div class="desc">Battle Matt in Sporting, Sans in Perseverance, or Broken Reality's hall showdown.</div></div>
                 <div class="feature"><div class="name">No setup required</div><div class="desc">Open the file and play. No installs, assets, or servers required.</div></div>
             </div>
             <div class="actions">
@@ -365,9 +365,54 @@ body.fullViewport #app { width: 100vw; height: 100vh; aspect-ratio: auto; border
 <script src="sprite-data.js"></script>
 <script src="sporting-chart.js"></script>
 <script src="perseverance-data.js"></script>
+<script src="broken-reality-data.js"></script>
 <script>
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
+const DUSTIN_SHADER_SOURCES = Object.freeze({ bloom: "shaders/dustin-bloom.frag", bloomNew: "shaders/dustin-bloom_new.frag" });
+const postFxCanvas = document.createElement("canvas");
+const postFxCtx = postFxCanvas.getContext("2d");
+function setRenderQuality(context){
+    if(!context) return;
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+}
+function syncPostFxCanvas(){
+    if(postFxCanvas.width !== canvas.width || postFxCanvas.height !== canvas.height){
+        postFxCanvas.width = canvas.width;
+        postFxCanvas.height = canvas.height;
+    }
+    setRenderQuality(postFxCtx);
+}
+function importedBloomStrength(t){
+    if(typeof state === "undefined") return 0;
+    if(state.selectedSong === "brokenReality") return Math.max(0, Number(state.br?.bloom || 1) - 1);
+    if(state.selectedSong === "perseverance" && typeof perseveranceBloomStrength === "function") return Math.max(0, perseveranceBloomStrength(t));
+    return 0;
+}
+function applyDustinBloom(t){
+    const strength = importedBloomStrength(t);
+    if(strength <= 0.02) return;
+    syncPostFxCanvas();
+    postFxCtx.clearRect(0, 0, postFxCanvas.width, postFxCanvas.height);
+    postFxCtx.filter = "brightness(" + (1.08 + strength * 0.42).toFixed(2) + ") saturate(" + (1.08 + strength * 0.2).toFixed(2) + ")";
+    postFxCtx.drawImage(canvas, 0, 0, postFxCanvas.width, postFxCanvas.height);
+    postFxCtx.filter = "none";
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    ctx.globalAlpha = Math.min(0.32, 0.05 + strength * 0.08);
+    ctx.filter = "blur(" + (6 + strength * 8).toFixed(2) + "px)";
+    ctx.drawImage(postFxCanvas, 0, 0, canvas.width, canvas.height);
+    ctx.globalAlpha = Math.min(0.22, 0.025 + strength * 0.055);
+    ctx.filter = "blur(" + (14 + strength * 14).toFixed(2) + "px)";
+    ctx.drawImage(postFxCanvas, 0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    setRenderQuality(ctx);
+}
+canvas.style.imageRendering = "auto";
+canvas.style.transform = "translateZ(0)";
+canvas.style.backfaceVisibility = "hidden";
+setRenderQuality(ctx);
 const ui = {
     menu: document.getElementById("menu"), settings: document.getElementById("settings"), resultsWrap: document.getElementById("resultsWrap"), songList: document.getElementById("songList"),
     versusToggle: document.getElementById("versusToggle"), cameraMode: document.getElementById("cameraMode"), difficulty: document.getElementById("difficulty"), playBtn: document.getElementById("playBtn"), storyBtn: document.getElementById("storyBtn"), settingsBtn: document.getElementById("settingsBtn"),
@@ -385,6 +430,7 @@ const DEFAULTS = { solo:{left:"a",down:"s",up:"w",right:"d"}, p1:{left:"a",down:
 const SONGS = {
     sporting:{ title:"Sporting", subtitle:"Original beat + exact chart", diff:"Normal (Original Chart)", tempo:300, root:45, scale:[0,2,3,5,7,8,10], prog:[0,5,3,7], scroll:920, seed:29, introBeats:0, outroBeats:4, palette:["#0f1422","#1b2f46","#314f74","#0b0e16","#4de3ff","#ff9d42"], blurb:"Imported from the original VS Matt chart file and synced to the real Sporting instrumental and vocals for original-speed playback.", chartSource:"sporting"},
     perseverance:{ title:"Perseverance", subtitle:"Friday Night Dustin hard chart", diff:"Hard (Original Chart)", tempo:120, root:41, scale:[0,2,3,5,7,8,10], prog:[0,5,3,6], scroll:810, seed:33, introBeats:0, outroBeats:4, palette:["#06080d","#182332","#34455b","#0b0d12","#cfe7ff","#7fb7ff"], blurb:"Imported from Friday Night Dustin with the original hard chart, ruins exit stage art, Sans sprites, pixel section, and gaster blaster dodge mechanic.", chartSource:"perseverance"},
+    brokenReality:{ title:"Broken Reality", subtitle:"Friday Night Dustin hard chart", diff:"Hard (Original Chart)", tempo:120, root:40, scale:[0,2,3,5,7,8,10], prog:[0,5,3,6], scroll:780, seed:37, introBeats:0, outroBeats:4, palette:["#04050a","#16162a","#2f3251","#08090f","#f2d6ff","#ff5a5a"], blurb:"Imported from Friday Night Dustin with the original hard chart, cutscene videos, hall stage, drain, attack prompt, scroll flips, and red-phase Papyrus swap.", chartSource:"brokenReality"},
 };
 const PATTERNS = {
     chill:{kick:[0,8],snare:[4,12],hat:[2,6,10,14],bass:[0,null,0,null,2,null,4,null],lead:[null,null,4,null,3,null,2,null,0,null,2,null,4,null,5,null],chords:[0,8]},
@@ -1077,9 +1123,10 @@ function phrase(notes, rng, startBeat, beats, side, motif, intensity, chars){
         if(stepSize <= .5 && intensity > .76 && rng() < .15){ const grace = beat + stepSize / 2; if(grace < startBeat + beats) note(notes, grace, side, (lane + 1) % 4, char); }
     }
 }
-function isImportedSong(song){ return !!song && (song.chartSource === "sporting" || song.chartSource === "perseverance"); }
+function isImportedSong(song){ return !!song && (song.chartSource === "sporting" || song.chartSource === "perseverance" || song.chartSource === "brokenReality"); }
 function makeChart(song){ if(song.chartSource === "sporting" && window.SPORTING_CHART){ return { ...window.SPORTING_CHART, notes: window.SPORTING_CHART.notes.map(n => ({...n})), timeline: window.SPORTING_CHART.timeline.map(s => ({...s})) }; }
     if(song.chartSource === "perseverance" && window.PERSEVERANCE_DATA){ return { ...window.PERSEVERANCE_DATA.chart, notes: window.PERSEVERANCE_DATA.chart.notes.map(n => ({...n})), timeline: window.PERSEVERANCE_DATA.chart.timeline.map(s => ({...s})) }; }
+    if(song.chartSource === "brokenReality" && window.BROKEN_REALITY_DATA){ return { ...window.BROKEN_REALITY_DATA.chart, notes: window.BROKEN_REALITY_DATA.chart.notes.map(n => ({...n})), timeline: (window.BROKEN_REALITY_DATA.chart.timeline || []).map(s => ({...s})) }; }
     const rng = mulberry32(song.seed); const notes = []; const timeline = []; let beat = song.introBeats ?? 4;
     song.sections.forEach((section, idx) => {
         const start = beat;
@@ -1578,8 +1625,8 @@ function renderScene(songT, previewT){
             ctx.drawImage(vignette, 0, 0, canvas.width, canvas.height);
             ctx.restore();
         }
-        /* intro cover removed — sans & bf silhouettes (t<16) handle the darkened-character effect */
-        // post-blaster scroll tween flashes — black screen, white chars, blur out
+        /* intro cover removed � sans & bf silhouettes (t<16) handle the darkened-character effect */
+        // post-blaster scroll tween flashes � black screen, white chars, blur out
         for(const ft of PERSEVERANCE_POST_BLASTER_FLASHES){
             const age = t - ft;
             if(age >= 0 && age < 0.5){
@@ -1630,7 +1677,7 @@ function drawHitGlows(){
     }
 }
 function frame(now){
-    const dt = (now - state.lastFrame) / 1000; state.lastFrame = now; const preview = now / 1000; ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const dt = (now - state.lastFrame) / 1000; state.lastFrame = now; const preview = now / 1000; setRenderQuality(ctx); ctx.clearRect(0, 0, canvas.width, canvas.height);
     // screen shake
     const shakeAge = now / 1000 - state.shake.time;
     if(shakeAge < 0.15 && shakeAge >= 0){
@@ -1638,10 +1685,10 @@ function frame(now){
         ctx.save();
         ctx.translate(Math.random() * s * 2 - s, Math.random() * s * 2 - s);
     }
-    if(state.playing && (state.audio.ctx || state.audio.inst || state.audio.inst2)){ const t = songTime(); if(t >= 0){ if(!isImportedSong(state.currentSong)) scheduleMusic(); if(state.selectedSong === "perseverance") updatePerseveranceState(Math.max(0, t)); handleMisses(t); updateHoldNotes(t); updateCamera(Math.max(0, t), dt); } refreshHUD(Math.max(0, t)); renderScene(Math.max(0, t), preview); drawHitGlows(); if(state.health <= 0) finish(true); else if(t >= state.chart.totalTime + .4) finish(false); }
+    if(state.playing && (state.audio.ctx || state.audio.inst || state.audio.inst2)){ const t = songTime(); if(t >= 0){ if(!isImportedSong(state.currentSong)) scheduleMusic(); if(state.selectedSong === "perseverance") updatePerseveranceState(Math.max(0, t)); handleMisses(t); updateHoldNotes(t); updateCamera(Math.max(0, t), dt); } refreshHUD(Math.max(0, t)); renderScene(Math.max(0, t), preview); drawHitGlows(); applyDustinBloom(Math.max(0, t)); if(state.health <= 0) finish(true); else if(t >= state.chart.totalTime + .4) finish(false); }
     else renderScene(0, preview);
     if(shakeAge < 0.15 && shakeAge >= 0) ctx.restore();
-    requestAnimationFrame(frame);
+    requestAnimationFrame(window.frame || frame);
 }
 function startSong(id=state.selectedSong){
     const a = ensureAudio();
@@ -1694,7 +1741,7 @@ ui.menuBtn.onclick = () => { stopExternalAudio(); ui.resultsWrap.classList.remov
 ui.replayBtn.onclick = () => startSong(state.selectedSong);
 ui.versusToggle.onchange = () => { state.mode = ui.versusToggle.checked ? "versus" : "solo"; rebuildKeyMap(); };
 window.addEventListener("keydown", keydown); window.addEventListener("keyup", keyup);
-renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo Battle"; requestAnimationFrame(frame);
+renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo Battle"; requestAnimationFrame(window.frame || frame);
 </script>
 <script>
 (function(){
@@ -1724,8 +1771,13 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
   if (statusSub) statusSub.textContent = "Offline build: solo and local versus are available with no server setup.";
 })();
 </script>
+<script src="broken-reality-mode.js"></script>
+<script src="broken-reality-soul-data.js"></script>
+<script src="broken-reality-fix.js"></script>
 </body>
 </html>
+
+
 
 
 

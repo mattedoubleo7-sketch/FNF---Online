@@ -92,7 +92,7 @@
   const finalPapyrusDuetStart = Number((BR.chart?.notes || []).find(note => note.character === "phantom_paps_br" && Number(note.time || 0) >= 400)?.time || 408.166667);
   const soulPhaseStart = 342.666667;
   const soulPhaseEnd = 394.666667;
-  const manualDrainFixStart = 282.5;
+  const manualDrainFixStart = 0;
   const skinTimeline = [{ time: 0, id: "default" }].concat(
     (BR.events || [])
       .filter(event => event.name === "Change Strum Skin")
