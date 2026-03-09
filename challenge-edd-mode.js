@@ -107,12 +107,16 @@
         state.audio.challengeVoices.preload = "auto";
         state.audio.challengeVoices.volume = 0.92;
       }
+      state.audio.inst = state.audio.challengeInst;
+      state.audio.voices = state.audio.challengeVoices;
     }
     window.ensureChallengeEddAudio = ensureAudioTracks;
 
     function totalTime() {
-      const durations = [state.audio.challengeInst?.duration, state.audio.challengeVoices?.duration].filter(value => Number.isFinite(value) && value > 0);
-      return durations.length ? Math.max(Number(CE.chart?.totalTime || 0), ...durations) : Number(CE.chart?.totalTime || 0);
+      const noteEnd = (CE.chart?.notes || []).reduce((max, note) => Math.max(max, Number(note.time || 0) + Math.max(0, Number(note.sLen || 0))), 0);
+      const durations = [state.audio.inst?.duration, state.audio.voices?.duration].filter(value => Number.isFinite(value) && value > 0);
+      const chartEnd = Math.max(Number(CE.chart?.totalTime || 0), noteEnd + 2);
+      return durations.length ? Math.max(chartEnd, ...durations) : chartEnd;
     }
 
     function valueAt(track, t) {
@@ -444,9 +448,12 @@
     }
 
     isImportedSong = song => !!song && (song.chartSource === "challengeEdd" || baseIsImportedSong(song));
-    makeChart = song => song?.chartSource === "challengeEdd"
-      ? { ...clone(CE.chart), notes: clone(CE.chart.notes), timeline: clone(CE.chart.timeline || []) }
-      : baseMakeChart(song);
+    makeChart = song => {
+      if (song?.chartSource !== "challengeEdd") return baseMakeChart(song);
+      const chart = { ...clone(CE.chart), notes: clone(CE.chart.notes), timeline: clone(CE.chart.timeline || []) };
+      chart.totalTime = Math.max(Number(chart.totalTime || 0), chart.notes.reduce((max, note) => Math.max(max, Number(note.time || 0) + Math.max(0, Number(note.sLen || 0))), 0) + 2);
+      return chart;
+    };
 
     stopExternalAudio = function() {
       baseStopExternalAudio();
@@ -459,7 +466,7 @@
       });
     };
 
-    songTime = () => state.currentSong?.chartSource === "challengeEdd" && state.audio.challengeInst ? state.audio.challengeInst.currentTime : baseSongTime();
+    songTime = () => state.currentSong?.chartSource === "challengeEdd" && state.audio.inst ? state.audio.inst.currentTime : baseSongTime();
 
     startSong = function(id = state.selectedSong, options = {}) {
       const song = SONGS[id] || state.currentSong;
@@ -479,20 +486,20 @@
       state.chart.notes = state.chart.notes.map(note => ({ ...note }));
       resetStats();
       state.health = 0.65;
-      state.audio.challengeInst.currentTime = 0;
-      state.audio.challengeVoices.currentTime = 0;
+      state.audio.inst.currentTime = 0;
+      state.audio.voices.currentTime = 0;
       state.songStart = 0;
       state.nextStep = 0;
       state.nextStepTime = 0;
       state.playing = true;
       if (state.mode === "online" && state.network?.matchStartAt) {
-        state.audio.challengeInst.pause();
-        state.audio.challengeVoices.pause();
-        state.audio.challengeInst.load();
-        state.audio.challengeVoices.load();
+        state.audio.inst.pause();
+        state.audio.voices.pause();
+        state.audio.inst.load();
+        state.audio.voices.load();
       } else {
-        state.audio.challengeInst.play().catch(() => {});
-        state.audio.challengeVoices.play().catch(() => {});
+        state.audio.inst.play().catch(() => {});
+        state.audio.voices.play().catch(() => {});
       }
       state.feeds.player.time = -10;
       state.feeds.opp.time = -10;
@@ -546,7 +553,7 @@
 
     finish = function(failed = false) {
       if (state.currentSong?.chartSource === "challengeEdd") {
-        [state.audio.challengeInst, state.audio.challengeVoices].forEach(track => {
+        [state.audio.inst, state.audio.voices].forEach(track => {
           if (!track) return;
           try { track.pause(); } catch {}
         });
@@ -577,42 +584,12 @@
 
     receptors = function(t) {
       if (state.selectedSong !== "challengeEdd") return baseReceptors(t);
-      const y = receptorY();
-      ctx.strokeStyle = "rgba(255,255,255,0.12)";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(canvas.width * 0.5, 72);
-      ctx.lineTo(canvas.width * 0.5, 452);
-      ctx.stroke();
-      for (let lane = 0; lane < 8; lane++) {
-        const x = laneX(lane);
-        drawChallengeReceptor(lane, x, y);
-        ctx.strokeStyle = "rgba(255,255,255,0.05)";
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(x, y + 26);
-        ctx.lineTo(x, 448);
-        ctx.stroke();
-      }
+      return baseReceptors(t);
     };
 
     notes = function(t) {
       if (state.selectedSong !== "challengeEdd") return baseNotes(t);
-      for (const note of state.chart?.notes || []) {
-        if (note.invisible) continue;
-        if (note.played && note.hit && (!isHoldNote(note) || note.holdDone)) continue;
-        if (note.judged && note.side !== "opp" && (!isHoldNote(note) || note.holdDone || !note.hit)) continue;
-        const diff = note.time - t;
-        const y = receptorY() + diff * state.currentSong.scroll;
-        const tailY = receptorY() + (holdEndTime(note) - t) * state.currentSong.scroll;
-        if (y < -120 && tailY < -120) continue;
-        if (y > canvas.height + 120 && tailY > canvas.height + 120) continue;
-        const scale = clamp(1 - Math.pow(Math.abs(diff), 0.7) * 0.45, 0.75, 1.12);
-        const alpha = note.side === "opp" ? 0.84 : 1;
-        if (isHoldNote(note)) drawChallengeSustain(note, note.hit ? receptorY() : y, tailY, alpha * (note.hit ? 0.94 : 1));
-        if (note.hit && isHoldNote(note) && t > note.time) continue;
-        drawChallengeNote(note, laneX(note.lane), y, scale, alpha);
-      }
+      return baseNotes(t);
     };
 
     if (typeof syncOnlinePlayback === "function" && typeof expectedOnlineSongTime === "function") {
