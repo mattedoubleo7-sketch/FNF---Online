@@ -4,10 +4,6 @@ const path = require("path");
 const { createGameServer } = require("./server");
 const { setupAutoUpdater } = require("./auto-update");
 
-app.disableHardwareAcceleration();
-app.commandLine.appendSwitch("disable-gpu");
-app.commandLine.appendSwitch("disable-gpu-compositing");
-
 let mainWindow = null;
 let embeddedServer = null;
 
@@ -29,7 +25,8 @@ async function createWindow() {
     useContentSize: true,
     icon: path.join(__dirname, "assets", "bf-logo-256.png"),
     webPreferences: {
-      contextIsolation: true
+      contextIsolation: true,
+      backgroundThrottling: false
     }
   });
 
