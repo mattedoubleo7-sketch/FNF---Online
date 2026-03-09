@@ -30,11 +30,12 @@ html, body {
     color: var(--text);
     font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
 }
-body { display: block; min-height: 100vh; padding: 0; overflow: hidden; }
+body { display: block; min-height: 100vh; padding: 0; overflow-x: hidden; overflow-y: auto; }
 #app {
     position: relative;
     width: 100vw;
-    height: 100vh;
+    height: max(100vh, 720px);
+    min-height: 720px;
     aspect-ratio: auto;
     overflow: hidden;
     border-radius: 0;
@@ -115,6 +116,8 @@ canvas { display: block; width: 100%; height: 100%; }
     pointer-events: none;
     opacity: 0;
     visibility: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
     background:
         linear-gradient(180deg, rgba(4,7,16,0.56), rgba(4,7,16,0.92)),
         radial-gradient(circle at top right, rgba(86, 215, 255, 0.14), transparent 24%),
@@ -238,7 +241,9 @@ body.fullViewport #app { width: 100vw; height: 100vh; aspect-ratio: auto; border
 .rStat .value { margin-top: 6px; font-size: 30px; font-weight: 900; }
 @media (max-width: 1100px) {
     body { padding: 0; }
-    #app { width: 100vw; height: 100vh; aspect-ratio: auto; min-height: 100vh; }
+    #app { width: 100vw; height: max(100vh, 720px); aspect-ratio: auto; min-height: 720px; }
+    #menu, #settings, #results { align-items: flex-start; }
+    .modal, .results { margin: 16px auto; }
     #menu, .features, .grid2, .resultGrid { flex-direction: column; grid-template-columns: 1fr; }
     .top, .bottom { left: 8px; right: 8px; gap: 8px; }
     .stats, .help { flex-wrap: wrap; }
@@ -1671,8 +1676,8 @@ function renderScene(songT, previewT){
             ctx.drawImage(vignette, 0, 0, canvas.width, canvas.height);
             ctx.restore();
         }
-        /* intro cover removed ï¿½ sans & bf silhouettes (t<16) handle the darkened-character effect */
-        // post-blaster scroll tween flashes ï¿½ black screen, white chars, blur out
+        /* intro cover removed; sans and bf silhouettes (t<16) handle the darkened-character effect */
+        // post-blaster scroll tween flashes: black screen, white chars, blur out
         for(const ft of PERSEVERANCE_POST_BLASTER_FLASHES){
             const age = t - ft;
             if(age >= 0 && age < 0.5){
