@@ -50,7 +50,7 @@
     return (Math.sin(seed * 127.1 + 311.7) + 1) * 0.5;
   }
 
-  const HALL_DUST = Array.from({ length: 84 }, (_, i) => ({
+  const HALL_DUST = Array.from({ length: 172 }, (_, i) => ({
     beam: i % HALL_BEAMS.length,
     offsetX: seededUnit(i * 1.73 + 0.13),
     offsetY: seededUnit(i * 2.31 + 0.37),
@@ -609,8 +609,9 @@
 
     const frame = draw.info.frame;
     const frameH = (frame.rotated ? frame.w : frame.h) * draw.scale;
-    const clipTop = draw.y - 12;
-    const clipBottom = Math.min(canvas.height, draw.y + frameH * 0.86 + 120);
+    const floorY = draw.y + 6;
+    const clipTop = floorY - 2;
+    const clipBottom = Math.min(canvas.height, floorY + frameH * 0.86 + 138);
     if (clipBottom <= clipTop) {
       return;
     }
@@ -619,26 +620,27 @@
     ctx.beginPath();
     ctx.rect(0, clipTop, canvas.width, clipBottom - clipTop);
     ctx.clip();
-    ctx.translate(0, draw.y * 2 + 14);
-    ctx.scale(1, -1);
-    ctx.filter = "blur(2.6px) saturate(0.95)";
+    ctx.globalCompositeOperation = "screen";
+    ctx.translate(0, floorY * 2 + 8);
+    ctx.scale(1, -0.84);
+    ctx.filter = "blur(1.8px) brightness(1.08) saturate(0.92)";
     drawVisibleFrame(
       draw.info.pack.image,
       draw.info.frame,
       draw.x,
       draw.y,
       draw.scale,
-      alpha,
+      Math.min(0.34, alpha * 1.55),
       draw.flipX
     );
     ctx.restore();
 
     ctx.save();
     const fade = ctx.createLinearGradient(0, clipTop, 0, clipBottom);
-    fade.addColorStop(0, "rgba(10,8,18,0)");
-    fade.addColorStop(0.16, "rgba(10,8,18,0.16)");
-    fade.addColorStop(0.58, "rgba(10,8,18,0.5)");
-    fade.addColorStop(1, "rgba(10,8,18,0.84)");
+    fade.addColorStop(0, "rgba(255,255,255,0.02)");
+    fade.addColorStop(0.12, "rgba(16,12,28,0.08)");
+    fade.addColorStop(0.56, "rgba(12,10,24,0.44)");
+    fade.addColorStop(1, "rgba(8,7,18,0.9)");
     ctx.globalCompositeOperation = "multiply";
     ctx.fillStyle = fade;
     ctx.fillRect(0, clipTop, canvas.width, clipBottom - clipTop);
@@ -779,34 +781,42 @@
     const boost = Math.max(1, bloom);
     ctx.save();
     ctx.globalCompositeOperation = "screen";
-    ctx.globalAlpha = Math.min(0.66, 0.3 + boost * 0.19);
+    ctx.globalAlpha = Math.min(0.9, 0.42 + boost * 0.24);
     ctx.drawImage(stageImages.light, rect.x, rect.y, rect.w, rect.h);
-    ctx.filter = "blur(" + (18 + boost * 18).toFixed(2) + "px) brightness(" + (1.72 + boost * 0.34).toFixed(2) + ")";
-    ctx.globalAlpha = Math.min(0.48, 0.18 + boost * 0.12);
+    ctx.filter = "blur(" + (22 + boost * 24).toFixed(2) + "px) brightness(" + (1.95 + boost * 0.45).toFixed(2) + ")";
+    ctx.globalAlpha = Math.min(0.68, 0.26 + boost * 0.16);
     ctx.drawImage(stageImages.light, rect.x, rect.y, rect.w, rect.h);
     ctx.filter = "none";
 
     for (const beam of HALL_BEAMS) {
       const cx = rect.x + rect.w * beam.x;
       const beamW = rect.w * beam.width;
-      const topY = rect.y + rect.h * 0.19;
-      const beamBottom = rect.y + rect.h * 0.96;
-      const pulse = 0.92 + Math.sin(t * 0.9 + beam.x * 8) * 0.08;
+      const topY = rect.y + rect.h * 0.18;
+      const beamBottom = rect.y + rect.h * 0.965;
+      const pulse = 0.94 + Math.sin(t * 0.92 + beam.x * 8.4) * 0.06;
 
-      const glow = ctx.createRadialGradient(cx, topY, beamW * 0.08, cx, topY, beamW * 0.82);
-      glow.addColorStop(0, "rgba(255,244,255," + Math.min(0.95, 0.54 * beam.intensity * pulse) + ")");
-      glow.addColorStop(0.42, "rgba(220,205,255," + Math.min(0.62, 0.28 * beam.intensity * pulse) + ")");
-      glow.addColorStop(1, "rgba(120,90,160,0)");
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = glow;
-      ctx.fillRect(cx - beamW, topY - beamW * 0.42, beamW * 2, beamW * 1.9);
+      const inner = ctx.createRadialGradient(cx, topY + beamW * 0.04, beamW * 0.04, cx, topY + beamW * 0.1, beamW * 1.14);
+      inner.addColorStop(0, "rgba(255,253,255," + Math.min(0.98, 0.9 * beam.intensity * pulse) + ")");
+      inner.addColorStop(0.16, "rgba(250,242,255," + Math.min(0.9, 0.7 * beam.intensity * pulse) + ")");
+      inner.addColorStop(0.46, "rgba(204,184,255," + Math.min(0.62, 0.36 * beam.intensity * pulse) + ")");
+      inner.addColorStop(1, "rgba(110,76,205,0)");
+      ctx.fillStyle = inner;
+      ctx.fillRect(cx - beamW * 1.42, topY - beamW * 0.68, beamW * 2.84, beamW * 2.56);
+
+      const aura = ctx.createRadialGradient(cx, topY + beamW * 0.12, beamW * 0.24, cx, topY + beamW * 0.12, beamW * 1.92);
+      aura.addColorStop(0, "rgba(222,202,255," + Math.min(0.38, 0.22 * beam.intensity * pulse) + ")");
+      aura.addColorStop(0.55, "rgba(150,118,235," + Math.min(0.26, 0.12 * beam.intensity * pulse) + ")");
+      aura.addColorStop(1, "rgba(84,54,148,0)");
+      ctx.fillStyle = aura;
+      ctx.fillRect(cx - beamW * 2.1, topY - beamW * 1.05, beamW * 4.2, beamW * 3.1);
 
       const shaft = ctx.createLinearGradient(0, topY, 0, beamBottom);
-      shaft.addColorStop(0, "rgba(255,245,255," + Math.min(0.44, 0.22 * beam.intensity * boost) + ")");
-      shaft.addColorStop(0.28, "rgba(228,214,255," + Math.min(0.3, 0.14 * beam.intensity * boost) + ")");
+      shaft.addColorStop(0, "rgba(255,248,255," + Math.min(0.62, 0.34 * beam.intensity * boost) + ")");
+      shaft.addColorStop(0.18, "rgba(244,231,255," + Math.min(0.4, 0.2 * beam.intensity * boost) + ")");
+      shaft.addColorStop(0.54, "rgba(184,156,245," + Math.min(0.2, 0.1 * beam.intensity * boost) + ")");
       shaft.addColorStop(1, "rgba(120,90,160,0)");
       ctx.fillStyle = shaft;
-      ctx.fillRect(cx - beamW * 0.78, topY, beamW * 1.56, beamBottom - topY);
+      ctx.fillRect(cx - beamW * 0.84, topY, beamW * 1.68, beamBottom - topY);
     }
     ctx.restore();
   }
@@ -1063,6 +1073,8 @@
     const playerPack = currentPack("player", t);
     const soulDuet = t >= soulPhaseStart && t < soulPhaseEnd && (pack.id === "gfSoul" || playerPack.id === "bfSoul");
     if (soulDuet) {
+      drawCharacterReflection("opp", t, 0.1, packById("gfSoul", "gfSoul"), SOUL_DUET_LAYOUT.gfSoul);
+      drawCharacterReflection("player", t, 0.12, packById("bfSoul", "bfSoul"), SOUL_DUET_LAYOUT.bfSoul);
       drawCharacter("opp", t, 0.22, true, packById("gfSoul", "gfSoul"), SOUL_DUET_LAYOUT.gfSoul);
       drawCharacter("player", t, 0.24, true, packById("bfSoul", "bfSoul"), SOUL_DUET_LAYOUT.bfSoul);
       drawCharacter("opp", t, 1, false, packById("gfSoul", "gfSoul"), SOUL_DUET_LAYOUT.gfSoul);
@@ -1103,11 +1115,11 @@
       drawHallDust(rect, t, bloom);
     }
 
-    drawCharacterReflection("opp", t, usePapyrusStage ? 0.08 : 0.11);
+    drawCharacterReflection("opp", t, usePapyrusStage ? 0.12 : 0.18);
     if (papyrusDuetActiveAt(t)) {
-      drawCharacterReflection("opp", t, 0.07, packById("papyrusBody", "papyrus"), STAGE_LAYOUT.papyrusBody);
+      drawCharacterReflection("opp", t, 0.1, packById("papyrusBody", "papyrus"), STAGE_LAYOUT.papyrusBody);
     }
-    drawCharacterReflection("player", t, usePapyrusStage ? 0.09 : 0.12);
+    drawCharacterReflection("player", t, usePapyrusStage ? 0.14 : 0.2);
 
     drawCharacter("opp", t, 0.22, true);
     if (papyrusDuetActiveAt(t)) {
