@@ -69,6 +69,7 @@
         tord: CE.sprites.opponent.tord.image,
         bft: CE.sprites.player.bft.image,
         bfv: CE.sprites.player.bfv.image,
+        bfBase: window.CHALLENGE_EDD_BF_DATA?.image,
         bfsl: CE.sprites.player.bfsl.image,
         eddsl: CE.sprites.player.eddsl.image,
         matt: CE.sprites.extras.matt.image,
@@ -208,6 +209,14 @@
       return { sprite, image, animName: pose.anim, elapsed: pose.elapsed, loop: pose.loop, flipX: !!sprite.flipX };
     }
 
+    function challengeBfSpriteState(t) {
+      const sprite = window.CHALLENGE_EDD_BF_DATA;
+      const image = ce.images.bfBase;
+      if (!sprite || !imageReady(image)) return null;
+      const stateInfo = poseInfoForSprite(sprite, "player", t, null);
+      return stateInfo ? { state: stateInfo, image, scale: variantScale("player", "player"), flipX: !!sprite.flipX } : null;
+    }
+
     function currentState(t) {
       return {
         stageMode: valueAt(CE.stageModes, t),
@@ -330,19 +339,22 @@
       const x = laneX(note.lane);
       const top = Math.min(headY, tailY);
       const bottom = Math.max(headY, tailY);
-      const cap = 28;
-      const bodyTop = top + cap * 0.45;
-      const bodyBottom = bottom - cap * 0.45;
+      const cap = 34;
+      const bodyTop = top + cap * 0.44;
+      const bodyBottom = bottom - cap * 0.44;
       if (bodyBottom > bodyTop) {
         ctx.save();
-        ctx.globalAlpha = alpha * 0.5;
-        ctx.shadowBlur = 14;
+        ctx.globalAlpha = alpha * 0.7;
+        ctx.shadowBlur = 18;
         ctx.shadowColor = COLORS[note.lane];
         ctx.fillStyle = COLORS[note.lane];
-        ctx.fillRect(x - 8, bodyTop, 16, bodyBottom - bodyTop);
+        ctx.fillRect(x - 14, bodyTop, 28, bodyBottom - bodyTop);
+        ctx.globalAlpha = alpha * 0.4;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(x - 5, bodyTop + 2, 10, Math.max(0, bodyBottom - bodyTop - 4));
         ctx.restore();
       }
-      drawSportingNote(note.lane, x, tailY, 0.62, alpha);
+      drawSportingNote(note.lane, x, tailY, 0.52, alpha * 0.94);
     }
 
     function drawChallengeNote(note, x, y, scale, alpha) {
@@ -423,7 +435,7 @@
       const y = (canvas.height - height) / 2;
       drawSimpleImage("tordBg", x, y, layout.tordBgScale);
       const oppState = opponentSpriteState(t, phase.opp);
-      if (oppState) drawSpriteState(oppState.state, oppState.image, 342, 632, oppState.scale, oppState.flipX, 1);
+      if (oppState) drawSpriteState(oppState.state, oppState.image, canvas.width * 0.5, 632, oppState.scale, oppState.flipX, 1);
     }
 
     function opponentSpriteState(t, oppKey) {
@@ -437,10 +449,7 @@
 
     function playerSpriteState(t, playerKey) {
       if (!playerKey || playerKey === "none") return null;
-      if (playerKey === "player") {
-        const stateInfo = sportingSpriteState("boyfriend", t);
-        return stateInfo ? { state: stateInfo, image: stateInfo.image, scale: variantScale(playerKey, "player"), flipX: !!stateInfo.flipX } : null;
-      }
+      if (playerKey === "player") return challengeBfSpriteState(t);
       const sprite = CE.sprites.player[playerKey];
       const image = imageForVariant(playerKey);
       if (!sprite || !imageReady(image)) return null;
