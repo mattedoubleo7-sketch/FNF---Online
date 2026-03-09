@@ -1368,34 +1368,14 @@ function cameraActiveSide(t){
     return state.camera.lastSide || "both";
 }
 function updateCamera(t, dt){
-    const mode = ui.cameraMode ? ui.cameraMode.value : "off";
     const midX = canvas.width / 2;
     const midY = canvas.height * 0.45;
-    if(mode === "off"){ state.camera.zoom = 1; state.camera.focusX = midX; state.camera.focusY = midY; state.camera.lastSide = "both"; state.camera.highwayX = 0; state.camera.highwayY = 0; return; }
-    if(!state.chart) return;
-    const side = mode === "center" ? "both" : cameraActiveSide(t);
-    state.camera.lastSide = side;
-    const targets = cameraTargets();
-    const profile = cameraPanProfile();
-    let targetZoom = 1;
-    let targetX = midX;
-    let targetY = targets.focusY;
-    if(mode === "pan"){
-        if(side === "opp"){
-            targetZoom = profile.zoom;
-            targetX = midX + (targets.oppX - midX) * profile.bias;
-        } else if(side === "player"){
-            targetZoom = profile.zoom;
-            targetX = midX + (targets.playerX - midX) * profile.bias;
-        }
-    }
-    const speed = Math.min(1, dt * profile.speed);
-    state.camera.zoom += (targetZoom - state.camera.zoom) * speed;
-    state.camera.focusX += (targetX - state.camera.focusX) * speed;
-    state.camera.focusY += (targetY - state.camera.focusY) * speed;
-    const targetHudX = mode === "pan" ? clamp((targetX - midX) * profile.hud, -profile.hudClamp, profile.hudClamp) : 0;
-    state.camera.highwayX += (targetHudX - state.camera.highwayX) * speed;
-    state.camera.highwayY += (0 - state.camera.highwayY) * speed;
+    state.camera.zoom = 1;
+    state.camera.focusX = midX;
+    state.camera.focusY = midY;
+    state.camera.lastSide = "both";
+    state.camera.highwayX = 0;
+    state.camera.highwayY = 0;
 }
 function refreshHUD(t){
     const acc = accuracy(state.stats.player), sec = currentSection(t / state.chart.spb), p = state.stats.player;
