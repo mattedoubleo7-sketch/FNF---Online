@@ -1,4 +1,4 @@
-(() => {
+﻿(() => {
   try {
     const CE = window.CHALLENGE_EDD_DATA;
     if (!CE || typeof SONGS === "undefined") return;
@@ -12,8 +12,10 @@
       speakerX: 640,
       speakerY: 538,
       gfX: 640,
-      gfY: 424,
+      gfY: 430,
       gfScale: 0.66,
+      vallasY: 178,
+      vallasWidthScale: 1.012,
       oppX: 430,
       oppY: 642,
       oppScale: 0.58,
@@ -88,6 +90,7 @@
         sky: CE.stage.images.sky,
         patio: CE.stage.images.patio,
         fence: CE.stage.images.fence,
+        vallas: "assets/challenge-edd-vallas.png",
         car: CE.stage.images.car,
         tordBg: CE.stage.images.tordBg,
         edd: CE.sprites.opponent.edd.image,
@@ -121,7 +124,7 @@
 
     function stageImagesReady() {
       initAssets();
-      return imageReady(ce.images.sky) && imageReady(ce.images.patio) && imageReady(ce.images.fence);
+      return imageReady(ce.images.sky) && imageReady(ce.images.patio) && (imageReady(ce.images.vallas) || imageReady(ce.images.fence));
     }
 
     function defaultHoldReady() {
@@ -257,7 +260,7 @@
         ctx.beginPath();
         ctx.rect(canvas.width - 290, 0, 290, canvas.height);
         ctx.clip();
-        drawSpriteState(info.state, info.image, canvas.width - 124, canvas.height - 12, info.scale * 1.8, info.flipX, 0.96);
+        drawSpriteState(info.state, info.image, canvas.width - 124, canvas.height - 12, info.scale * 1.8, false, 0.96);
       }
       ctx.restore();
     }
@@ -468,6 +471,24 @@
       });
       ctx.restore();
     }
+    function drawFullWidthImage(key, y, widthScale = 1, alpha = 1) {
+      const img = ce.images[key];
+      if (!imageReady(img)) return;
+      const width = canvas.width * widthScale;
+      const height = img.naturalHeight * (width / img.naturalWidth);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, (canvas.width - width) / 2, y, width, height);
+      ctx.restore();
+    }
+
+    function drawChallengeGf(t) {
+      const gfState = sportingSpriteState("gf", t);
+      if (!gfState || !imageReady(spriteState.images.gf)) return;
+      drawSpriteState(gfState, spriteState.images.gf, CE.stage.layout.gfX, CE.stage.layout.gfY, CE.stage.layout.gfScale, false, 1);
+    }
 
     function drawChallengeReceptor(lane, x, y) {
       if (!CE.sprites?.notes) return;
@@ -547,7 +568,8 @@
       const layout = CE.stage.layout;
       const sky = ce.images.sky;
       const patio = ce.images.patio;
-      const fence = ce.images.fence;
+      const fenceKey = imageReady(ce.images.vallas) ? "vallas" : "fence";
+      const fence = ce.images[fenceKey];
       const bot = tordbotState(t, phase.stageMode);
       const botBehindHouse = !!(bot && bot.state?.animName === "enter");
       if (imageReady(sky)) {
@@ -562,15 +584,15 @@
         drawSimpleImage("patio", patioX, 8, layout.patioScale);
       }
       if (imageReady(fence)) {
-        const fenceW = fence.naturalWidth * layout.fenceScale;
-        const fenceX = (canvas.width - fenceW) / 2;
-        drawSimpleImage("fence", fenceX, 254, layout.fenceScale, 0.98);
+        if (fenceKey === "vallas") drawFullWidthImage("vallas", layout.vallasY, layout.vallasWidthScale, 1);
+        else {
+          const fenceW = fence.naturalWidth * layout.fenceScale;
+          const fenceX = (canvas.width - fenceW) / 2;
+          drawSimpleImage("fence", fenceX, 254, layout.fenceScale, 0.98);
+        }
       }
 
-      if (phase.gf !== "none") {
-        const gfState = sportingSpriteState("gf", t);
-        drawSpriteState(gfState, spriteState.images.gf, layout.gfX, layout.gfY, layout.gfScale, false, 1);
-      }
+      drawChallengeGf(t);
 
       if (bot && !botBehindHouse) drawSpriteState(bot.state, ce.images.tordbot, bot.x, bot.y, bot.scale, false, 1);
 
@@ -961,6 +983,8 @@
     console.error("Challenge Edd mode failed to initialize", error);
   }
 })();
+
+
 
 
 
