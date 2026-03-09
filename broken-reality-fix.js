@@ -1103,10 +1103,6 @@
       drawHallDust(rect, t, bloom);
     }
 
-    if (ready(fg)) {
-      drawCenterPillarReflection(fg, rect.y, rect.h, usePapyrusStage ? 0.06 : 0.09);
-    }
-
     drawCharacterReflection("opp", t, usePapyrusStage ? 0.08 : 0.11);
     if (papyrusDuetActiveAt(t)) {
       drawCharacterReflection("opp", t, 0.07, packById("papyrusBody", "papyrus"), STAGE_LAYOUT.papyrusBody);
