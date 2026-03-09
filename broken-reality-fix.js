@@ -55,7 +55,7 @@
     offsetX: seededUnit(i * 1.73 + 0.13),
     offsetY: seededUnit(i * 2.31 + 0.37),
     speed: 0.35 + seededUnit(i * 0.91 + 0.22) * 1.25,
-    size: 1.1 + seededUnit(i * 1.41 + 0.81) * 3.4,
+    size: 0.38 + seededUnit(i * 1.41 + 0.81) * 1.18,
     sway: 0.35 + seededUnit(i * 1.19 + 0.44),
     phase: seededUnit(i * 0.63 + 0.58) * Math.PI * 2,
     alpha: 0.18 + seededUnit(i * 1.07 + 0.29) * 0.42
@@ -721,16 +721,55 @@
     }
   }
 
-  function drawCenterPillar(image, stageY, stageH) {
-    if (!ready(image)) {
-      return;
-    }
+  function centerPillarRect(image, stageY, stageH) {
     const srcX = Math.floor(image.naturalWidth * 0.74);
     const srcW = Math.max(1, Math.floor(image.naturalWidth * 0.26));
     const scale = stageH / image.naturalHeight;
     const drawW = srcW * scale;
     const drawX = canvas.width * 0.5 - drawW / 2;
-    ctx.drawImage(image, srcX, 0, srcW, image.naturalHeight, drawX, stageY, drawW, stageH);
+    return { srcX, srcW, drawW, drawX, stageY, stageH };
+  }
+
+  function drawCenterPillar(image, stageY, stageH) {
+    if (!ready(image)) {
+      return;
+    }
+    const rect = centerPillarRect(image, stageY, stageH);
+    ctx.drawImage(image, rect.srcX, 0, rect.srcW, image.naturalHeight, rect.drawX, stageY, rect.drawW, stageH);
+  }
+
+  function drawCenterPillarReflection(image, stageY, stageH, alpha = 0.08) {
+    if (!ready(image)) {
+      return;
+    }
+    const rect = centerPillarRect(image, stageY, stageH);
+    const clipTop = stageY + stageH * 0.72;
+    const clipBottom = Math.min(canvas.height, stageY + stageH + 110);
+    if (clipBottom <= clipTop) {
+      return;
+    }
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, clipTop, canvas.width, clipBottom - clipTop);
+    ctx.clip();
+    ctx.translate(0, (stageY + stageH) * 2 - 2);
+    ctx.scale(1, -1);
+    ctx.filter = "blur(2.2px) saturate(0.9)";
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(image, rect.srcX, 0, rect.srcW, image.naturalHeight, rect.drawX, stageY, rect.drawW, stageH);
+    ctx.restore();
+
+    ctx.save();
+    const fade = ctx.createLinearGradient(0, clipTop, 0, clipBottom);
+    fade.addColorStop(0, "rgba(10,8,18,0)");
+    fade.addColorStop(0.2, "rgba(10,8,18,0.2)");
+    fade.addColorStop(0.68, "rgba(10,8,18,0.52)");
+    fade.addColorStop(1, "rgba(10,8,18,0.86)");
+    ctx.globalCompositeOperation = "multiply";
+    ctx.fillStyle = fade;
+    ctx.fillRect(0, clipTop, canvas.width, clipBottom - clipTop);
+    ctx.restore();
   }
 
   function drawHallWindowBloom(rect, t, bloom) {
@@ -776,10 +815,11 @@
     const boost = Math.max(1, bloom);
     const topY = rect.y + rect.h * 0.16;
     const travelH = rect.h * 0.76;
+    const floorY = rect.y + rect.h * 0.955;
     ctx.save();
     ctx.globalCompositeOperation = "screen";
     ctx.shadowColor = "rgba(242,232,255,0.9)";
-    ctx.shadowBlur = 8 + boost * 6;
+    ctx.shadowBlur = 3 + boost * 2.5;
     for (const mote of HALL_DUST) {
       const beam = HALL_BEAMS[mote.beam];
       const beamW = rect.w * beam.width;
@@ -789,13 +829,21 @@
         + Math.sin(t * (0.34 + mote.sway * 0.18) + mote.phase + y * 0.018) * beamW * 0.2
         + (mote.offsetX - 0.5) * beamW * 0.48;
       const pulse = 0.6 + 0.4 * Math.sin(t * (0.8 + mote.speed * 0.22) + mote.phase);
-      const alpha = Math.min(0.34, (0.045 + mote.alpha * 0.2 * pulse) * (0.84 + boost * 0.18));
-      const size = mote.size * (0.86 + pulse * 0.48);
+      const alpha = Math.min(0.22, (0.02 + mote.alpha * 0.11 * pulse) * (0.82 + boost * 0.14));
+      const size = mote.size * (0.82 + pulse * 0.32);
       ctx.globalAlpha = alpha;
       ctx.fillStyle = mote.beam === 1 ? "#f7f0ff" : "#ede4ff";
       ctx.beginPath();
       ctx.arc(x, y, size, 0, Math.PI * 2);
       ctx.fill();
+
+      const reflectedY = floorY + (floorY - y) * 0.22;
+      if (reflectedY > floorY - 6 && reflectedY < canvas.height) {
+        ctx.globalAlpha = alpha * 0.32;
+        ctx.beginPath();
+        ctx.arc(x, reflectedY, Math.max(0.18, size * 0.72), 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
     ctx.restore();
   }
@@ -1053,6 +1101,10 @@
       const bloom = Number(state.br?.bloom || 1);
       drawHallWindowBloom(rect, t, bloom);
       drawHallDust(rect, t, bloom);
+    }
+
+    if (ready(fg)) {
+      drawCenterPillarReflection(fg, rect.y, rect.h, usePapyrusStage ? 0.06 : 0.09);
     }
 
     drawCharacterReflection("opp", t, usePapyrusStage ? 0.08 : 0.11);
