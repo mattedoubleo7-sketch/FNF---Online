@@ -1335,24 +1335,37 @@ function cameraTargets(){
     return { oppX: 314, playerX: 962, focusY: canvas.height * 0.46 };
 }
 function cameraPanProfile(){
-    if(state.selectedSong === "perseverance") return { zoom: 1.18, bias: 1.18, hud: 0.24, hudClamp: 74 };
-    if(state.selectedSong === "brokenReality") return { zoom: 1.2, bias: 1.12, hud: 0.24, hudClamp: 80 };
-    return { zoom: 1.1, bias: 1, hud: 0.18, hudClamp: 56 };
+    if(state.selectedSong === "perseverance") return { zoom: 1.28, bias: 1.34, hud: 0.34, hudClamp: 112, speed: 4.4 };
+    if(state.selectedSong === "brokenReality") return { zoom: 1.3, bias: 1.4, hud: 0.36, hudClamp: 120, speed: 4.6 };
+    return { zoom: 1.1, bias: 1, hud: 0.18, hudClamp: 56, speed: 3.2 };
+}
+function cameraPoseKeys(){
+    if(state.selectedSong === "sporting") return { opp: "matt", player: "player" };
+    if(state.selectedSong === "perseverance" || state.selectedSong === "brokenReality") return { opp: "sans", player: "player" };
+    return { opp: "dad", player: "player" };
 }
 function cameraActiveSide(t){
-    if(!state.chart?.notes) return "both";
-    let hasOpp = false, hasPlayer = false;
-    for(const n of state.chart.notes){
-        const end = isHoldNote(n) ? holdEndTime(n) + 0.03 : n.time + 0.14;
-        if(end < t - 0.08) continue;
-        if(n.time > t + 0.22) break;
-        if(n.side === "opp") hasOpp = true;
-        if(n.side === "player") hasPlayer = true;
-        if(hasOpp && hasPlayer) return "both";
+    const keys = cameraPoseKeys();
+    const now = performance.now() / 1000;
+    const oppPose = state.poses?.[keys.opp];
+    const playerPose = state.poses?.[keys.player];
+    let hasOpp = !!(oppPose && oppPose.kind !== "miss" && now - oppPose.time <= 0.26);
+    let hasPlayer = !!(playerPose && playerPose.kind !== "miss" && now - playerPose.time <= 0.26);
+    if(state.chart?.notes){
+        for(const n of state.chart.notes){
+            if(n.time > t + 0.08) break;
+            const activeHold = isHoldNote(n) && n.hit && !n.holdDone && holdEndTime(n) >= t - 0.02;
+            const activeTap = !isHoldNote(n) && t >= n.time - 0.02 && t <= n.time + 0.08;
+            if(!activeHold && !activeTap) continue;
+            if(n.side === "opp") hasOpp = true;
+            if(n.side === "player") hasPlayer = true;
+            if(hasOpp && hasPlayer) return "both";
+        }
     }
+    if(hasOpp && hasPlayer) return "both";
     if(hasOpp) return "opp";
     if(hasPlayer) return "player";
-    return "both";
+    return state.camera.lastSide || "both";
 }
 function updateCamera(t, dt){
     const mode = ui.cameraMode ? ui.cameraMode.value : "off";
@@ -1376,7 +1389,7 @@ function updateCamera(t, dt){
             targetX = midX + (targets.playerX - midX) * profile.bias;
         }
     }
-    const speed = Math.min(1, dt * 3.2);
+    const speed = Math.min(1, dt * profile.speed);
     state.camera.zoom += (targetZoom - state.camera.zoom) * speed;
     state.camera.focusX += (targetX - state.camera.focusX) * speed;
     state.camera.focusY += (targetY - state.camera.focusY) * speed;
