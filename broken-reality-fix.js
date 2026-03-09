@@ -40,6 +40,26 @@
     uprising: "the-uprising-cutscene.mp4"
   };
   const endingVideos = {};
+  const HALL_BEAMS = [
+    { x: 0.19, width: 0.118, intensity: 1.05 },
+    { x: 0.5, width: 0.132, intensity: 1.22 },
+    { x: 0.81, width: 0.118, intensity: 1.05 }
+  ];
+
+  function seededUnit(seed) {
+    return (Math.sin(seed * 127.1 + 311.7) + 1) * 0.5;
+  }
+
+  const HALL_DUST = Array.from({ length: 84 }, (_, i) => ({
+    beam: i % HALL_BEAMS.length,
+    offsetX: seededUnit(i * 1.73 + 0.13),
+    offsetY: seededUnit(i * 2.31 + 0.37),
+    speed: 0.35 + seededUnit(i * 0.91 + 0.22) * 1.25,
+    size: 1.1 + seededUnit(i * 1.41 + 0.81) * 3.4,
+    sway: 0.35 + seededUnit(i * 1.19 + 0.44),
+    phase: seededUnit(i * 0.63 + 0.58) * Math.PI * 2,
+    alpha: 0.18 + seededUnit(i * 1.07 + 0.29) * 0.42
+  }));
 
   function loadImage(bucket, key, src) {
     if (!src) {
@@ -649,6 +669,73 @@
     ctx.drawImage(image, srcX, 0, srcW, image.naturalHeight, drawX, stageY, drawW, stageH);
   }
 
+  function drawHallWindowBloom(rect, t, bloom) {
+    if (!ready(stageImages.light)) {
+      return;
+    }
+    const boost = Math.max(1, bloom);
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    ctx.globalAlpha = Math.min(0.66, 0.3 + boost * 0.19);
+    ctx.drawImage(stageImages.light, rect.x, rect.y, rect.w, rect.h);
+    ctx.filter = "blur(" + (18 + boost * 18).toFixed(2) + "px) brightness(" + (1.72 + boost * 0.34).toFixed(2) + ")";
+    ctx.globalAlpha = Math.min(0.48, 0.18 + boost * 0.12);
+    ctx.drawImage(stageImages.light, rect.x, rect.y, rect.w, rect.h);
+    ctx.filter = "none";
+
+    for (const beam of HALL_BEAMS) {
+      const cx = rect.x + rect.w * beam.x;
+      const beamW = rect.w * beam.width;
+      const topY = rect.y + rect.h * 0.19;
+      const beamBottom = rect.y + rect.h * 0.96;
+      const pulse = 0.92 + Math.sin(t * 0.9 + beam.x * 8) * 0.08;
+
+      const glow = ctx.createRadialGradient(cx, topY, beamW * 0.08, cx, topY, beamW * 0.82);
+      glow.addColorStop(0, "rgba(255,244,255," + Math.min(0.95, 0.54 * beam.intensity * pulse) + ")");
+      glow.addColorStop(0.42, "rgba(220,205,255," + Math.min(0.62, 0.28 * beam.intensity * pulse) + ")");
+      glow.addColorStop(1, "rgba(120,90,160,0)");
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = glow;
+      ctx.fillRect(cx - beamW, topY - beamW * 0.42, beamW * 2, beamW * 1.9);
+
+      const shaft = ctx.createLinearGradient(0, topY, 0, beamBottom);
+      shaft.addColorStop(0, "rgba(255,245,255," + Math.min(0.44, 0.22 * beam.intensity * boost) + ")");
+      shaft.addColorStop(0.28, "rgba(228,214,255," + Math.min(0.3, 0.14 * beam.intensity * boost) + ")");
+      shaft.addColorStop(1, "rgba(120,90,160,0)");
+      ctx.fillStyle = shaft;
+      ctx.fillRect(cx - beamW * 0.78, topY, beamW * 1.56, beamBottom - topY);
+    }
+    ctx.restore();
+  }
+
+  function drawHallDust(rect, t, bloom) {
+    const boost = Math.max(1, bloom);
+    const topY = rect.y + rect.h * 0.16;
+    const travelH = rect.h * 0.76;
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    ctx.shadowColor = "rgba(242,232,255,0.9)";
+    ctx.shadowBlur = 8 + boost * 6;
+    for (const mote of HALL_DUST) {
+      const beam = HALL_BEAMS[mote.beam];
+      const beamW = rect.w * beam.width;
+      const cx = rect.x + rect.w * beam.x;
+      const y = topY + ((mote.offsetY * travelH) + t * (18 + mote.speed * 24)) % travelH;
+      const x = cx
+        + Math.sin(t * (0.34 + mote.sway * 0.18) + mote.phase + y * 0.018) * beamW * 0.2
+        + (mote.offsetX - 0.5) * beamW * 0.48;
+      const pulse = 0.6 + 0.4 * Math.sin(t * (0.8 + mote.speed * 0.22) + mote.phase);
+      const alpha = Math.min(0.34, (0.045 + mote.alpha * 0.2 * pulse) * (0.84 + boost * 0.18));
+      const size = mote.size * (0.86 + pulse * 0.48);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = mote.beam === 1 ? "#f7f0ff" : "#ede4ff";
+      ctx.beginPath();
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   function drawAttackBar(t) {
     const fix = getFixState();
     const snap = fix.attackSnapshot;
@@ -892,15 +979,17 @@
     if (ready(stageImages.light)) {
       const bloom = Number(state.br?.bloom || 1);
       ctx.globalCompositeOperation = "screen";
-      ctx.globalAlpha = 0.18 + bloom * 0.16;
+      ctx.globalAlpha = usePapyrusStage ? 0.16 + bloom * 0.08 : 0.2 + bloom * 0.1;
       ctx.drawImage(stageImages.light, rect.x, rect.y, rect.w, rect.h);
-      ctx.filter = "blur(12px) brightness(1.55)";
-      ctx.globalAlpha = 0.16 + bloom * 0.14;
-      ctx.drawImage(stageImages.light, rect.x, rect.y, rect.w, rect.h);
-      ctx.filter = "none";
       ctx.globalCompositeOperation = "source-over";
     }
     ctx.restore();
+
+    if (!usePapyrusStage) {
+      const bloom = Number(state.br?.bloom || 1);
+      drawHallWindowBloom(rect, t, bloom);
+      drawHallDust(rect, t, bloom);
+    }
 
     drawCharacter("opp", t, 0.22, true);
     if (papyrusDuetActiveAt(t)) {
