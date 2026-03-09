@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1391,13 +1391,13 @@ function laneX(i){
     const baseX = 248 + i * 112;
     const mode = ui.cameraMode ? ui.cameraMode.value : "off";
     if(mode !== "pan") return baseX;
-    return baseX + (state.camera.focusX - canvas.width / 2) * 0.34;
+    return baseX + clamp((state.camera.focusX - canvas.width / 2) * 0.18, -56, 56);
 }
 function receptorY(){
     const baseY = 172;
     const mode = ui.cameraMode ? ui.cameraMode.value : "off";
     if(mode !== "pan") return baseY;
-    return baseY + (state.camera.focusY - canvas.height * 0.45) * 0.22;
+    return baseY + clamp((state.camera.focusY - canvas.height * 0.45) * 0.12, -14, 14);
 }
 function arrow(x, y, size, angle, fill, stroke, alpha=1){
     ctx.save();
