@@ -609,9 +609,10 @@
 
     const frame = draw.info.frame;
     const frameH = (frame.rotated ? frame.w : frame.h) * draw.scale;
-    const floorY = draw.y + 6;
-    const clipTop = floorY - 2;
-    const clipBottom = Math.min(canvas.height, floorY + frameH * 0.86 + 138);
+    const floorY = draw.y + 4;
+    const reflectScaleY = 0.9;
+    const clipTop = floorY - 3;
+    const clipBottom = Math.min(canvas.height, floorY + frameH * 0.98 + 160);
     if (clipBottom <= clipTop) {
       return;
     }
@@ -620,27 +621,28 @@
     ctx.beginPath();
     ctx.rect(0, clipTop, canvas.width, clipBottom - clipTop);
     ctx.clip();
-    ctx.globalCompositeOperation = "screen";
-    ctx.translate(0, floorY * 2 + 8);
-    ctx.scale(1, -0.84);
-    ctx.filter = "blur(1.8px) brightness(1.08) saturate(0.92)";
+    ctx.translate(0, floorY * (1 + reflectScaleY));
+    ctx.scale(1, -reflectScaleY);
+    ctx.globalCompositeOperation = "source-over";
+    ctx.filter = "blur(1.6px) brightness(1.05) saturate(0.9)";
     drawVisibleFrame(
       draw.info.pack.image,
       draw.info.frame,
       draw.x,
       draw.y,
       draw.scale,
-      Math.min(0.34, alpha * 1.55),
+      Math.min(0.5, alpha * 1.9),
       draw.flipX
     );
     ctx.restore();
 
     ctx.save();
     const fade = ctx.createLinearGradient(0, clipTop, 0, clipBottom);
-    fade.addColorStop(0, "rgba(255,255,255,0.02)");
-    fade.addColorStop(0.12, "rgba(16,12,28,0.08)");
-    fade.addColorStop(0.56, "rgba(12,10,24,0.44)");
-    fade.addColorStop(1, "rgba(8,7,18,0.9)");
+    fade.addColorStop(0, "rgba(255,255,255,0.01)");
+    fade.addColorStop(0.08, "rgba(18,14,30,0.04)");
+    fade.addColorStop(0.4, "rgba(14,12,26,0.28)");
+    fade.addColorStop(0.78, "rgba(10,9,20,0.62)");
+    fade.addColorStop(1, "rgba(7,7,16,0.92)");
     ctx.globalCompositeOperation = "multiply";
     ctx.fillStyle = fade;
     ctx.fillRect(0, clipTop, canvas.width, clipBottom - clipTop);
@@ -1073,8 +1075,8 @@
     const playerPack = currentPack("player", t);
     const soulDuet = t >= soulPhaseStart && t < soulPhaseEnd && (pack.id === "gfSoul" || playerPack.id === "bfSoul");
     if (soulDuet) {
-      drawCharacterReflection("opp", t, 0.1, packById("gfSoul", "gfSoul"), SOUL_DUET_LAYOUT.gfSoul);
-      drawCharacterReflection("player", t, 0.12, packById("bfSoul", "bfSoul"), SOUL_DUET_LAYOUT.bfSoul);
+      drawCharacterReflection("opp", t, 0.18, packById("gfSoul", "gfSoul"), SOUL_DUET_LAYOUT.gfSoul);
+      drawCharacterReflection("player", t, 0.22, packById("bfSoul", "bfSoul"), SOUL_DUET_LAYOUT.bfSoul);
       drawCharacter("opp", t, 0.22, true, packById("gfSoul", "gfSoul"), SOUL_DUET_LAYOUT.gfSoul);
       drawCharacter("player", t, 0.24, true, packById("bfSoul", "bfSoul"), SOUL_DUET_LAYOUT.bfSoul);
       drawCharacter("opp", t, 1, false, packById("gfSoul", "gfSoul"), SOUL_DUET_LAYOUT.gfSoul);
@@ -1115,11 +1117,11 @@
       drawHallDust(rect, t, bloom);
     }
 
-    drawCharacterReflection("opp", t, usePapyrusStage ? 0.12 : 0.18);
+    drawCharacterReflection("opp", t, usePapyrusStage ? 0.2 : 0.28);
     if (papyrusDuetActiveAt(t)) {
-      drawCharacterReflection("opp", t, 0.1, packById("papyrusBody", "papyrus"), STAGE_LAYOUT.papyrusBody);
+      drawCharacterReflection("opp", t, 0.16, packById("papyrusBody", "papyrus"), STAGE_LAYOUT.papyrusBody);
     }
-    drawCharacterReflection("player", t, usePapyrusStage ? 0.14 : 0.2);
+    drawCharacterReflection("player", t, usePapyrusStage ? 0.24 : 0.34);
 
     drawCharacter("opp", t, 0.22, true);
     if (papyrusDuetActiveAt(t)) {
