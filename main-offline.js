@@ -1,5 +1,14 @@
 const { app, BrowserWindow } = require("electron");
 const path = require("path");
+const { setupAutoUpdater } = require("./auto-update");
+
+app.disableHardwareAcceleration();
+app.commandLine.appendSwitch("disable-gpu");
+app.commandLine.appendSwitch("disable-gpu-compositing");
+
+let mainWindow = null;
+
+setupAutoUpdater(() => mainWindow, "FNF Onliine Offline");
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -13,6 +22,7 @@ function createWindow() {
     }
   });
 
+  mainWindow = win;
   win.setMenuBarVisibility(false);
   win.loadFile(path.join(__dirname, "FNF - Offline.html"));
 }

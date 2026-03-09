@@ -2,9 +2,16 @@ const { app, BrowserWindow } = require("electron");
 const fs = require("fs");
 const path = require("path");
 const { createGameServer } = require("./server");
+const { setupAutoUpdater } = require("./auto-update");
+
+app.disableHardwareAcceleration();
+app.commandLine.appendSwitch("disable-gpu");
+app.commandLine.appendSwitch("disable-gpu-compositing");
 
 let mainWindow = null;
 let embeddedServer = null;
+
+setupAutoUpdater(() => mainWindow, "FNF Onliine");
 
 function readRemoteServerUrl() {
   const envUrl = String(process.env.FNF_REMOTE_SERVER_URL || "").trim();
