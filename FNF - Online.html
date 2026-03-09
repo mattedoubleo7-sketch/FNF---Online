@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1328,36 +1328,49 @@ function updateHoldNotes(t){
     }
 }
 function perseveranceSection(t){ return window.PERSEVERANCE_DATA?.chart.timeline.find(sec => t >= sec.startTime && t < sec.endTime); }
-function updateCamera(t, dt){
-    const mode = ui.cameraMode ? ui.cameraMode.value : "off";
-    if(mode === "off"){ state.camera.zoom = 1; state.camera.focusX = canvas.width / 2; state.camera.focusY = canvas.height * 0.45; return; }
-    if(!state.chart) return;
-    // determine who's playing by looking at notes in a 2s window
+function cameraTargets(){
+    if(state.selectedSong === "sporting") return { oppX: 286, playerX: 742, focusY: canvas.height * 0.47 };
+    if(state.selectedSong === "perseverance") return { oppX: 486, playerX: 854, focusY: canvas.height * 0.45 };
+    if(state.selectedSong === "brokenReality") return { oppX: canvas.width * 0.838, playerX: canvas.width * 0.288, focusY: canvas.height * 0.46 };
+    return { oppX: 314, playerX: 962, focusY: canvas.height * 0.46 };
+}
+function cameraActiveSide(t){
+    if(!state.chart?.notes) return "both";
     let hasOpp = false, hasPlayer = false;
     for(const n of state.chart.notes){
-        if(n.time < t - 0.5) continue;
-        if(n.time > t + 2) break;
+        const end = isHoldNote(n) ? holdEndTime(n) + 0.03 : n.time + 0.14;
+        if(end < t - 0.08) continue;
+        if(n.time > t + 0.22) break;
         if(n.side === "opp") hasOpp = true;
         if(n.side === "player") hasPlayer = true;
+        if(hasOpp && hasPlayer) return "both";
     }
-    let side = hasOpp && hasPlayer ? "both" : hasOpp ? "opp" : hasPlayer ? "player" : state.camera.lastSide;
-    if(side !== state.camera.lastSide){ state.camera.sideTime = t; state.camera.lastSide = side; }
-    const elapsed = t - state.camera.sideTime;
-    // focus points for perseverance: sans ~486, bf ~854, center ~670
-    // for sporting/default: similar positions
-    const sansX = 486, bfX = 854, midX = canvas.width / 2, midY = canvas.height * 0.45;
-    let targetZoom = 1, targetX = midX, targetY = midY;
-    if(elapsed >= 2){
-        if(mode === "center"){
-            targetZoom = side === "both" ? 1 : 1.12;
-            targetX = side === "opp" ? sansX : side === "player" ? bfX : midX;
-        } else {
-            targetZoom = side === "both" ? 1 : 1.15;
-            targetX = side === "opp" ? sansX : side === "player" ? bfX : midX;
+    if(hasOpp) return "opp";
+    if(hasPlayer) return "player";
+    return "both";
+}
+function updateCamera(t, dt){
+    const mode = ui.cameraMode ? ui.cameraMode.value : "off";
+    const midX = canvas.width / 2;
+    const midY = canvas.height * 0.45;
+    if(mode === "off"){ state.camera.zoom = 1; state.camera.focusX = midX; state.camera.focusY = midY; state.camera.lastSide = "both"; return; }
+    if(!state.chart) return;
+    const side = mode === "center" ? "both" : cameraActiveSide(t);
+    state.camera.lastSide = side;
+    const targets = cameraTargets();
+    let targetZoom = 1;
+    let targetX = midX;
+    let targetY = targets.focusY;
+    if(mode === "pan"){
+        if(side === "opp"){
+            targetZoom = 1.1;
+            targetX = targets.oppX;
+        } else if(side === "player"){
+            targetZoom = 1.1;
+            targetX = targets.playerX;
         }
     }
-    // smooth lerp
-    const speed = Math.min(1, dt * 1.8);
+    const speed = Math.min(1, dt * 3.2);
     state.camera.zoom += (targetZoom - state.camera.zoom) * speed;
     state.camera.focusX += (targetX - state.camera.focusX) * speed;
     state.camera.focusY += (targetY - state.camera.focusY) * speed;
@@ -1374,8 +1387,18 @@ function finish(failed=false){
     ui.resultTitle.textContent = state.currentSong.title; ui.resultGrade.textContent = g; ui.resultSummary.textContent = failed ? "Health dropped to zero before the song ended." : rating(acc); ui.rScore.textContent = state.stats.player.score.toLocaleString(); ui.rAccuracy.textContent = (acc * 100).toFixed(2) + "%"; ui.rCombo.textContent = state.stats.player.maxCombo; ui.rJudge.textContent = `${j.perfect} / ${j.good} / ${j.bad} / ${j.miss}`;
     ui.resultsWrap.classList.add("show");
 }
-function laneX(i){ return 248 + i * 112; }
-function receptorY(){ return 172; }
+function laneX(i){
+    const baseX = 248 + i * 112;
+    const mode = ui.cameraMode ? ui.cameraMode.value : "off";
+    if(mode !== "pan") return baseX;
+    return baseX + (state.camera.focusX - canvas.width / 2) * 0.34;
+}
+function receptorY(){
+    const baseY = 172;
+    const mode = ui.cameraMode ? ui.cameraMode.value : "off";
+    if(mode !== "pan") return baseY;
+    return baseY + (state.camera.focusY - canvas.height * 0.45) * 0.22;
+}
 function arrow(x, y, size, angle, fill, stroke, alpha=1){
     ctx.save();
     ctx.translate(x, y);
@@ -1653,8 +1676,8 @@ function renderScene(songT, previewT){
             ctx.drawImage(vignette, 0, 0, canvas.width, canvas.height);
             ctx.restore();
         }
-        /* intro cover removed � sans & bf silhouettes (t<16) handle the darkened-character effect */
-        // post-blaster scroll tween flashes � black screen, white chars, blur out
+        /* intro cover removed ï¿½ sans & bf silhouettes (t<16) handle the darkened-character effect */
+        // post-blaster scroll tween flashes ï¿½ black screen, white chars, blur out
         for(const ft of PERSEVERANCE_POST_BLASTER_FLASHES){
             const age = t - ft;
             if(age >= 0 && age < 0.5){
@@ -1777,6 +1800,7 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 <script src="broken-reality-fix.js"></script>
 </body>
 </html>
+
 
 
 
