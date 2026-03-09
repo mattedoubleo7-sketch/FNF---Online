@@ -283,6 +283,16 @@
       }
     }
     window.ensureChallengeEddAudio = ensureAudioTracks;
+    window.prepareChallengeEddOnlineStart = function() {
+      ensureAudioTracks();
+      [state.audio.challengeInst, state.audio.challengeVoices].forEach(track => {
+        if (!track) return;
+        track.pause();
+        try { track.currentTime = 0; } catch {}
+        try { track.load(); } catch {}
+      });
+      return [state.audio.challengeInst, state.audio.challengeVoices];
+    };
 
     function noteEndTime() {
       return (CE.chart?.notes || []).reduce((max, note) => Math.max(max, Number(note.time || 0) + Math.max(0, Number(note.sLen || 0))), 0);
@@ -715,6 +725,7 @@
       ensureAudioTracks();
       const inst = state.audio.challengeInst;
       const voices = state.audio.challengeVoices;
+      const skipReload = !!options.skipReload;
       if (typeof initSportingSprites === "function") initSportingSprites();
       state.selectedSong = id;
       state.currentSong = SONGS[id];
@@ -734,8 +745,10 @@
       if (state.mode === "online" && state.network?.matchStartAt) {
         inst.pause();
         voices.pause();
-        inst.load();
-        voices.load();
+        if (!skipReload) {
+          inst.load();
+          voices.load();
+        }
       } else {
         inst.play().catch(() => {});
         voices.play().catch(() => {});
@@ -920,7 +933,8 @@
         const base = baseSyncOnlinePlayback(force);
         if (targetTime == null || state.currentSong?.chartSource !== "challengeEdd") return base;
         ensureAudioTracks();
-        const shouldPlay = Date.now() + 40 >= (state.network?.matchStartAt || 0);
+        const now = typeof serverClockNow === "function" ? serverClockNow() : Date.now();
+        const shouldPlay = now + 40 >= (state.network?.matchStartAt || 0);
         for (const track of [state.audio.challengeInst, state.audio.challengeVoices]) {
           if (!track) continue;
           if (track.readyState === 0) {
@@ -947,3 +961,7 @@
     console.error("Challenge Edd mode failed to initialize", error);
   }
 })();
+
+
+
+

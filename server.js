@@ -7,6 +7,7 @@ const ROOT = __dirname;
 const rooms = new Map();
 const matchmakingQueue = [];
 const MATCH_START_DELAY_MS = 8000;
+const MATCH_PREPARE_TIMEOUT_MS = 25000;
 
 function makePlayerName() {
   return "Player " + Math.floor(1000 + Math.random() * 9000);
@@ -21,6 +22,11 @@ function makeRoomCode() {
   return code;
 }
 
+function clearPrepareTimer(room) {
+  if (room.prepareTimer) clearTimeout(room.prepareTimer);
+  room.prepareTimer = null;
+}
+
 function snapshotFor(room, socketId) {
   const role = room.hostId === socketId ? "host" : room.guestId === socketId ? "guest" : null;
   return {
@@ -31,18 +37,28 @@ function snapshotFor(room, socketId) {
       host: !!room.hostReady,
       guest: !!room.guestReady
     },
+    loaded: {
+      host: !!room.hostLoaded,
+      guest: !!room.guestLoaded
+    },
+    preparing: !!room.matchId && !(room.startAt > Date.now()),
     startAt: Number(room.startAt || 0),
     players: {
       host: room.hostUser,
       guest: room.guestUser
-    }
+    },
+    serverNow: Date.now()
   };
 }
 
 function resetReady(room) {
+  clearPrepareTimer(room);
   room.hostReady = false;
   room.guestReady = false;
+  room.hostLoaded = false;
+  room.guestLoaded = false;
   room.startAt = 0;
+  room.matchId = "";
 }
 
 function queueSnapshot(position) {
@@ -113,13 +129,62 @@ function makeRoomForHost(socket, songId) {
     guestUser: null,
     hostReady: false,
     guestReady: false,
-    startAt: 0
+    hostLoaded: false,
+    guestLoaded: false,
+    startAt: 0,
+    matchId: "",
+    prepareTimer: null
   };
   rooms.set(room.id, room);
   socket.data.roomId = room.id;
   socket.data.role = "host";
   socket.join(room.id);
   return room;
+}
+
+function beginPrepare(io, room) {
+  clearPrepareTimer(room);
+  room.hostLoaded = false;
+  room.guestLoaded = false;
+  room.startAt = 0;
+  room.matchId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const matchId = room.matchId;
+  io.to(room.id).emit("game:prepare", {
+    roomId: room.id,
+    songId: room.songId,
+    matchId,
+    timeoutMs: MATCH_PREPARE_TIMEOUT_MS,
+    serverNow: Date.now()
+  });
+  room.prepareTimer = setTimeout(() => {
+    if (room.matchId !== matchId) return;
+    resetReady(room);
+    io.to(room.id).emit("room:error", { message: "A player took too long to finish loading. Press Ready Up again." });
+    broadcastRoom(io, room);
+  }, MATCH_PREPARE_TIMEOUT_MS);
+  broadcastRoom(io, room);
+}
+
+function startPreparedMatch(io, room) {
+  if (!room.matchId || !room.hostLoaded || !room.guestLoaded) return;
+  const matchId = room.matchId;
+  clearPrepareTimer(room);
+  const startAt = Date.now() + MATCH_START_DELAY_MS;
+  room.startAt = startAt;
+  room.hostReady = false;
+  room.guestReady = false;
+  room.hostLoaded = false;
+  room.guestLoaded = false;
+  room.matchId = "";
+  io.to(room.id).emit("game:start", {
+    roomId: room.id,
+    songId: room.songId,
+    matchId,
+    startAt,
+    delayMs: MATCH_START_DELAY_MS,
+    serverNow: Date.now()
+  });
+  broadcastRoom(io, room);
 }
 
 function leaveRoom(io, socket) {
@@ -145,6 +210,7 @@ function leaveRoom(io, socket) {
     room.guestUser = null;
   }
   if (!room.hostId && !room.guestId) {
+    clearPrepareTimer(room);
     rooms.delete(roomId);
     return;
   }
@@ -181,7 +247,11 @@ function createGameServer({ port = Number(process.env.PORT) || 3000, host = proc
     socket.data.role = null;
     socket.data.matchmaking = false;
     socket.data.lastSongId = "sporting";
-    socket.emit("session:ready", { user: socket.data.user });
+    socket.emit("session:ready", { user: socket.data.user, serverNow: Date.now() });
+
+    socket.on("time:sync", payload => {
+      socket.emit("time:sync", { sentAt: Number(payload?.sentAt || 0), serverNow: Date.now() });
+    });
 
     socket.on("session:set-name", payload => {
       const name = String(payload?.username || "").trim().slice(0, 18);
@@ -231,8 +301,11 @@ function createGameServer({ port = Number(process.env.PORT) || 3000, host = proc
         role: null,
         songId: null,
         ready: { host: false, guest: false },
+        loaded: { host: false, guest: false },
+        preparing: false,
         startAt: 0,
-        players: { host: null, guest: null }
+        players: { host: null, guest: null },
+        serverNow: Date.now()
       });
     });
 
@@ -287,19 +360,26 @@ function createGameServer({ port = Number(process.env.PORT) || 3000, host = proc
       }
       if (socket.data.role === "host") room.hostReady = !!payload?.ready;
       if (socket.data.role === "guest") room.guestReady = !!payload?.ready;
+      if (!payload?.ready) {
+        if (room.matchId || room.startAt) resetReady(room);
+        broadcastRoom(io, room);
+        return;
+      }
       room.startAt = 0;
-      if (room.hostReady && room.guestReady) {
-        const startAt = Date.now() + MATCH_START_DELAY_MS;
-        resetReady(room);
-        room.startAt = startAt;
-        io.to(room.id).emit("game:start", {
-          roomId: room.id,
-          songId: room.songId,
-          startAt,
-          delayMs: MATCH_START_DELAY_MS
-        });
+      if (room.hostReady && room.guestReady && !room.matchId) {
+        beginPrepare(io, room);
+        return;
       }
       broadcastRoom(io, room);
+    });
+
+    socket.on("game:loaded", payload => {
+      const room = rooms.get(socket.data.roomId || "");
+      if (!room || !room.matchId || payload?.matchId !== room.matchId) return;
+      if (socket.data.role === "host") room.hostLoaded = true;
+      if (socket.data.role === "guest") room.guestLoaded = true;
+      broadcastRoom(io, room);
+      startPreparedMatch(io, room);
     });
 
     socket.on("game:judgment", payload => {

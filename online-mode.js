@@ -21,12 +21,13 @@ Object.assign(ui, {
 
 state.startTimer = null;
 state.endTimer = null;
-state.network = { socket: null, connected: false, roomId: "", role: null, peerConnected: false, user: null, matchStartAt: 0, pendingStartAt: 0, lastTrackSync: 0, matchmakingQueued: false, matchmakingStatus: "", ready: { host: false, guest: false } };
+state.network = { socket: null, connected: false, roomId: "", role: null, peerConnected: false, user: null, matchStartAt: 0, pendingStartAt: 0, lastTrackSync: 0, matchmakingQueued: false, matchmakingStatus: "", ready: { host: false, guest: false }, loaded: { host: false, guest: false }, preparing: false, prepareMatchId: "", preparedSongId: "", loadingStatus: "", serverOffsetMs: 0 };
 
 let socketClientPromise = null;
 const originalVoice = voice;
 const originalSongTime = songTime;
 let matchmakingBtn = null;
+let clockSyncTimer = null;
 
 function ensureMatchmakingButton() {
   if (matchmakingBtn) return matchmakingBtn;
@@ -47,11 +48,132 @@ function syncMatchmakingButton() {
   button.textContent = state.network.matchmakingQueued ? "Cancel Queue" : "Matchmake";
 }
 
-function expectedOnlineSongTime() {
-  if (state.mode !== "online" || !state.playing || !state.network.matchStartAt) return null;
-  return Math.max(0, (Date.now() - state.network.matchStartAt) / 1000);
+function serverClockNow() {
+  return Date.now() + (state.network.serverOffsetMs || 0);
 }
 
+function localFromServerTime(serverTime) {
+  return Number(serverTime || 0) - (state.network.serverOffsetMs || 0);
+}
+
+function ingestServerClock(serverTime, sentAt = 0, receivedAt = Date.now()) {
+  const serverNow = Number(serverTime || 0);
+  if (!Number.isFinite(serverNow) || serverNow <= 0) return;
+  const outbound = Number(sentAt || 0);
+  const midpoint = outbound > 0 ? outbound + (receivedAt - outbound) / 2 : receivedAt;
+  const candidate = serverNow - midpoint;
+  if (!Number.isFinite(candidate)) return;
+  if (!Number.isFinite(state.network.serverOffsetMs)) state.network.serverOffsetMs = candidate;
+  else state.network.serverOffsetMs = state.network.serverOffsetMs * 0.75 + candidate * 0.25;
+}
+
+function requestTimeSync(socket = state.network.socket) {
+  if (!socket || !socket.connected) return;
+  socket.emit("time:sync", { sentAt: Date.now() });
+}
+
+function scheduleClockSync(socket = state.network.socket) {
+  if (clockSyncTimer) clearInterval(clockSyncTimer);
+  requestTimeSync(socket);
+  [180, 600, 1400].forEach(delay => setTimeout(() => requestTimeSync(socket), delay));
+  clockSyncTimer = setInterval(() => requestTimeSync(socket), 10000);
+}
+
+function clearPreparedMatch() {
+  state.network.preparing = false;
+  state.network.prepareMatchId = "";
+  state.network.preparedSongId = "";
+  state.network.loaded = { host: false, guest: false };
+  state.network.loadingStatus = "";
+}
+
+function mediaListFrom(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value[Symbol.iterator] === "function") return Array.from(value).filter(Boolean);
+  return [];
+}
+
+function waitForTrackReady(track, timeoutMs = 12000) {
+  return new Promise(resolve => {
+    if (!track) { resolve(); return; }
+    if (track.readyState >= 3) { resolve(); return; }
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      cleanup();
+      resolve();
+    };
+    const cleanup = () => {
+      clearTimeout(timer);
+      ["canplaythrough", "canplay", "loadeddata", "error"].forEach(name => track.removeEventListener(name, finish));
+    };
+    const timer = setTimeout(finish, timeoutMs);
+    ["canplaythrough", "canplay", "loadeddata", "error"].forEach(name => track.addEventListener(name, finish, { once: false }));
+    try { track.load(); } catch {}
+  });
+}
+
+async function preloadSongForMatch(songId, matchId) {
+  state.network.preparing = true;
+  state.network.prepareMatchId = matchId;
+  state.network.preparedSongId = "";
+  state.network.loadingStatus = "Loading song files on your side.";
+  updateOnlinePanel();
+  if (SONGS[songId]?.chartSource === "sporting") {
+    ensureSportingAudio();
+    [state.audio.inst, state.audio.voices].forEach(track => {
+      if (!track) return;
+      track.pause();
+      try { track.currentTime = 0; } catch {}
+      try { track.load(); } catch {}
+    });
+    await Promise.all([waitForTrackReady(state.audio.inst), waitForTrackReady(state.audio.voices)]);
+  } else if (SONGS[songId]?.chartSource === "perseverance") {
+    ensurePerseveranceAudio();
+    [state.audio.inst2, state.audio.voices2a, state.audio.voices2b].forEach(track => {
+      if (!track) return;
+      track.pause();
+      try { track.currentTime = 0; } catch {}
+      try { track.load(); } catch {}
+    });
+    await Promise.all([waitForTrackReady(state.audio.inst2), waitForTrackReady(state.audio.voices2a), waitForTrackReady(state.audio.voices2b)]);
+  } else if (SONGS[songId]?.chartSource === "brokenReality") {
+    const prepared = typeof window.prepareBrokenRealityOnlineStart === "function"
+      ? window.prepareBrokenRealityOnlineStart()
+      : (typeof window.ensureBrokenRealityAudio === "function"
+        ? (window.ensureBrokenRealityAudio(), [state.audio.inst3, state.audio.voices3a, state.audio.voices3b])
+        : []);
+    const media = mediaListFrom(prepared);
+    const tracks = media.length ? media : [state.audio.inst3, state.audio.voices3a, state.audio.voices3b];
+    await Promise.all(tracks.filter(Boolean).map(track => waitForTrackReady(track)));
+  } else if (SONGS[songId]?.chartSource === "challengeEdd") {
+    const prepared = typeof window.prepareChallengeEddOnlineStart === "function"
+      ? window.prepareChallengeEddOnlineStart()
+      : (typeof window.ensureChallengeEddAudio === "function"
+        ? (window.ensureChallengeEddAudio(), [state.audio.challengeInst, state.audio.challengeVoices])
+        : []);
+    const media = mediaListFrom(prepared);
+    const tracks = media.length ? media : [state.audio.challengeInst, state.audio.challengeVoices];
+    await Promise.all(tracks.filter(Boolean).map(track => waitForTrackReady(track)));
+  }
+  if (state.network.prepareMatchId !== matchId) return false;
+  state.network.preparedSongId = songId;
+  state.network.loadingStatus = "Loaded on your side. Waiting for the other player.";
+  if (state.network.role === "host") state.network.loaded.host = true;
+  if (state.network.role === "guest") state.network.loaded.guest = true;
+  updateOnlinePanel();
+  if (state.network.socket && state.network.roomId) {
+    state.network.socket.emit("game:loaded", { matchId, songId });
+  }
+  return true;
+}
+
+function expectedOnlineSongTime() {
+  if (state.mode !== "online" || !state.playing || !state.network.matchStartAt) return null;
+  return Math.max(0, (serverClockNow() - state.network.matchStartAt) / 1000);
+}
 function syncTrackToTime(track, targetTime, shouldPlay) {
   if (!track) return;
   if (track.readyState === 0) {
@@ -73,9 +195,10 @@ function syncTrackToTime(track, targetTime, shouldPlay) {
 function syncOnlinePlayback(force = false) {
   const targetTime = expectedOnlineSongTime();
   if (targetTime == null) return null;
-  const now = Date.now();
-  if (!force && now - (state.network.lastTrackSync || 0) < 120) return targetTime;
-  state.network.lastTrackSync = now;
+  const localNow = Date.now();
+  const now = serverClockNow();
+  if (!force && localNow - (state.network.lastTrackSync || 0) < 120) return targetTime;
+  state.network.lastTrackSync = localNow;
   const shouldPlay = now + 40 >= state.network.matchStartAt;
   if (state.currentSong.chartSource === "sporting") {
     ensureSportingAudio();
@@ -147,14 +270,26 @@ function peerReady() {
   return false;
 }
 
+function localLoaded() {
+  if (state.network.role === "host") return !!state.network.loaded.host;
+  if (state.network.role === "guest") return !!state.network.loaded.guest;
+  return false;
+}
+
+function peerLoaded() {
+  if (state.network.role === "host") return !!state.network.loaded.guest;
+  if (state.network.role === "guest") return !!state.network.loaded.host;
+  return false;
+}
+
 function onlineCountdownSeconds() {
-  if (!state.network.pendingStartAt || state.network.pendingStartAt <= Date.now()) return 0;
-  return Math.ceil((state.network.pendingStartAt - Date.now()) / 1000);
+  if (!state.network.pendingStartAt || state.network.pendingStartAt <= serverClockNow()) return 0;
+  return Math.ceil((state.network.pendingStartAt - serverClockNow()) / 1000);
 }
 
 function syncReadyButton() {
   if (!ui.playBtn) return;
-  if (state.network.pendingStartAt && state.network.pendingStartAt > Date.now()) {
+  if (state.network.preparing || (state.network.pendingStartAt && state.network.pendingStartAt > serverClockNow())) {
     ui.playBtn.textContent = "Loading Match";
     return;
   }
@@ -232,11 +367,28 @@ function updateOnlinePanel() {
   if (!state.network.roomId) {
     state.network.pendingStartAt = 0;
     state.network.ready = { host: false, guest: false };
+    clearPreparedMatch();
     setOnlineMessage("Server ready", "Host a room, enter a room code to join one, or use Matchmake for a quick room.");
     return;
   }
-  if (state.network.pendingStartAt && state.network.pendingStartAt > Date.now()) {
-    setOnlineMessage("Loading match", "Both players are ready. Match starts in " + onlineCountdownSeconds() + " seconds so both games can finish loading.");
+  if (state.network.pendingStartAt && state.network.pendingStartAt > serverClockNow()) {
+    setOnlineMessage("Loading match", "Both players finished loading. Starting in " + onlineCountdownSeconds() + " seconds on the shared server clock.");
+    return;
+  }
+  if (state.network.preparing) {
+    if (localLoaded() && peerLoaded()) {
+      setOnlineMessage("Both clients loaded", "The server is locking in the synced start time now.");
+      return;
+    }
+    if (localLoaded()) {
+      setOnlineMessage("Loaded on your side", "Waiting for the other player to finish loading.");
+      return;
+    }
+    if (peerLoaded()) {
+      setOnlineMessage("Opponent loaded", "Finishing your local preload now.");
+      return;
+    }
+    setOnlineMessage("Preloading match", state.network.loadingStatus || "Both players are ready. Loading audio before the synced countdown.");
     return;
   }
   if (!state.network.peerConnected) {
@@ -244,7 +396,7 @@ function updateOnlinePanel() {
     return;
   }
   if (localReady() && peerReady()) {
-    setOnlineMessage("Both players ready", "The server is preparing the match now.");
+    setOnlineMessage("Both players ready", "Waiting for both clients to finish loading before the server starts the countdown.");
     return;
   }
   if (localReady()) {
@@ -255,9 +407,8 @@ function updateOnlinePanel() {
     setOnlineMessage("Opponent ready", "Press Ready Up when your game is loaded.");
     return;
   }
-  setOnlineMessage("Room " + state.network.roomId + " ready check", "Both players have to press Ready Up. The match starts with an 8 second load window.");
+  setOnlineMessage("Room " + state.network.roomId + " ready check", "Both players have to press Ready Up. After that, both games preload first, then the server starts an 8 second synced countdown.");
 }
-
 async function ensureOnlineSocket() {
   if (!onlineSupported()) {
     updateOnlinePanel();
@@ -274,15 +425,19 @@ async function ensureOnlineSocket() {
   }
   state.network.matchStartAt = 0;
   state.network.lastTrackSync = 0;
+  clearPreparedMatch();
   const socket = window.io({ transports: ["websocket", "polling"] });
   state.network.socket = socket;
   socket.on("connect", () => {
     state.network.connected = true;
+    scheduleClockSync(socket);
     updateOnlinePanel();
   });
   socket.on("disconnect", () => {
     if (state.endTimer) clearTimeout(state.endTimer);
     state.endTimer = null;
+    if (clockSyncTimer) clearInterval(clockSyncTimer);
+    clockSyncTimer = null;
     state.network.connected = false;
     state.network.peerConnected = false;
     state.network.roomId = "";
@@ -292,25 +447,35 @@ async function ensureOnlineSocket() {
     state.network.matchStartAt = 0;
     state.network.matchmakingQueued = false;
     state.network.matchmakingStatus = "";
+    clearPreparedMatch();
     syncModeUI();
     updateOnlinePanel();
   });
   socket.on("session:ready", payload => {
     state.network.user = payload && payload.user ? payload.user : { username: "Anonymous" };
+    ingestServerClock(payload?.serverNow);
     updateOnlinePanel();
+  });
+  socket.on("time:sync", payload => {
+    ingestServerClock(payload?.serverNow, Number(payload?.sentAt || 0), Date.now());
+    if (state.network.pendingStartAt && state.network.pendingStartAt > serverClockNow()) updateOnlinePanel();
   });
   socket.on("room:error", payload => {
     setOnlineMessage("Room error", payload && payload.message ? payload.message : "Room request failed.");
   });
   socket.on("room:update", payload => {
+    ingestServerClock(payload?.serverNow);
     state.network.roomId = payload && payload.roomId ? payload.roomId : "";
     state.network.role = payload && payload.role ? payload.role : null;
     state.network.ready = payload && payload.ready ? { host: !!payload.ready.host, guest: !!payload.ready.guest } : { host: false, guest: false };
+    state.network.loaded = payload && payload.loaded ? { host: !!payload.loaded.host, guest: !!payload.loaded.guest } : { host: false, guest: false };
+    state.network.preparing = !!payload?.preparing && !(Number(payload?.startAt || 0) > 0);
     state.network.pendingStartAt = Number(payload?.startAt || 0);
     const other = state.network.role === "host" ? payload?.players?.guest : payload?.players?.host;
     state.network.peerConnected = !!other;
     state.network.matchmakingQueued = false;
     state.network.matchmakingStatus = "";
+    if (!state.network.preparing && !state.network.pendingStartAt) clearPreparedMatch();
     if (payload && payload.songId) selectSong(payload.songId, true);
     syncModeUI();
     updateOnlinePanel();
@@ -321,20 +486,46 @@ async function ensureOnlineSocket() {
     syncMatchmakingButton();
     updateOnlinePanel();
   });
+  socket.on("game:prepare", payload => {
+    if (payload && payload.songId) selectSong(payload.songId, true);
+    ingestServerClock(payload?.serverNow);
+    state.network.pendingStartAt = 0;
+    state.network.matchStartAt = 0;
+    state.network.loaded = { host: false, guest: false };
+    state.network.preparing = true;
+    state.network.prepareMatchId = String(payload?.matchId || "");
+    state.network.preparedSongId = "";
+    state.network.loadingStatus = "Loading song files on your side.";
+    setOnlineMessage("Preloading match", "Both players are ready. Waiting for both games to finish loading before the synced countdown starts.");
+    preloadSongForMatch(payload && payload.songId ? payload.songId : state.selectedSong, state.network.prepareMatchId).catch(() => {
+      if (state.network.prepareMatchId === String(payload?.matchId || "")) {
+        state.network.loadingStatus = "Local preload failed. Press Ready Up again.";
+        updateOnlinePanel();
+      }
+    });
+  });
   socket.on("game:start", payload => {
     if (payload && payload.songId) selectSong(payload.songId, true);
+    ingestServerClock(payload?.serverNow);
     const delayMs = Number(payload?.delayMs || 8000);
-    const startAt = payload && payload.startAt ? payload.startAt : Date.now() + delayMs;
+    const startAt = payload && payload.startAt ? Number(payload.startAt) : serverClockNow() + delayMs;
+    const matchId = String(payload?.matchId || "");
+    const songId = payload && payload.songId ? payload.songId : state.selectedSong;
+    const skipReload = state.network.prepareMatchId === matchId && state.network.preparedSongId === songId;
     state.network.pendingStartAt = startAt;
     state.network.ready = { host: false, guest: false };
-    setOnlineMessage("Match starting", "Both players are ready. The match will start in " + Math.ceil(delayMs / 1000) + " seconds so audio can finish loading on both machines.");
-    startSong(payload && payload.songId ? payload.songId : state.selectedSong, { forceMode: "online", startAt });
+    state.network.loaded = { host: false, guest: false };
+    state.network.preparing = false;
+    state.network.prepareMatchId = "";
+    state.network.preparedSongId = "";
+    state.network.loadingStatus = "";
+    setOnlineMessage("Match starting", "Both players finished loading. The synced countdown ends in " + Math.ceil(delayMs / 1000) + " seconds.");
+    startSong(songId, { forceMode: "online", startAt, skipReload });
   });
   socket.on("game:judgment", payload => applyRemoteJudgment(payload));
   socket.on("game:dodge", payload => applyRemoteDodge(payload));
   return socket;
 }
-
 async function hostOnlineRoom() {
   const socket = await ensureOnlineSocket();
   if (!socket) return;
@@ -577,7 +768,7 @@ refreshHUD = function(t){
   ui.timer.textContent = formatTime(t) + " / " + formatTime(state.chart.totalTime);
   ui.p1Score.textContent = secondary.score.toLocaleString();
   ui.p1Combo.textContent = "Combo " + secondary.combo;
-  const waitMs = state.network.matchStartAt - Date.now();
+  const waitMs = state.network.matchStartAt - serverClockNow();
   if (waitMs > 0) {
     const seconds = waitMs > 1000 ? String(Math.ceil(waitMs / 1000)) : (waitMs / 1000).toFixed(1);
     ui.statusText.textContent = "Loading match";
@@ -647,42 +838,46 @@ startSong = function(id = state.selectedSong, options = {}){
   state.receptorFx.forEach(fx => fx.time = -10);
   state.perseverance = { canDodge: false, prompt: false, dodging: false, dodged: false, resolved: false, dodgeStart: -10, flashTime: -10, gfAlpha: 0 };
   state.camera = { x: 0, target: 0, sideTime: 0, lastSide: "both" };
-  state.network.matchStartAt = Number(options.startAt || Date.now() + 8000);
+  state.network.matchStartAt = Number(options.startAt || (serverClockNow() + 8000));
   state.network.pendingStartAt = state.network.matchStartAt;
   state.network.lastTrackSync = 0;
   state.network.ready = { host: false, guest: false };
   ui.songTitle.textContent = state.currentSong.title;
   ui.songSub.textContent = state.currentSong.subtitle;
   ui.statusText.textContent = "Match syncing";
-  ui.statusSub.textContent = "Both players readied up. The server is giving the match 8 seconds to preload before audio starts.";
+  ui.statusSub.textContent = "Both players finished loading. The server is holding an 8 second synced countdown before audio starts.";
   ui.timer.textContent = "0:00 / " + formatTime(state.chart.totalTime);
   ui.menu.classList.remove("show");
   ui.settings.classList.remove("show");
   ui.resultsWrap.classList.remove("show");
   syncModeUI();
+  const skipReload = !!options.skipReload;
   if (state.currentSong.chartSource === "sporting") {
     ensureSportingAudio();
     state.audio.inst.pause();
     state.audio.voices.pause();
-    state.audio.inst.currentTime = 0;
-    state.audio.voices.currentTime = 0;
-    state.audio.inst.load();
-    state.audio.voices.load();
+    try { state.audio.inst.currentTime = 0; } catch {}
+    try { state.audio.voices.currentTime = 0; } catch {}
+    if (!skipReload) {
+      state.audio.inst.load();
+      state.audio.voices.load();
+    }
   } else {
     ensurePerseveranceAudio();
     state.audio.inst2.pause();
     state.audio.voices2a.pause();
     state.audio.voices2b.pause();
-    state.audio.inst2.currentTime = 0;
-    state.audio.voices2a.currentTime = 0;
-    state.audio.voices2b.currentTime = 0;
-    state.audio.inst2.load();
-    state.audio.voices2a.load();
-    state.audio.voices2b.load();
+    try { state.audio.inst2.currentTime = 0; } catch {}
+    try { state.audio.voices2a.currentTime = 0; } catch {}
+    try { state.audio.voices2b.currentTime = 0; } catch {}
+    if (!skipReload) {
+      state.audio.inst2.load();
+      state.audio.voices2a.load();
+      state.audio.voices2b.load();
+    }
   }
   syncOnlinePlayback(true);
 };
-
 ui.playBtn.onclick = () => {
   if (!state.network.roomId) {
     setOnlineMessage("Join a room first", "Host a room or enter a room code before readying up.");
@@ -692,7 +887,7 @@ ui.playBtn.onclick = () => {
     setOnlineMessage("Need another player", "A second player has to join before the match can start.");
     return;
   }
-  if (state.network.pendingStartAt && state.network.pendingStartAt > Date.now()) {
+  if (state.network.preparing || (state.network.pendingStartAt && state.network.pendingStartAt > serverClockNow())) {
     setOnlineMessage("Loading match", "Both players are already ready. Waiting for the 8 second load countdown.");
     return;
   }
@@ -769,6 +964,8 @@ syncViewportMode();
 syncMatchmakingButton();
 updateOnlinePanel();
 setInterval(() => {
-  if (state.network.pendingStartAt && state.network.pendingStartAt > Date.now()) updateOnlinePanel();
+  if (state.network.preparing || (state.network.pendingStartAt && state.network.pendingStartAt > serverClockNow())) updateOnlinePanel();
 }, 250);
 ensureOnlineSocket();
+
+

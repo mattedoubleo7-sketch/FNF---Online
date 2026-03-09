@@ -267,6 +267,13 @@
       Number(state.audio?.voices3a?.currentTime || 0),
       Number(state.audio?.voices3b?.currentTime || 0)
     );
+    const onlineTime =
+      state.mode === "online" && typeof expectedOnlineSongTime === "function"
+        ? expectedOnlineSongTime()
+        : null;
+    if (onlineTime != null) {
+      return Math.max(audioTime, onlineTime);
+    }
     const fix = getFixState();
     const perfTime = fix.startedAt
       ? Math.max(0, performance.now() / 1000 - fix.startedAt + Number(fix.timeOffset || 0))
@@ -1308,6 +1315,7 @@
     }
   }, 100);
 })();
+
 
 
 
