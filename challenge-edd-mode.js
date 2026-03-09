@@ -89,11 +89,9 @@
       return !!(image && image.complete && image.naturalWidth);
     }
 
-    function spritesReady() {
+    function stageImagesReady() {
       initAssets();
-      const customReady = Object.values(ce.images).every(imageReady);
-      const sportingReady = !!(typeof spriteState !== "undefined" && spriteState.images?.boyfriend && spriteState.images?.gf && imageReady(spriteState.images.boyfriend) && imageReady(spriteState.images.gf));
-      return customReady && sportingReady;
+      return imageReady(ce.images.sky) && imageReady(ce.images.patio) && imageReady(ce.images.fence);
     }
 
     function ensureAudioTracks() {
@@ -112,10 +110,15 @@
     }
     window.ensureChallengeEddAudio = ensureAudioTracks;
 
+    function noteEndTime() {
+      return (CE.chart?.notes || []).reduce((max, note) => Math.max(max, Number(note.time || 0) + Math.max(0, Number(note.sLen || 0))), 0);
+    }
+
     function totalTime() {
-      const noteEnd = (CE.chart?.notes || []).reduce((max, note) => Math.max(max, Number(note.time || 0) + Math.max(0, Number(note.sLen || 0))), 0);
+      const noteEnd = noteEndTime();
+      const timelineEnd = (CE.chart?.timeline || []).reduce((max, section) => Math.max(max, Number(section.endTime || 0)), 0);
       const durations = [state.audio.inst?.duration, state.audio.voices?.duration].filter(value => Number.isFinite(value) && value > 0);
-      const chartEnd = Math.max(Number(CE.chart?.totalTime || 0), noteEnd + 2);
+      const chartEnd = Math.max(Number(CE.chart?.totalTime || 0), timelineEnd, noteEnd + 2);
       return durations.length ? Math.max(chartEnd, ...durations) : chartEnd;
     }
 
@@ -337,20 +340,21 @@
       const patio = ce.images.patio;
       const fence = ce.images.fence;
       const car = ce.images.car;
-      const skyW = sky.naturalWidth * layout.skyScale;
-      const skyH = sky.naturalHeight * layout.skyScale;
-      const patioW = patio.naturalWidth * layout.patioScale;
-      const patioH = patio.naturalHeight * layout.patioScale;
-      const fenceW = fence.naturalWidth * layout.fenceScale;
-      const fenceH = fence.naturalHeight * layout.fenceScale;
-      const carW = car.naturalWidth * layout.carScale;
-      const carH = car.naturalHeight * layout.carScale;
-      const skyX = (canvas.width - skyW) / 2;
-      const patioX = (canvas.width - patioW) / 2;
-      const fenceX = (canvas.width - fenceW) / 2;
-      drawSimpleImage("sky", skyX, -122, layout.skyScale);
-      drawSimpleImage("patio", patioX, 8, layout.patioScale);
-      drawSimpleImage("fence", fenceX, 254, layout.fenceScale, 0.98);
+      if (imageReady(sky)) {
+        const skyW = sky.naturalWidth * layout.skyScale;
+        const skyX = (canvas.width - skyW) / 2;
+        drawSimpleImage("sky", skyX, -122, layout.skyScale);
+      }
+      if (imageReady(patio)) {
+        const patioW = patio.naturalWidth * layout.patioScale;
+        const patioX = (canvas.width - patioW) / 2;
+        drawSimpleImage("patio", patioX, 8, layout.patioScale);
+      }
+      if (imageReady(fence)) {
+        const fenceW = fence.naturalWidth * layout.fenceScale;
+        const fenceX = (canvas.width - fenceW) / 2;
+        drawSimpleImage("fence", fenceX, 254, layout.fenceScale, 0.98);
+      }
       drawSpeakerStack();
 
       if (phase.gf !== "none") {
@@ -375,12 +379,16 @@
       const arpon = arponState(t, phase.stageMode);
       if (arpon) drawSpriteState(arpon.state, ce.images.toomArpon, arpon.x, arpon.y, arpon.scale, false, 1);
 
-      drawSimpleImage("car", -84, 530, layout.carScale, 0.96);
+      if (imageReady(car)) drawSimpleImage("car", -84, 530, layout.carScale, 0.96);
     }
 
     function drawTordStage(t, phase) {
       const layout = CE.stage.layout;
       const img = ce.images.tordBg;
+      if (!imageReady(img)) {
+        drawNormalStage(t, phase);
+        return;
+      }
       const width = img.naturalWidth * layout.tordBgScale;
       const height = img.naturalHeight * layout.tordBgScale;
       const x = (canvas.width - width) / 2;
@@ -451,7 +459,29 @@
     makeChart = song => {
       if (song?.chartSource !== "challengeEdd") return baseMakeChart(song);
       const chart = { ...clone(CE.chart), notes: clone(CE.chart.notes), timeline: clone(CE.chart.timeline || []) };
-      chart.totalTime = Math.max(Number(chart.totalTime || 0), chart.notes.reduce((max, note) => Math.max(max, Number(note.time || 0) + Math.max(0, Number(note.sLen || 0))), 0) + 2);
+      const bpm = Number(CE.song?.bpm || SONGS.challengeEdd?.tempo || 186);
+      const spb = 60 / bpm;
+      const noteEnd = chart.notes.reduce((max, note) => Math.max(max, Number(note.time || 0) + Math.max(0, Number(note.sLen || 0))), 0);
+      const noteBeatEnd = chart.notes.reduce((max, note) => Math.max(max, Number(note.beat || 0) + (Math.max(0, Number(note.sLen || 0)) / spb)), 0);
+      const timelineEndTime = chart.timeline.reduce((max, section) => Math.max(max, Number(section.endTime || 0)), 0);
+      const timelineEndBeat = chart.timeline.reduce((max, section) => Math.max(max, Number(section.endBeat || 0)), 0);
+      chart.timeline = chart.timeline.map(section => {
+        const startTime = Number.isFinite(Number(section.startTime)) ? Number(section.startTime) : Number(section.startBeat || 0) * spb;
+        const endTime = Number.isFinite(Number(section.endTime)) ? Number(section.endTime) : Number(section.endBeat || 0) * spb;
+        let opp = 0;
+        let player = 0;
+        for (const note of chart.notes) {
+          const time = Number(note.time || 0);
+          if (time < startTime || time >= endTime) continue;
+          if (note.side === "opp") opp++;
+          if (note.side === "player") player++;
+        }
+        const turn = opp && player ? "both" : player ? "player" : opp ? "opp" : "both";
+        return { ...section, startTime, endTime, turn };
+      });
+      chart.spb = spb;
+      chart.totalBeats = Math.max(timelineEndBeat, noteBeatEnd + 4, Math.ceil(Math.max(Number(chart.totalTime || 0), timelineEndTime, noteEnd + 2) / spb));
+      chart.totalTime = Math.max(Number(chart.totalTime || 0), timelineEndTime, noteEnd + 2, chart.totalBeats * spb);
       return chart;
     };
 
@@ -576,7 +606,8 @@
 
     stage = function(t) {
       if (state.selectedSong !== "challengeEdd") return baseStage(t);
-      if (!spritesReady()) return;
+      initAssets();
+      if (!stageImagesReady()) return;
       const phase = currentState(t);
       if (phase.stageMode === "tord") drawTordStage(t, phase);
       else drawNormalStage(t, phase);
@@ -584,12 +615,48 @@
 
     receptors = function(t) {
       if (state.selectedSong !== "challengeEdd") return baseReceptors(t);
-      return baseReceptors(t);
+      initAssets();
+      if (!imageReady(ce.images.notes)) return baseReceptors(t);
+      const y = receptorY();
+      ctx.strokeStyle = "rgba(255,255,255,0.1)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(canvas.width * .5, 72);
+      ctx.lineTo(canvas.width * .5, 452);
+      ctx.stroke();
+      for (let lane = 0; lane < 8; lane++) {
+        const x = laneX(lane);
+        drawChallengeReceptor(lane, x, y);
+        ctx.strokeStyle = "rgba(255,255,255,0.06)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x, y + 26);
+        ctx.lineTo(x, 448);
+        ctx.stroke();
+      }
     };
 
     notes = function(t) {
       if (state.selectedSong !== "challengeEdd") return baseNotes(t);
-      return baseNotes(t);
+      if (!state.chart) return;
+      initAssets();
+      if (!imageReady(ce.images.notes)) return baseNotes(t);
+      const scroll = state.currentSong.scroll;
+      for (const note of state.chart.notes) {
+        if (note.played && note.hit && (!isHoldNote(note) || note.holdDone)) continue;
+        if (note.judged && note.side !== "opp" && (!isHoldNote(note) || note.holdDone || !note.hit)) continue;
+        if (note.invisible) continue;
+        const diff = note.time - t;
+        const y = receptorY() + diff * scroll;
+        const tailY = receptorY() + (holdEndTime(note) - t) * scroll;
+        if (y < -120 && tailY < -120) continue;
+        if (y > canvas.height + 120 && tailY > canvas.height + 120) continue;
+        const scale = clamp(1 - Math.pow(Math.abs(diff), 0.7) * .45, .75, 1.12);
+        const alpha = note.side === "opp" ? .84 : 1;
+        if (isHoldNote(note)) drawChallengeSustain(note, note.hit ? receptorY() : y, tailY, alpha * (note.hit ? 0.94 : 1));
+        if (note.hit && isHoldNote(note) && t > note.time) continue;
+        drawChallengeNote(note, laneX(note.lane), y, scale, alpha);
+      }
     };
 
     if (typeof syncOnlinePlayback === "function" && typeof expectedOnlineSongTime === "function") {
