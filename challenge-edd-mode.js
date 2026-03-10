@@ -14,8 +14,8 @@
       gfX: 640,
       gfY: 430,
       gfScale: 0.66,
-      vallasY: 178,
-      vallasWidthScale: 1.012,
+      vallasX: -28,
+      vallasY: 238,
       oppX: 430,
       oppY: 642,
       oppScale: 0.58,
@@ -587,7 +587,7 @@
         drawSimpleImage("patio", patioX, 8, layout.patioScale);
       }
       if (imageReady(fence)) {
-        if (fenceKey === "vallas") drawFullWidthImage("vallas", layout.vallasY, layout.vallasWidthScale, 1);
+        if (fenceKey === "vallas") drawSimpleImage("vallas", layout.vallasX, layout.vallasY, layout.fenceScale, 1);
         else {
           const fenceW = fence.naturalWidth * layout.fenceScale;
           const fenceX = (canvas.width - fenceW) / 2;
@@ -986,6 +986,7 @@
     console.error("Challenge Edd mode failed to initialize", error);
   }
 })();
+
 
 
 
