@@ -107,7 +107,8 @@
         matt: CE.sprites.extras.matt.image,
         tordbot: CE.sprites.extras.tordbot.image,
         tomRun: CE.sprites.extras.tomRun.image,
-        toomArpon: CE.sprites.extras.toomArpon.image
+        toomArpon: CE.sprites.extras.toomArpon.image,
+        gf: "assets/GF_assets.png"
       };
       if (CE.sprites?.notes?.image) sources.notes = CE.sprites.notes.image;
       Object.entries(sources).forEach(([key, src]) => {
@@ -485,9 +486,11 @@
     }
 
     function drawChallengeGf(t) {
-      const gfState = sportingSpriteState("gf", t);
-      if (!gfState || !imageReady(spriteState.images.gf)) return;
-      drawSpriteState(gfState, spriteState.images.gf, CE.stage.layout.gfX, CE.stage.layout.gfY, CE.stage.layout.gfScale, false, 1);
+      const sprite = window.SPORTING_SPRITES?.gf;
+      const image = imageReady(ce.images.gf) ? ce.images.gf : spriteState.images.gf;
+      if (!sprite || !imageReady(image)) return;
+      const pose = sportingPose("gf", t);
+      drawSpriteState({ sprite, animName: pose.anim, elapsed: pose.elapsed, loop: pose.loop }, image, CE.stage.layout.gfX, CE.stage.layout.gfY, CE.stage.layout.gfScale, false, 1);
     }
 
     function drawChallengeReceptor(lane, x, y) {
@@ -983,6 +986,8 @@
     console.error("Challenge Edd mode failed to initialize", error);
   }
 })();
+
+
 
 
 
