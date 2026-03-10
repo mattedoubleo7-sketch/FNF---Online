@@ -1,4 +1,4 @@
-﻿(() => {
+(() => {
   try {
     const CE = window.CHALLENGE_EDD_DATA;
     if (!CE || typeof SONGS === "undefined") return;
@@ -16,8 +16,8 @@
       gfScale: 0.66,
       vallasLeftX: -30,
       vallasLeftY: 436,
-      vallasRightX: 1088,
-      vallasRightY: 438,
+      vallasRightX: 831,
+      vallasRightY: 436,
       oppX: 430,
       oppY: 642,
       oppScale: 0.58,
@@ -474,14 +474,20 @@
       });
       ctx.restore();
     }
-    function drawCroppedImage(key, sx, sy, sw, sh, x, y, scale, alpha = 1) {
+    function drawCroppedImage(key, sx, sy, sw, sh, x, y, scale, alpha = 1, flipX = false) {
       const img = ce.images[key];
       if (!imageReady(img)) return;
       ctx.save();
       ctx.globalAlpha = alpha;
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(img, sx, sy, sw, sh, x, y, sw * scale, sh * scale);
+      if (flipX) {
+        ctx.translate(x + sw * scale, y);
+        ctx.scale(-1, 1);
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw * scale, sh * scale);
+      } else {
+        ctx.drawImage(img, sx, sy, sw, sh, x, y, sw * scale, sh * scale);
+      }
       ctx.restore();
     }
 
@@ -589,7 +595,7 @@
       if (imageReady(fence)) {
         if (fenceKey === "vallas") {
           drawCroppedImage("vallas", 0, 494, 1197, 586, layout.vallasLeftX, layout.vallasLeftY, layout.fenceScale, 1);
-          drawCroppedImage("vallas", 2732, 503, 569, 501, layout.vallasRightX, layout.vallasRightY, layout.fenceScale, 1);
+          drawCroppedImage("vallas", 0, 494, 1197, 586, layout.vallasRightX, layout.vallasRightY, layout.fenceScale, 1, true);
         }
         else {
           const fenceW = fence.naturalWidth * layout.fenceScale;
@@ -989,6 +995,10 @@
     console.error("Challenge Edd mode failed to initialize", error);
   }
 })();
+
+
+
+
 
 
 
