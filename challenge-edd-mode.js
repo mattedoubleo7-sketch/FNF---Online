@@ -14,6 +14,10 @@
       gfX: 640,
       gfY: 430,
       gfScale: 0.66,
+      skyX: -200,
+      skyY: -68,
+      patioX: -200,
+      patioY: 8,
       vallasLeftX: -30,
       vallasLeftY: 436,
       vallasRightX: 831,
@@ -582,15 +586,11 @@
       const bot = tordbotState(t, phase.stageMode);
       const botBehindHouse = !!(bot && bot.state?.animName === "enter");
       if (imageReady(sky)) {
-        const skyW = sky.naturalWidth * layout.skyScale;
-        const skyX = (canvas.width - skyW) / 2;
-        drawSimpleImage("sky", skyX, -122, layout.skyScale);
+        drawSimpleImage("sky", layout.skyX, layout.skyY, layout.skyScale);
       }
       if (botBehindHouse) drawSpriteState(bot.state, ce.images.tordbot, bot.x, bot.y, bot.scale, false, 1);
       if (imageReady(patio)) {
-        const patioW = patio.naturalWidth * layout.patioScale;
-        const patioX = (canvas.width - patioW) / 2;
-        drawSimpleImage("patio", patioX, 8, layout.patioScale);
+        drawSimpleImage("patio", layout.patioX, layout.patioY, layout.patioScale);
       }
       if (imageReady(fence)) {
         if (fenceKey === "vallas") {
@@ -995,18 +995,4 @@
     console.error("Challenge Edd mode failed to initialize", error);
   }
 })();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
