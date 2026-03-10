@@ -14,8 +14,10 @@
       gfX: 640,
       gfY: 430,
       gfScale: 0.66,
-      vallasX: -28,
-      vallasY: 238,
+      vallasLeftX: -30,
+      vallasLeftY: 436,
+      vallasRightX: 1088,
+      vallasRightY: 438,
       oppX: 430,
       oppY: 642,
       oppScale: 0.58,
@@ -472,16 +474,14 @@
       });
       ctx.restore();
     }
-    function drawFullWidthImage(key, y, widthScale = 1, alpha = 1) {
+    function drawCroppedImage(key, sx, sy, sw, sh, x, y, scale, alpha = 1) {
       const img = ce.images[key];
       if (!imageReady(img)) return;
-      const width = canvas.width * widthScale;
-      const height = img.naturalHeight * (width / img.naturalWidth);
       ctx.save();
       ctx.globalAlpha = alpha;
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(img, (canvas.width - width) / 2, y, width, height);
+      ctx.drawImage(img, sx, sy, sw, sh, x, y, sw * scale, sh * scale);
       ctx.restore();
     }
 
@@ -587,7 +587,10 @@
         drawSimpleImage("patio", patioX, 8, layout.patioScale);
       }
       if (imageReady(fence)) {
-        if (fenceKey === "vallas") drawSimpleImage("vallas", layout.vallasX, layout.vallasY, layout.fenceScale, 1);
+        if (fenceKey === "vallas") {
+          drawCroppedImage("vallas", 0, 494, 1197, 586, layout.vallasLeftX, layout.vallasLeftY, layout.fenceScale, 1);
+          drawCroppedImage("vallas", 2732, 503, 569, 501, layout.vallasRightX, layout.vallasRightY, layout.fenceScale, 1);
+        }
         else {
           const fenceW = fence.naturalWidth * layout.fenceScale;
           const fenceX = (canvas.width - fenceW) / 2;
@@ -986,6 +989,8 @@
     console.error("Challenge Edd mode failed to initialize", error);
   }
 })();
+
+
 
 
 
