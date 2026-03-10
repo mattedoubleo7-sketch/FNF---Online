@@ -18,10 +18,8 @@
       skyY: -68,
       patioX: -200,
       patioY: 8,
-      vallasLeftX: -30,
-      vallasLeftY: 436,
-      vallasRightX: 831,
-      vallasRightY: 436,
+      vallasX: -28,
+      vallasY: 238,
       oppX: 430,
       oppY: 642,
       oppScale: 0.58,
@@ -593,10 +591,7 @@
         drawSimpleImage("patio", layout.patioX, layout.patioY, layout.patioScale);
       }
       if (imageReady(fence)) {
-        if (fenceKey === "vallas") {
-          drawCroppedImage("vallas", 0, 494, 1197, 586, layout.vallasLeftX, layout.vallasLeftY, layout.fenceScale, 1);
-          drawCroppedImage("vallas", 0, 494, 1197, 586, layout.vallasRightX, layout.vallasRightY, layout.fenceScale, 1, true);
-        }
+        if (fenceKey === "vallas") drawSimpleImage("vallas", layout.vallasX, layout.vallasY, layout.fenceScale, 1);
         else {
           const fenceW = fence.naturalWidth * layout.fenceScale;
           const fenceX = (canvas.width - fenceW) / 2;
