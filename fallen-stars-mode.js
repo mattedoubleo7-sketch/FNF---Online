@@ -5,7 +5,7 @@
 
     const SONG_ID = "ourBrokenConstellations";
     const SONG_SOURCE = "ourBrokenConstellations";
-    const fsState = { ready: false, images: {} };
+    const fsState = { ready: false, images: {}, groundCache: {} };
     const DEFAULT_NOTE_HOLD = window.PERSEVERANCE_DATA?.sprites?.notes?.default?.hold || null;
     const nowSec = () => performance.now() / 1000;
     const DIR_TO_ANIM = {
@@ -36,7 +36,12 @@
       worldScale: 0.66,
       sansScale: 0.48,
       bfScale: 0.44,
-      gfScale: 0.4
+      gfScale: 0.4,
+      roleAdjust: {
+        opponent: { x: 38, y: 0 },
+        boyfriend: { x: -18, y: 0 },
+        girlfriend: { x: 0, y: 0 }
+      }
     };
 
     state.poses.sans = state.poses.sans || { lane: 1, time: -10, kind: "hit" };
@@ -218,17 +223,73 @@
       ctx.restore();
     }
 
-    function spriteGroundReference(sprite) {
+    function animOffset(anim) {
+      const rawOffset = anim?.offset || anim?.offsets || [0, 0];
+      return {
+        x: Number(rawOffset?.[0] || 0),
+        y: Number(rawOffset?.[1] || 0)
+      };
+    }
+
+    function frameGroundPoint(image, frame) {
+      if (!imageReady(image) || !frame) return { x: 0, y: 0 };
+      const key = image.src + "|" + (frame.name || [frame.x, frame.y, frame.w, frame.h].join(","));
+      if (fsState.groundCache[key]) return fsState.groundCache[key];
+      if (!frameGroundPoint.canvas) frameGroundPoint.canvas = document.createElement("canvas");
+      const sample = frameGroundPoint.canvas;
+      const sw = Math.max(1, Number(frame.w || frame.fw || 1));
+      const sh = Math.max(1, Number(frame.h || frame.fh || 1));
+      sample.width = sw;
+      sample.height = sh;
+      const sampleCtx = sample.getContext("2d", { willReadFrequently: true });
+      sampleCtx.clearRect(0, 0, sw, sh);
+      sampleCtx.drawImage(image, frame.x, frame.y, frame.w, frame.h, 0, 0, sw, sh);
+      const pixels = sampleCtx.getImageData(0, 0, sw, sh).data;
+      let row = sh - 1;
+      for (; row >= 0; row--) {
+        let found = false;
+        for (let x = 0; x < sw; x++) {
+          if (pixels[(row * sw + x) * 4 + 3] > 10) {
+            found = true;
+            break;
+          }
+        }
+        if (found) break;
+      }
+      if (row < 0) row = sh - 1;
+      let sumX = 0;
+      let count = 0;
+      for (let y = Math.max(0, row - 2); y <= row; y++) {
+        for (let x = 0; x < sw; x++) {
+          if (pixels[(y * sw + x) * 4 + 3] > 10) {
+            sumX += x;
+            count += 1;
+          }
+        }
+      }
+      const avgX = count ? (sumX / count) : (sw / 2);
+      const point = {
+        x: Number(frame.fx || 0) + avgX,
+        y: Number(frame.fy || 0) + row
+      };
+      fsState.groundCache[key] = point;
+      return point;
+    }
+
+    function spriteGroundReference(sprite, image) {
       if (!sprite?.animations) return null;
       const animName = sprite.animations["idle-loop"] ? "idle-loop" : (sprite.animations.idle ? "idle" : Object.keys(sprite.animations)[0]);
       const anim = animName ? sprite.animations[animName] : null;
       const frame = anim?.frames?.[0];
       if (!frame) return null;
-      const rawOffset = anim?.offset || anim?.offsets || [0, 0];
+      const offset = animOffset(anim);
+      const ground = frameGroundPoint(image, frame);
       return {
         frame,
-        offsetX: Number(rawOffset?.[0] || 0),
-        offsetY: Number(rawOffset?.[1] || 0)
+        offsetX: offset.x,
+        offsetY: offset.y,
+        groundX: ground.x,
+        groundY: ground.y
       };
     }
 
@@ -257,6 +318,20 @@
       const scale = roleBaseScale(role) * Number(sprite.scale || 1);
       const anchor = groundedWorldAnchor(world.x, world.y, sprite, scale);
       const pos = worldToStage(anchor.x, anchor.y);
+      const reference = spriteGroundReference(sprite, image);
+      const currentOffset = animOffset(anim);
+      const currentGround = frameGroundPoint(image, frame);
+      if (reference) {
+        pos.x += (reference.offsetX - currentOffset.x) * scale;
+        pos.y += (reference.offsetY - currentOffset.y) * scale;
+        pos.x += (reference.groundX - currentGround.x) * scale;
+        pos.y += (reference.groundY - currentGround.y) * scale;
+      }
+      const roleAdjust = LAYOUT.roleAdjust?.[role];
+      if (roleAdjust) {
+        pos.x += Number(roleAdjust.x || 0);
+        pos.y += Number(roleAdjust.y || 0);
+      }
       const shadowWidth = Math.max(92, (frame.fw || frame.w || 240) * scale * (role === "opponent" ? 0.48 : 0.42));
 
       if (role !== "girlfriend") {
