@@ -108,19 +108,25 @@
     if (action && Number.isFinite(action.time)) {
       const age = Math.max(0, t - action.time);
       let anim = '';
+      let fps = 18;
       if (kind === 'boyfriend') {
-        if (action.name === 'dodge') anim = 'dodge';
-        else if (action.name === 'block' || action.name === 'parry') anim = ({ left: 'blockLeft', down: 'blockDown', up: 'blockUp', right: 'blockRight' })[sportingLaneKey(action.lane || 0)] || 'blockLeft';
+        if (action.name === 'dodge') {
+          anim = 'dodge';
+          fps = 24;
+        } else if (action.name === 'block' || action.name === 'parry') anim = ({ left: 'blockLeft', down: 'blockDown', up: 'blockUp', right: 'blockRight' })[sportingLaneKey(action.lane || 0)] || 'blockLeft';
         else if (action.name === 'hit') anim = 'hit';
         else if (action.name === 'stando') anim = 'stando';
       } else {
         if (action.name === 'throw' || action.name === 'superPunch') anim = 'throw';
+        else if (action.name === 'dodge') anim = data.animations.parry?.length ? 'parry' : 'stando';
+        else if (action.name === 'block') anim = ({ left: 'blockLeft', down: 'blockDown', up: 'blockUp', right: 'blockRight' })[sportingLaneKey(action.lane || 0)] || 'blockLeft';
         else if (action.name === 'parry') anim = 'parry';
         else if (action.name === 'stando') anim = 'stando';
+        else if (action.name === 'hit' && data.animations.parry?.length) anim = 'parry';
       }
       const frames = data.animations[anim];
-      if (frames && frames.length && age < sportingAnimDuration(frames, anim === 'dodge' ? 24 : 18, 0.18, 1.45)) {
-        return { anim, elapsed: age, fps: anim === 'dodge' ? 24 : 18, loop: false };
+      if (frames && frames.length && age < sportingAnimDuration(frames, fps, 0.18, 1.45)) {
+        return { anim, elapsed: age, fps, loop: false };
       }
     }
     const pose = state.poses[kind === 'boyfriend' ? 'player' : 'matt'];
@@ -134,8 +140,10 @@
     if (frames && frames.length && age >= 0 && age < sportingAnimDuration(frames, 22, 0.18, 0.72)) {
       return { anim, elapsed: age, fps: 22, loop: false };
     }
-    if (kind === 'boyfriend' && bx.blockHeld) {
-      return { anim: ({ left: 'blockLeft', down: 'blockDown', up: 'blockUp', right: 'blockRight' })[sportingLaneKey(bx.lastLane || 0)] || 'blockLeft', elapsed: t, fps: 12, loop: true };
+    const localBlockKind = boxingLocalSide() === 'opp' ? 'matt' : 'boyfriend';
+    if (kind === localBlockKind && bx.blockHeld) {
+      const blockAnim = ({ left: 'blockLeft', down: 'blockDown', up: 'blockUp', right: 'blockRight' })[sportingLaneKey(bx.lastLane || 0)] || 'blockLeft';
+      if (data.animations[blockAnim]?.length) return { anim: blockAnim, elapsed: t, fps: 12, loop: true };
     }
     return { anim: 'idle', elapsed: t + (kind === 'boyfriend' ? 0.08 : 0), fps: 12, loop: true };
   }
