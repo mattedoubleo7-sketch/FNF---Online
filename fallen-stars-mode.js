@@ -15,22 +15,28 @@
       right: "singRIGHT"
     };
     const LAYOUT = {
-      bgX: 58,
-      bgY: 8,
-      bgScale: 0.44,
-      starsScale: 0.44,
-      starzX: 236,
-      starzY: 34,
-      starzScale: 0.72,
-      worldX: 242,
-      worldY: 84,
-      worldScale: 0.58,
-      frontX: 56,
-      frontY: 506,
-      frontScale: 0.44,
-      sansScale: 0.44,
-      bfScale: 0.36,
-      gfScale: 0.38
+      bgX: -16,
+      bgY: -18,
+      bgScale: 0.5,
+      starsScale: 0.5,
+      starzX: 172,
+      starzY: 54,
+      starzScale: 0.66,
+      groundX: -18,
+      groundY: 168,
+      groundScale: 0.5,
+      rockLargeX: 930,
+      rockLargeY: 176,
+      rockLargeScale: 0.6,
+      rockSmallX: 370,
+      rockSmallY: 154,
+      rockSmallScale: 0.54,
+      worldX: 314,
+      worldY: 42,
+      worldScale: 0.66,
+      sansScale: 0.48,
+      bfScale: 0.44,
+      gfScale: 0.4
     };
 
     state.poses.sans = state.poses.sans || { lane: 1, time: -10, kind: "hit" };
@@ -94,7 +100,9 @@
       const sources = {
         stars: FS.stage.images.stars,
         space: FS.stage.images.space,
-        front: "assets/fallen-stars-stagefront.png",
+        ground: "assets/fallen-stars-bg0.png",
+        rockLarge: "assets/fallen-stars-rock-large.png",
+        rockSmall: "assets/fallen-stars-rock-small.png",
         shooting: FS.sprites.shooting.image,
         sans: FS.sprites.sans.image,
         boyfriend: FS.sprites.boyfriend.image,
@@ -260,15 +268,16 @@
         );
       }
 
-      drawAtlasFrame(image, frame, pos.x, pos.y, scale, 1, !!sprite.flipX);
+      const flipX = role === "boyfriend" ? false : !!sprite.flipX;
+      drawAtlasFrame(image, frame, pos.x, pos.y, scale, 1, flipX);
     }
 
     function drawStageBackdrop(t) {
       const stars = fsState.images.stars;
       const space = fsState.images.space;
+      const rockLarge = fsState.images.rockLarge;
+      const rockSmall = fsState.images.rockSmall;
       const shooting = fsState.images.shooting;
-      const floatX = Math.sin(t * 0.11) * 14;
-      const floatY = Math.cos(t * 0.09) * 8;
 
       if (imageReady(stars)) {
         ctx.save();
@@ -277,8 +286,8 @@
         ctx.globalAlpha = 0.94;
         ctx.drawImage(
           stars,
-          LAYOUT.bgX - 14 + floatX * 0.4,
-          LAYOUT.bgY - 6 + floatY * 0.25,
+          LAYOUT.bgX,
+          LAYOUT.bgY,
           FS.stage.imageSize.stars[0] * LAYOUT.starsScale,
           FS.stage.imageSize.stars[1] * LAYOUT.starsScale
         );
@@ -292,10 +301,36 @@
         ctx.globalAlpha = 0.98;
         ctx.drawImage(
           space,
-          LAYOUT.bgX + floatX,
-          LAYOUT.bgY + floatY,
+          LAYOUT.bgX,
+          LAYOUT.bgY,
           FS.stage.imageSize.space[0] * LAYOUT.bgScale,
           FS.stage.imageSize.space[1] * LAYOUT.bgScale
+        );
+        ctx.restore();
+      }
+
+      if (imageReady(rockSmall)) {
+        ctx.save();
+        ctx.globalAlpha = 0.98;
+        ctx.drawImage(
+          rockSmall,
+          LAYOUT.rockSmallX,
+          LAYOUT.rockSmallY,
+          rockSmall.naturalWidth * LAYOUT.rockSmallScale,
+          rockSmall.naturalHeight * LAYOUT.rockSmallScale
+        );
+        ctx.restore();
+      }
+
+      if (imageReady(rockLarge)) {
+        ctx.save();
+        ctx.globalAlpha = 0.98;
+        ctx.drawImage(
+          rockLarge,
+          LAYOUT.rockLargeX,
+          LAYOUT.rockLargeY,
+          rockLarge.naturalWidth * LAYOUT.rockLargeScale,
+          rockLarge.naturalHeight * LAYOUT.rockLargeScale
         );
         ctx.restore();
       }
@@ -308,8 +343,8 @@
           drawAtlasTopLeft(
             shooting,
             frame,
-            LAYOUT.starzX + Math.sin(t * 0.35) * 22,
-            LAYOUT.starzY + Math.cos(t * 0.28) * 8,
+            LAYOUT.starzX + Math.sin(t * 0.35) * 18,
+            LAYOUT.starzY + Math.cos(t * 0.28) * 7,
             LAYOUT.starzScale
           );
           ctx.restore();
@@ -317,19 +352,19 @@
       }
     }
 
-    function drawStageForeground() {
-      const front = fsState.images.front;
-      if (!imageReady(front)) return;
+    function drawStageGround() {
+      const ground = fsState.images.ground;
+      if (!imageReady(ground)) return;
       ctx.save();
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
       ctx.globalAlpha = 0.98;
       ctx.drawImage(
-        front,
-        LAYOUT.frontX,
-        LAYOUT.frontY,
-        front.naturalWidth * LAYOUT.frontScale,
-        front.naturalHeight * LAYOUT.frontScale
+        ground,
+        LAYOUT.groundX,
+        LAYOUT.groundY,
+        ground.naturalWidth * LAYOUT.groundScale,
+        ground.naturalHeight * LAYOUT.groundScale
       );
       ctx.restore();
     }
@@ -545,7 +580,7 @@
       if (state.selectedSong !== SONG_ID) return baseStage(t);
       initAssets();
       drawStageBackdrop(t);
-      drawStageForeground();
+      drawStageGround();
       drawRole("girlfriend", "gf", t);
       drawRole("opponent", "sans", t);
       drawRole("boyfriend", "player", t);
