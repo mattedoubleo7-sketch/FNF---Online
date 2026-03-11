@@ -23,24 +23,24 @@
       starzY: 54,
       starzScale: 0.66,
       groundX: -18,
-      groundY: 168,
+      groundY: 78,
       groundScale: 0.5,
-      rockLargeX: 930,
-      rockLargeY: 176,
-      rockLargeScale: 0.6,
-      rockSmallX: 370,
-      rockSmallY: 154,
-      rockSmallScale: 0.54,
+      rockLargeX: 760,
+      rockLargeY: 130,
+      rockLargeScale: 0.78,
+      rockSmallX: 188,
+      rockSmallY: 140,
+      rockSmallScale: 0.66,
       worldX: 314,
       worldY: 42,
       worldScale: 0.66,
-      sansScale: 0.48,
-      bfScale: 0.44,
-      gfScale: 0.4,
+      sansScale: 0.6,
+      bfScale: 0.52,
+      gfScale: 0.48,
       roleAdjust: {
-        opponent: { x: 38, y: 0 },
-        boyfriend: { x: -18, y: 0 },
-        girlfriend: { x: 0, y: 0 }
+        opponent: { x: -72, y: 138 },
+        boyfriend: { x: -164, y: 8 },
+        girlfriend: { x: -66, y: 60 }
       }
     };
 
