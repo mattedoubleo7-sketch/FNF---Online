@@ -31,16 +31,13 @@
       rockSmallX: 188,
       rockSmallY: 140,
       rockSmallScale: 0.66,
-      worldX: 314,
-      worldY: 42,
-      worldScale: 0.66,
       sansScale: 0.6,
       bfScale: 0.52,
       gfScale: 0.48,
-      roleAdjust: {
-        opponent: { x: -72, y: 138 },
-        boyfriend: { x: -164, y: 8 },
-        girlfriend: { x: -66, y: 60 }
+      roleGround: {
+        opponent: { x: 306, y: 594 },
+        girlfriend: { x: 582, y: 512 },
+        boyfriend: { x: 806, y: 632 }
       }
     };
 
@@ -196,20 +193,11 @@
       return { name: idle, elapsed: sprite === FS.sprites.gf ? t * 1.25 : t, loop: true };
     }
 
-    function roleWorldPosition(role) {
-      const sprite = spriteByRole(role);
-      const slot = FS.stage.positions[role];
-      const offset = sprite.position || [0, 0];
+    function roleGroundAnchor(role) {
+      const anchor = LAYOUT.roleGround?.[role];
       return {
-        x: Number(slot[0] || 0) + Number(offset[0] || 0),
-        y: Number(slot[1] || 0) + Number(offset[1] || 0)
-      };
-    }
-
-    function worldToStage(x, y) {
-      return {
-        x: LAYOUT.worldX + x * LAYOUT.worldScale,
-        y: LAYOUT.worldY + y * LAYOUT.worldScale
+        x: Number(anchor?.x || 0),
+        y: Number(anchor?.y || 0)
       };
     }
 
@@ -276,33 +264,6 @@
       return point;
     }
 
-    function spriteGroundReference(sprite, image) {
-      if (!sprite?.animations) return null;
-      const animName = sprite.animations["idle-loop"] ? "idle-loop" : (sprite.animations.idle ? "idle" : Object.keys(sprite.animations)[0]);
-      const anim = animName ? sprite.animations[animName] : null;
-      const frame = anim?.frames?.[0];
-      if (!frame) return null;
-      const offset = animOffset(anim);
-      const ground = frameGroundPoint(image, frame);
-      return {
-        frame,
-        offsetX: offset.x,
-        offsetY: offset.y,
-        groundX: ground.x,
-        groundY: ground.y
-      };
-    }
-
-    function groundedWorldAnchor(worldX, worldY, sprite, scale = 1) {
-      const reference = spriteGroundReference(sprite);
-      if (!reference?.frame) return { x: worldX, y: worldY };
-      const spriteScale = Number(scale || 1);
-      const frame = reference.frame;
-      return {
-        x: worldX + (reference.offsetX + ((frame.fw || frame.w) / 2) - Number(frame.fx || 0)) * spriteScale,
-        y: worldY + (reference.offsetY + (frame.fh || frame.h) - Number(frame.fy || 0)) * spriteScale
-      };
-    }
 
     function drawRole(role, poseKey, t) {
       const sprite = spriteByRole(role);
@@ -314,24 +275,18 @@
       if (!anim?.frames?.length) return;
       const frame = frameFromList(anim.frames, animState.elapsed, Number(anim.fps || 24), animState.loop);
       if (!frame) return;
-      const world = roleWorldPosition(role);
       const scale = roleBaseScale(role) * Number(sprite.scale || 1);
-      const anchor = groundedWorldAnchor(world.x, world.y, sprite, scale);
-      const pos = worldToStage(anchor.x, anchor.y);
-      const reference = spriteGroundReference(sprite, image);
+      const groundAnchor = roleGroundAnchor(role);
+      const fw = Number(frame.fw || frame.w || 0);
+      const fh = Number(frame.fh || frame.h || 0);
+      const fx = Number(frame.fx || 0);
+      const fy = Number(frame.fy || 0);
       const currentOffset = animOffset(anim);
       const currentGround = frameGroundPoint(image, frame);
-      if (reference) {
-        pos.x += (reference.offsetX - currentOffset.x) * scale;
-        pos.y += (reference.offsetY - currentOffset.y) * scale;
-        pos.x += (reference.groundX - currentGround.x) * scale;
-        pos.y += (reference.groundY - currentGround.y) * scale;
-      }
-      const roleAdjust = LAYOUT.roleAdjust?.[role];
-      if (roleAdjust) {
-        pos.x += Number(roleAdjust.x || 0);
-        pos.y += Number(roleAdjust.y || 0);
-      }
+      const pos = {
+        x: groundAnchor.x + (fw * 0.5 + fx - currentGround.x - currentOffset.x) * scale,
+        y: groundAnchor.y + (fh + fy - currentGround.y - currentOffset.y) * scale
+      };
       const shadowWidth = Math.max(92, (frame.fw || frame.w || 240) * scale * (role === "opponent" ? 0.48 : 0.42));
 
       if (role !== "girlfriend") {
