@@ -32,7 +32,9 @@
     "auto-update.js",
     "challenge-edd-data.js",
     "challenge-edd-mode.js",
-    "challenge-edd-bf-data.js"
+    "challenge-edd-bf-data.js",
+    "fallen-stars-data.js",
+    "fallen-stars-mode.js"
   ],
   "directories": {
     "output": "dist-offline"
@@ -61,3 +63,5 @@
     "artifactName": "FNF-Browser-Jam-offline-1.0.0-portable.${ext}"
   }
 }
+
+

@@ -166,6 +166,15 @@ async function preloadSongForMatch(songId, matchId) {
     const media = mediaListFrom(prepared);
     const tracks = media.length ? media : [state.audio.challengeInst, state.audio.challengeVoices];
     await Promise.all(tracks.filter(Boolean).map(track => waitForTrackReady(track)));
+  } else if (SONGS[songId]?.chartSource === "ourBrokenConstellations") {
+    const prepared = typeof window.prepareFallenStarsOnlineStart === "function"
+      ? window.prepareFallenStarsOnlineStart()
+      : (typeof window.ensureFallenStarsAudio === "function"
+        ? (window.ensureFallenStarsAudio(), [state.audio.fallenStarsInst, state.audio.fallenStarsVoices])
+        : []);
+    const media = mediaListFrom(prepared);
+    const tracks = media.length ? media : [state.audio.fallenStarsInst, state.audio.fallenStarsVoices];
+    await Promise.all(tracks.filter(Boolean).map(track => waitForTrackReady(track)));
   }
   if (state.network.prepareMatchId !== matchId) return false;
   state.network.preparedSongId = songId;
@@ -990,5 +999,6 @@ setInterval(() => {
   if (state.network.preparing || (state.network.pendingStartAt && state.network.pendingStartAt > serverClockNow())) updateOnlinePanel();
 }, 250);
 ensureOnlineSocket();
+
 
 
