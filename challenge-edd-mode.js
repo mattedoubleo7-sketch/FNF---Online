@@ -8,36 +8,52 @@
     const lerp = (a, b, t) => a + (b - a) * clamp01(t);
     const nowSec = () => performance.now() / 1000;
     const ce = { ready: false, images: {} };
-    Object.assign(CE.stage.layout, {
+    CE.stage.layout = {
+      skyScale: 0.42,
+      patioScale: 0.42,
+      fenceScale: 0.4,
+      carScale: 0.3,
+      tordBgScale: 0.94,
       speakerX: 640,
-      speakerY: 538,
+      speakerY: 534,
+      speakerScale: 0.72,
       gfX: 640,
-      gfY: 430,
-      gfScale: 0.66,
+      gfY: 422,
+      gfScale: 0.64,
       skyX: -200,
       skyY: -68,
       patioX: -200,
       patioY: 8,
       vallasX: -28,
       vallasY: 238,
-      oppX: 430,
-      oppY: 642,
-      oppScale: 0.58,
-      playerX: 1016,
-      playerY: 644,
-      playerScale: 0.66,
-      mattX: 1118,
-      mattY: 590,
-      mattScale: 0.62,
-      tordbotX: 925,
+      oppX: 302,
+      oppY: 616,
+      oppScale: 0.44,
+      playerX: 990,
+      playerY: 626,
+      playerScale: 0.72,
+      mattX: 1210,
+      mattY: 564,
+      mattScale: 0.45,
+      tordbotX: 910,
       tordbotY: 616,
-      tordbotScale: 0.38,
-      tomRunX: 1184,
-      tomRunY: 612,
-      tomRunScale: 0.56,
-      toomArponX: 1124,
-      toomArponY: 616,
-      toomArponScale: 0.56
+      tordbotScale: 0.34,
+      tomRunX: 1245,
+      tomRunY: 614,
+      tomRunScale: 0.44,
+      toomArponX: 1172,
+      toomArponY: 622,
+      toomArponScale: 0.44,
+      ...(CE.stage.layout || {})
+    };
+    Object.assign(CE.stage.layout, {
+      gfX: 700,
+      gfY: 404,
+      gfScale: 0.4
+    });
+    Object.assign(CE.stage.positions || (CE.stage.positions = {}), {
+      opponent: [1325, 190],
+      boyfriend: [2355, 150]
     });
     const DEFAULT_HOLD = window.PERSEVERANCE_DATA?.sprites?.notes?.default?.hold || null;
     const ROCKET_FRAME = { x: 0, y: 0, w: 314, h: 538, fx: 0, fy: 0, fw: 314, fh: 538, rotated: false };
@@ -72,6 +88,18 @@
     const tordbotTime = playEvents.find(event => String(event.params?.[0] || "").trim().toLowerCase() === "tordbot")?.time ?? Infinity;
     const boomTime = playEvents.find(event => String(event.params?.[0] || "").trim().toLowerCase() === "boom")?.time ?? Infinity;
     const arponTime = playEvents.find(event => String(event.params?.[0] || "").trim().toLowerCase() === "arpon")?.time ?? Infinity;
+    const CE_WORLD = {
+      normal: {
+        sky: { x: -600, y: -950 },
+        patio: { x: -600, y: -770 },
+        fence: { x: 85, y: -120 },
+        car: { x: -835, y: 800 }
+      },
+      matt: { startX: 1950, idleX: 1200, reactX: 1300, y: 200, scale: 1.56 },
+      tordbot: { x: 1670, startY: 200, endY: -500, scale: 1.56 },
+      tomRun: { startX: 2550, endX: 2900, y: 500, scale: 1.56 },
+      toomArpon: { x: 2550, y: 500, scale: 1.56 }
+    };
 
     const baseIsImportedSong = isImportedSong;
     const baseMakeChart = makeChart;
@@ -347,6 +375,13 @@
       return frame ? { anim, frame } : null;
     }
 
+    function sportingAnimationFrame(sprite, animName, elapsed, fps = 12, loop = true) {
+      const frames = sprite?.animations?.[animName];
+      if (!frames?.length) return null;
+      const frame = frameFromList(frames, elapsed, fps, loop);
+      return frame ? { frame } : null;
+    }
+
     function specialOppAnim(t, oppKey) {
       if (oppKey !== "tord") return null;
       const sprite = CE.sprites.opponent.tord;
@@ -399,7 +434,8 @@
       const image = ce.images.bfBase;
       if (!sprite || !imageReady(image)) return null;
       const stateInfo = poseInfoForSprite(sprite, "player", t, null);
-      return stateInfo ? { state: stateInfo, image, scale: variantScale("player", "player"), flipX: false } : null;
+      const world = characterWorldPos("player", sprite);
+      return stateInfo ? { state: stateInfo, image, scale: variantScale("player", "player"), worldX: world.x, worldY: world.y, worldScale: Number(sprite.scale || 1), flipX: false } : null;
     }
 
     function currentState(t) {
@@ -430,8 +466,19 @@
       if (!stateInfo?.sprite || !imageReady(image)) return;
       const result = animationFrame(stateInfo.sprite, stateInfo.animName, stateInfo.elapsed, stateInfo.loop);
       if (!result?.frame) return;
-      drawAtlasFrame(image, result.frame, x, y, scale, alpha, flipX);
+      const rawOffset = result.anim?.offset || result.anim?.offsets || [0, 0];
+      const offsetX = Number(rawOffset?.[0] || 0) * scale;
+      const offsetY = Number(rawOffset?.[1] || 0) * scale;
+      drawAtlasFrame(image, result.frame, x + offsetX, y + offsetY, scale, alpha, flipX);
     }
+
+    function drawSportingSpriteState(sprite, image, animName, elapsed, x, y, scale, fps = 12, loop = true, flipX = false, alpha = 1) {
+      if (!sprite || !imageReady(image)) return;
+      const result = sportingAnimationFrame(sprite, animName, elapsed, fps, loop);
+      if (!result?.frame) return;
+      drawAtlasTopLeft(image, result.frame, x, y, scale, alpha, flipX);
+    }
+
 
     function drawSimpleImage(key, x, y, scale, alpha = 1) {
       const img = ce.images[key];
@@ -444,11 +491,99 @@
       ctx.restore();
     }
 
+    function ceWorldScale() {
+      return Number(CE.stage.layout.skyScale || 0.42);
+    }
+
+    function ceWorldOriginX() {
+      return Number(CE.stage.layout.skyX || -200) - CE_WORLD.normal.sky.x * ceWorldScale();
+    }
+
+    function ceWorldOriginY() {
+      return Number(CE.stage.layout.skyY || -68) - CE_WORLD.normal.sky.y * ceWorldScale();
+    }
+
+    function worldToStage(x, y) {
+      const scale = ceWorldScale();
+      return { x: ceWorldOriginX() + x * scale, y: ceWorldOriginY() + y * scale, scale };
+    }
+
+    function roleStageKey(role) {
+      return ({ opp: "opponent", opponent: "opponent", player: "boyfriend", boyfriend: "boyfriend", gf: "girlfriend", girlfriend: "girlfriend" })[role] || role;
+    }
+
+    function characterWorldPos(role, sprite) {
+      const base = CE.stage.positions?.[roleStageKey(role)] || [0, 0];
+      const pos = sprite?.position || [0, 0];
+      return {
+        x: Number(base[0] || 0) + Number(pos[0] || 0),
+        y: Number(base[1] || 0) + Number(pos[1] || 0)
+      };
+    }
+
+    function drawWorldImage(key, worldX, worldY, extraScale = 1, alpha = 1) {
+      const point = worldToStage(worldX, worldY);
+      drawSimpleImage(key, point.x, point.y, point.scale * extraScale, alpha);
+    }
+
+    function drawWorldSpriteState(stateInfo, image, worldX, worldY, scale = 1, flipX = false, alpha = 1) {
+      if (!stateInfo?.sprite || !imageReady(image)) return;
+      const result = animationFrame(stateInfo.sprite, stateInfo.animName, stateInfo.elapsed, stateInfo.loop);
+      if (!result?.frame) return;
+      const point = worldToStage(worldX, worldY);
+      const drawScale = point.scale * scale;
+      const rawOffset = result.anim?.offset || result.anim?.offsets || [0, 0];
+      const offsetX = Number(rawOffset?.[0] || 0) * drawScale;
+      const offsetY = Number(rawOffset?.[1] || 0) * drawScale;
+      drawAtlasTopLeft(image, result.frame, point.x + offsetX, point.y + offsetY, drawScale, alpha, flipX);
+    }
+
+    function spriteGroundReference(sprite) {
+      if (!sprite?.animations) return null;
+      const animName = sprite.animations["idle-loop"] ? "idle-loop" : (sprite.animations.idle ? "idle" : Object.keys(sprite.animations)[0]);
+      const anim = animName ? sprite.animations[animName] : null;
+      const frame = anim?.frames?.[0];
+      if (!frame) return null;
+      const rawOffset = anim?.offset || anim?.offsets || [0, 0];
+      return {
+        frame,
+        offsetX: Number(rawOffset?.[0] || 0),
+        offsetY: Number(rawOffset?.[1] || 0)
+      };
+    }
+
+    function groundedWorldAnchor(worldX, worldY, sprite, scale = 1) {
+      const reference = spriteGroundReference(sprite);
+      if (!reference?.frame) return { x: worldX, y: worldY };
+      const spriteScale = Number(scale || 1);
+      const frame = reference.frame;
+      return {
+        x: worldX + (reference.offsetX + ((frame.fw || frame.w) / 2) - Number(frame.fx || 0)) * spriteScale,
+        y: worldY + (reference.offsetY + (frame.fh || frame.h) - Number(frame.fy || 0)) * spriteScale
+      };
+    }
+
+    function drawGroundedSpriteState(stateInfo, image, x, y, scale, flipX = false, alpha = 1) {
+      if (!stateInfo?.sprite || !imageReady(image)) return;
+      const result = animationFrame(stateInfo.sprite, stateInfo.animName, stateInfo.elapsed, stateInfo.loop);
+      if (!result?.frame) return;
+      drawAtlasFrame(image, result.frame, x, y, scale, alpha, flipX);
+    }
+
+    function drawGroundedWorldSpriteState(stateInfo, image, worldX, worldY, scale = 1, flipX = false, alpha = 1) {
+      if (!stateInfo?.sprite || !imageReady(image)) return;
+      const anchor = groundedWorldAnchor(worldX, worldY, stateInfo.sprite, scale);
+      const point = worldToStage(anchor.x, anchor.y);
+      drawGroundedSpriteState(stateInfo, image, point.x, point.y, point.scale * scale, flipX, alpha);
+    }
+
     function drawSpeakerStack() {
       const x = CE.stage.layout.speakerX;
       const y = CE.stage.layout.speakerY;
+      const scale = Number(CE.stage.layout.speakerScale || 1);
       ctx.save();
       ctx.translate(x, y);
+      ctx.scale(scale, scale);
       ctx.fillStyle = "#3a3d49";
       ctx.strokeStyle = "rgba(15,18,26,0.78)";
       ctx.lineWidth = 5;
@@ -495,10 +630,10 @@
 
     function drawChallengeGf(t) {
       const sprite = window.SPORTING_SPRITES?.gf;
-      const image = imageReady(ce.images.gf) ? ce.images.gf : spriteState.images.gf;
+      const image = imageReady(spriteState.images.gf) ? spriteState.images.gf : (imageReady(ce.images.gf) ? ce.images.gf : null);
       if (!sprite || !imageReady(image)) return;
       const pose = sportingPose("gf", t);
-      drawSpriteState({ sprite, animName: pose.anim, elapsed: pose.elapsed, loop: pose.loop }, image, CE.stage.layout.gfX, CE.stage.layout.gfY, CE.stage.layout.gfScale, false, 1);
+      drawSportingSpriteState(sprite, image, pose.anim, pose.elapsed, CE.stage.layout.gfX, CE.stage.layout.gfY, CE.stage.layout.gfScale, pose.fps || 12, pose.loop, false, 1);
     }
 
     function drawChallengeReceptor(lane, x, y) {
@@ -576,46 +711,26 @@
     }
 
     function drawNormalStage(t, phase) {
-      const layout = CE.stage.layout;
-      const sky = ce.images.sky;
-      const patio = ce.images.patio;
       const fenceKey = imageReady(ce.images.vallas) ? "vallas" : "fence";
-      const fence = ce.images[fenceKey];
       const bot = tordbotState(t, phase.stageMode);
-      const botBehindHouse = !!(bot && bot.state?.animName === "enter");
-      if (imageReady(sky)) {
-        drawSimpleImage("sky", layout.skyX, layout.skyY, layout.skyScale);
-      }
-      if (botBehindHouse) drawSpriteState(bot.state, ce.images.tordbot, bot.x, bot.y, bot.scale, false, 1);
-      if (imageReady(patio)) {
-        drawSimpleImage("patio", layout.patioX, layout.patioY, layout.patioScale);
-      }
-      if (imageReady(fence)) {
-        if (fenceKey === "vallas") drawSimpleImage("vallas", layout.vallasX, layout.vallasY, layout.fenceScale, 1);
-        else {
-          const fenceW = fence.naturalWidth * layout.fenceScale;
-          const fenceX = (canvas.width - fenceW) / 2;
-          drawSimpleImage("fence", fenceX, 254, layout.fenceScale, 0.98);
-        }
-      }
-
+      const matt = mattState(t, phase.stageMode);
+      const tom = tomRunState(t, phase.stageMode);
+      const arpon = arponState(t, phase.stageMode);
+      if (imageReady(ce.images.sky)) drawWorldImage("sky", CE_WORLD.normal.sky.x, CE_WORLD.normal.sky.y);
+      if (bot) drawWorldSpriteState(bot.state, ce.images.tordbot, bot.x, bot.y, bot.scale, false, 1);
+      if (imageReady(ce.images.patio)) drawWorldImage("patio", CE_WORLD.normal.patio.x, CE_WORLD.normal.patio.y);
+      if (matt) drawGroundedWorldSpriteState(matt.state, ce.images.matt, matt.x, matt.y, matt.scale, false, 1);
       drawChallengeGf(t);
 
-      if (bot && !botBehindHouse) drawSpriteState(bot.state, ce.images.tordbot, bot.x, bot.y, bot.scale, false, 1);
-
-      const matt = mattState(t, phase.stageMode);
-      if (matt) drawSpriteState(matt.state, ce.images.matt, matt.x, matt.y, matt.scale, false, 1);
-
       const oppState = opponentSpriteState(t, phase.opp);
-      if (oppState) drawSpriteState(oppState.state, oppState.image, layout.oppX, layout.oppY, oppState.scale, oppState.flipX, 1);
+      if (oppState) drawGroundedWorldSpriteState(oppState.state, oppState.image, oppState.worldX, oppState.worldY, oppState.worldScale, oppState.flipX, 1);
 
       const playerState = playerSpriteState(t, phase.player);
-      if (playerState) drawSpriteState(playerState.state, playerState.image, layout.playerX, layout.playerY, playerState.scale, playerState.flipX, 1);
-
-      const tom = tomRunState(t, phase.stageMode);
-      if (tom) drawSpriteState(tom.state, ce.images.tomRun, tom.x, tom.y, tom.scale, false, 1);
-      const arpon = arponState(t, phase.stageMode);
-      if (arpon) drawSpriteState(arpon.state, ce.images.toomArpon, arpon.x, arpon.y, arpon.scale, false, 1);
+      if (playerState) drawGroundedWorldSpriteState(playerState.state, playerState.image, playerState.worldX, playerState.worldY, playerState.worldScale, playerState.flipX, 1);
+      if (imageReady(ce.images[fenceKey])) drawWorldImage(fenceKey, CE_WORLD.normal.fence.x, CE_WORLD.normal.fence.y, 1, fenceKey === "vallas" ? 1 : 0.98);
+      if (imageReady(ce.images.car)) drawWorldImage("car", CE_WORLD.normal.car.x, CE_WORLD.normal.car.y);
+      if (tom) drawGroundedWorldSpriteState(tom.state, ce.images.tomRun, tom.x, tom.y, tom.scale, false, 1);
+      if (arpon) drawGroundedWorldSpriteState(arpon.state, ce.images.toomArpon, arpon.x, arpon.y, arpon.scale, false, 1);
     }
 
     function drawTordStage(t, phase) {
@@ -634,7 +749,7 @@
       ctx.translate(shake.x, shake.y);
       drawSimpleImage("tordBg", x, y, layout.tordBgScale);
       const oppState = opponentSpriteState(t, phase.opp);
-      if (oppState) drawSpriteState(oppState.state, oppState.image, canvas.width * 0.5, 646, oppState.scale, oppState.flipX, 1);
+      if (oppState) drawGroundedSpriteState(oppState.state, oppState.image, canvas.width * 0.5, 654, oppState.scale * 1.18, oppState.flipX, 1);
       ctx.restore();
       drawTordTurnPortraits(t, phase);
     }
@@ -645,7 +760,8 @@
       const image = imageForVariant(oppKey);
       if (!sprite || !imageReady(image)) return null;
       const stateInfo = poseInfoForSprite(sprite, oppKey, t, specialOppAnim(t, oppKey));
-      return stateInfo ? { state: stateInfo, image, scale: variantScale(oppKey, "opp"), flipX: !!sprite.flipX } : null;
+      const world = characterWorldPos("opp", sprite);
+      return stateInfo ? { state: stateInfo, image, scale: variantScale(oppKey, "opp"), worldX: world.x, worldY: world.y, worldScale: Number(sprite.scale || 1), flipX: !!sprite.flipX } : null;
     }
 
     function playerSpriteState(t, playerKey) {
@@ -655,19 +771,20 @@
       const image = imageForVariant(playerKey);
       if (!sprite || !imageReady(image)) return null;
       const stateInfo = poseInfoForSprite(sprite, playerKey, t, null);
-      return stateInfo ? { state: stateInfo, image, scale: variantScale(playerKey, "player"), flipX: playerKey.startsWith("bf") ? false : !!sprite.flipX } : null;
+      const world = characterWorldPos("player", sprite);
+      return stateInfo ? { state: stateInfo, image, scale: variantScale(playerKey, "player"), worldX: world.x, worldY: world.y, worldScale: Number(sprite.scale || 1), flipX: playerKey.startsWith("bf") ? false : !!sprite.flipX } : null;
     }
 
     function mattState(t, stageMode) {
       if (!Number.isFinite(mattWalkTime) || t < mattWalkTime || stageMode === "tord") return null;
       const sprite = CE.sprites.extras.matt;
       if (t >= mattReactTime) {
-        return { state: { sprite, animName: "react", elapsed: t - mattReactTime, loop: false }, x: lerp(CE.stage.layout.mattX + 70, CE.stage.layout.mattX, (t - mattReactTime) / 0.12), y: CE.stage.layout.mattY, scale: CE.stage.layout.mattScale };
+        return { state: { sprite, animName: "react", elapsed: t - mattReactTime, loop: false }, x: lerp(CE_WORLD.matt.idleX, CE_WORLD.matt.reactX, (t - mattReactTime) / 0.1), y: CE_WORLD.matt.y, scale: CE_WORLD.matt.scale };
       }
       if (t >= mattIdleTime) {
-        return { state: { sprite, animName: "idle", elapsed: t - mattIdleTime, loop: true }, x: CE.stage.layout.mattX, y: CE.stage.layout.mattY, scale: CE.stage.layout.mattScale };
+        return { state: { sprite, animName: "idle", elapsed: t - mattIdleTime, loop: true }, x: CE_WORLD.matt.idleX, y: CE_WORLD.matt.y, scale: CE_WORLD.matt.scale };
       }
-      return { state: { sprite, animName: "enter", elapsed: t - mattWalkTime, loop: true }, x: lerp(canvas.width + 860, CE.stage.layout.mattX, (t - mattWalkTime) / 8), y: CE.stage.layout.mattY, scale: CE.stage.layout.mattScale };
+      return { state: { sprite, animName: "enter", elapsed: t - mattWalkTime, loop: true }, x: lerp(CE_WORLD.matt.startX, CE_WORLD.matt.idleX, (t - mattWalkTime) / 8), y: CE_WORLD.matt.y, scale: CE_WORLD.matt.scale };
     }
 
     function tordbotState(t, stageMode) {
@@ -675,22 +792,22 @@
       const sprite = CE.sprites.extras.tordbot;
       if (stageMode === "tord" && t < boomTime) return null;
       if (Number.isFinite(boomTime) && t >= boomTime) {
-        return { state: { sprite, animName: "boom", elapsed: t - boomTime, loop: false }, x: CE.stage.layout.tordbotX, y: CE.stage.layout.tordbotY - 232, scale: CE.stage.layout.tordbotScale };
+        return { state: { sprite, animName: "boom", elapsed: t - boomTime, loop: false }, x: CE_WORLD.tordbot.x, y: CE_WORLD.tordbot.endY, scale: CE_WORLD.tordbot.scale };
       }
       const rise = clamp01((t - tordbotTime) / 3);
-      return { state: { sprite, animName: "enter", elapsed: t - tordbotTime, loop: true }, x: CE.stage.layout.tordbotX, y: lerp(CE.stage.layout.tordbotY + 220, CE.stage.layout.tordbotY - 232, rise), scale: CE.stage.layout.tordbotScale };
+      return { state: { sprite, animName: "enter", elapsed: t - tordbotTime, loop: true }, x: CE_WORLD.tordbot.x, y: lerp(CE_WORLD.tordbot.startY, CE_WORLD.tordbot.endY, rise), scale: CE_WORLD.tordbot.scale };
     }
 
     function tomRunState(t, stageMode) {
       if (!Number.isFinite(tomRunTime) || t < tomRunTime || stageMode === "tord") return null;
       const sprite = CE.sprites.extras.tomRun;
-      return { state: { sprite, animName: "enter", elapsed: t - tomRunTime, loop: false }, x: lerp(canvas.width + 220, -80, (t - tomRunTime) / 3), y: CE.stage.layout.tomRunY, scale: CE.stage.layout.tomRunScale };
+      return { state: { sprite, animName: "enter", elapsed: t - tomRunTime, loop: false }, x: lerp(CE_WORLD.tomRun.startX, CE_WORLD.tomRun.endX, (t - tomRunTime) / 3), y: CE_WORLD.tomRun.y, scale: CE_WORLD.tomRun.scale };
     }
 
     function arponState(t, stageMode) {
       if (!Number.isFinite(arponTime) || t < arponTime || stageMode === "tord") return null;
       const sprite = CE.sprites.extras.toomArpon;
-      return { state: { sprite, animName: "enter", elapsed: t - arponTime, loop: true }, x: CE.stage.layout.toomArponX, y: CE.stage.layout.toomArponY, scale: CE.stage.layout.toomArponScale };
+      return { state: { sprite, animName: "enter", elapsed: t - arponTime, loop: true }, x: CE_WORLD.toomArpon.x, y: CE_WORLD.toomArpon.y, scale: CE_WORLD.toomArpon.scale };
     }
 
     isImportedSong = song => !!song && (song.chartSource === "challengeEdd" || baseIsImportedSong(song));

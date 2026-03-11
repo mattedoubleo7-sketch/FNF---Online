@@ -130,6 +130,15 @@ async function preloadSongForMatch(songId, matchId) {
       try { track.load(); } catch {}
     });
     await Promise.all([waitForTrackReady(state.audio.inst), waitForTrackReady(state.audio.voices)]);
+  } else if (SONGS[songId]?.chartSource === "boxingMatch") {
+    ensureBoxingMatchAudio();
+    [state.audio.boxingInst, state.audio.boxingVoices].forEach(track => {
+      if (!track) return;
+      track.pause();
+      try { track.currentTime = 0; } catch {}
+      try { track.load(); } catch {}
+    });
+    await Promise.all([waitForTrackReady(state.audio.boxingInst), waitForTrackReady(state.audio.boxingVoices)]);
   } else if (SONGS[songId]?.chartSource === "perseverance") {
     ensurePerseveranceAudio();
     [state.audio.inst2, state.audio.voices2a, state.audio.voices2b].forEach(track => {
@@ -204,6 +213,10 @@ function syncOnlinePlayback(force = false) {
     ensureSportingAudio();
     syncTrackToTime(state.audio.inst, targetTime, shouldPlay);
     syncTrackToTime(state.audio.voices, targetTime, shouldPlay);
+  } else if (state.currentSong.chartSource === "boxingMatch") {
+    ensureBoxingMatchAudio();
+    syncTrackToTime(state.audio.boxingInst, targetTime, shouldPlay);
+    syncTrackToTime(state.audio.boxingVoices, targetTime, shouldPlay);
   } else if (state.currentSong.chartSource === "perseverance") {
     ensurePerseveranceAudio();
     syncTrackToTime(state.audio.inst2, targetTime, shouldPlay);
@@ -861,6 +874,16 @@ startSong = function(id = state.selectedSong, options = {}){
     if (!skipReload) {
       state.audio.inst.load();
       state.audio.voices.load();
+    }
+  } else if (state.currentSong.chartSource === "boxingMatch") {
+    ensureBoxingMatchAudio();
+    state.audio.boxingInst.pause();
+    state.audio.boxingVoices.pause();
+    try { state.audio.boxingInst.currentTime = 0; } catch {}
+    try { state.audio.boxingVoices.currentTime = 0; } catch {}
+    if (!skipReload) {
+      state.audio.boxingInst.load();
+      state.audio.boxingVoices.load();
     }
   } else {
     ensurePerseveranceAudio();

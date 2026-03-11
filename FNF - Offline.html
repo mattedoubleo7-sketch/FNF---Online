@@ -296,7 +296,7 @@ body.fullViewport #app { width: 100vw; height: 100vh; aspect-ratio: auto; border
             <p>This is a self-contained Friday Night Funkin' style browser game with procedural charts, synthesized music, judgments, health, rebindable controls, and a proper results screen.</p>
             <div class="features">
                 <div class="feature"><div class="name">Four-lane highway</div><div class="desc">Classic left, down, up, right note lanes with timing windows, combo tracking, and misses.</div></div>
-                <div class="feature"><div class="name">Week-style tracks</div><div class="desc">Battle Matt in Sporting, Sans in Perseverance, or Broken Reality's hall showdown.</div></div>
+                <div class="feature"><div class="name">Week-style tracks</div><div class="desc">Battle Matt in Sporting or Boxing Match, Sans in Perseverance, or Broken Reality's hall showdown.</div></div>
                 <div class="feature"><div class="name">No setup required</div><div class="desc">Open the file and play. No installs, assets, or servers required.</div></div>
             </div>
             <div class="actions">
@@ -368,7 +368,9 @@ body.fullViewport #app { width: 100vw; height: 100vh; aspect-ratio: auto; border
     </div>
 </div>
 <script src="sprite-data.js"></script>
+<script src="boxing-fight-data.js"></script>
 <script src="sporting-chart.js"></script>
+<script src="boxing-match-chart.js"></script>
 <script src="perseverance-data.js"></script>
 <script src="broken-reality-data.js"></script>
 <script src="challenge-edd-data.js"></script>
@@ -464,6 +466,7 @@ const MOTIFS = [[0,1,2,3,2,1],[0,2,1,3,2,0],[3,2,1,0,1,2],[1,1,2,3,2,0],[0,3,1,2
 const DEFAULTS = { solo:{left:"a",down:"s",up:"w",right:"d"}, p1:{left:"a",down:"s",up:"w",right:"d"}, p2:{left:"arrowleft",down:"arrowdown",up:"arrowup",right:"arrowright"} };
 const SONGS = {
     sporting:{ title:"Sporting", subtitle:"Original beat + exact chart", diff:"Normal (Original Chart)", tempo:300, root:45, scale:[0,2,3,5,7,8,10], prog:[0,5,3,7], scroll:920, seed:29, introBeats:0, outroBeats:4, palette:["#0f1422","#1b2f46","#314f74","#0b0e16","#4de3ff","#ff9d42"], blurb:"Imported from the original VS Matt chart file and synced to the real Sporting instrumental and vocals for original-speed playback.", chartSource:"sporting"},
+    boxingMatch:{ title:"Boxing Match", subtitle:"Original VS Matt chart", diff:"Normal (Original Chart)", tempo:339, root:45, scale:[0,2,3,5,7,8,10], prog:[0,5,3,7], scroll:760, seed:31, introBeats:0, outroBeats:4, palette:["#0f1422","#1b2f46","#314f74","#0b0e16","#4de3ff","#ff9d42"], blurb:"Imported from the original VS Matt Boxing Match chart with the real instrumental and vocals, while reusing the Sporting stage and noteskins.", chartSource:"boxingMatch"},
     perseverance:{ title:"Perseverance", subtitle:"Friday Night Dustin hard chart", diff:"Hard (Original Chart)", tempo:120, root:41, scale:[0,2,3,5,7,8,10], prog:[0,5,3,6], scroll:810, seed:33, introBeats:0, outroBeats:4, palette:["#06080d","#182332","#34455b","#0b0d12","#cfe7ff","#7fb7ff"], blurb:"Imported from Friday Night Dustin with the original hard chart, ruins exit stage art, Sans sprites, pixel section, and gaster blaster dodge mechanic.", chartSource:"perseverance"},
     brokenReality:{ title:"Broken Reality", subtitle:"Friday Night Dustin hard chart", diff:"Hard (Original Chart)", tempo:120, root:40, scale:[0,2,3,5,7,8,10], prog:[0,5,3,6], scroll:780, seed:37, introBeats:0, outroBeats:4, palette:["#04050a","#16162a","#2f3251","#08090f","#f2d6ff","#ff5a5a"], blurb:"Imported from Friday Night Dustin with the original hard chart, cutscene videos, hall stage, drain, attack prompt, scroll flips, and red-phase Papyrus swap.", chartSource:"brokenReality"},
 };
@@ -1085,7 +1088,7 @@ const state = {
     poses: { player:{lane:2,time:-10}, dad:{lane:1,time:-10}, matt:{lane:1,time:-10}, sans:{lane:1,time:-10}, skid:{lane:0,time:-10}, pump:{lane:3,time:-10}, pico:{lane:1,time:-10}, monster:{lane:2,time:-10} },
     receptorFx: Array.from({length:8}, () => ({ time:-10, lane:0 })),
     perseverance: { canDodge:false, prompt:false, dodging:false, dodged:false, resolved:false, dodgeStart:-10, flashTime:-10, gfAlpha:0 },
-    audio: { ctx:null, noise:null, inst:null, voices:null, inst2:null, voices2a:null, voices2b:null },
+    audio: { ctx:null, noise:null, inst:null, voices:null, boxingInst:null, boxingVoices:null, inst2:null, voices2a:null, voices2b:null },
     shake: { time: -10, intensity: 0 }, _flashWhiteSilhouette: false,
     camera: { zoom: 1, focusX: 640, focusY: 324, sideTime: 0, lastSide: "both", highwayX: 0, highwayY: 0 },
     hitGlow: []
@@ -1158,8 +1161,9 @@ function phrase(notes, rng, startBeat, beats, side, motif, intensity, chars){
         if(stepSize <= .5 && intensity > .76 && rng() < .15){ const grace = beat + stepSize / 2; if(grace < startBeat + beats) note(notes, grace, side, (lane + 1) % 4, char); }
     }
 }
-function isImportedSong(song){ return !!song && (song.chartSource === "sporting" || song.chartSource === "perseverance" || song.chartSource === "brokenReality"); }
+function isImportedSong(song){ return !!song && (song.chartSource === "sporting" || song.chartSource === "boxingMatch" || song.chartSource === "perseverance" || song.chartSource === "brokenReality"); }
 function makeChart(song){ if(song.chartSource === "sporting" && window.SPORTING_CHART){ return { ...window.SPORTING_CHART, notes: window.SPORTING_CHART.notes.map(n => ({...n})), timeline: window.SPORTING_CHART.timeline.map(s => ({...s})) }; }
+    if(song.chartSource === "boxingMatch" && window.BOXING_MATCH_CHART){ return { ...window.BOXING_MATCH_CHART, notes: window.BOXING_MATCH_CHART.notes.map(n => ({...n})), timeline: window.BOXING_MATCH_CHART.timeline.map(s => ({...s})) }; }
     if(song.chartSource === "perseverance" && window.PERSEVERANCE_DATA){ return { ...window.PERSEVERANCE_DATA.chart, notes: window.PERSEVERANCE_DATA.chart.notes.map(n => ({...n})), timeline: window.PERSEVERANCE_DATA.chart.timeline.map(s => ({...s})) }; }
     if(song.chartSource === "brokenReality" && window.BROKEN_REALITY_DATA){ return { ...window.BROKEN_REALITY_DATA.chart, notes: window.BROKEN_REALITY_DATA.chart.notes.map(n => ({...n})), timeline: (window.BROKEN_REALITY_DATA.chart.timeline || []).map(s => ({...s})) }; }
     const rng = mulberry32(song.seed); const notes = []; const timeline = []; let beat = song.introBeats ?? 4;
@@ -1198,13 +1202,17 @@ function ensureSportingAudio(){
     if(!state.audio.inst){ state.audio.inst = new Audio("sporting-inst.ogg"); state.audio.inst.preload = "auto"; state.audio.inst.volume = 0.9; }
     if(!state.audio.voices){ state.audio.voices = new Audio("sporting-voices.ogg"); state.audio.voices.preload = "auto"; state.audio.voices.volume = 0.82; }
 }
+function ensureBoxingMatchAudio(){
+    if(!state.audio.boxingInst){ state.audio.boxingInst = new Audio("boxing-match-inst.ogg"); state.audio.boxingInst.preload = "auto"; state.audio.boxingInst.volume = 0.9; }
+    if(!state.audio.boxingVoices){ state.audio.boxingVoices = new Audio("boxing-match-voices.ogg"); state.audio.boxingVoices.preload = "auto"; state.audio.boxingVoices.volume = 0.82; }
+}
 function ensurePerseveranceAudio(){
     if(!state.audio.inst2){ state.audio.inst2 = new Audio("perseverance-inst.ogg"); state.audio.inst2.preload = "auto"; state.audio.inst2.volume = 0.92; }
     if(!state.audio.voices2a){ state.audio.voices2a = new Audio("perseverance-voices-bf.ogg"); state.audio.voices2a.preload = "auto"; state.audio.voices2a.volume = 0.82; }
     if(!state.audio.voices2b){ state.audio.voices2b = new Audio("perseverance-voices-opp.ogg"); state.audio.voices2b.preload = "auto"; state.audio.voices2b.volume = 0.84; }
 }
 function stopExternalAudio(){
-    [state.audio.inst, state.audio.voices, state.audio.inst2, state.audio.voices2a, state.audio.voices2b].forEach(track => {
+    [state.audio.inst, state.audio.voices, state.audio.boxingInst, state.audio.boxingVoices, state.audio.inst2, state.audio.voices2a, state.audio.voices2b].forEach(track => {
         if(!track) return;
         track.pause();
         track.currentTime = 0;
@@ -1247,7 +1255,7 @@ function scheduleMusic(){
         state.nextStep++; state.nextStepTime += state.chart.spb / 4;
     }
 }
-function songTime(){ if(!state.playing) return 0; if(state.currentSong.chartSource === "sporting" && state.audio.inst) return state.audio.inst.currentTime; if(state.currentSong.chartSource === "perseverance" && state.audio.inst2) return state.audio.inst2.currentTime; return !state.audio.ctx ? 0 : state.audio.ctx.currentTime - state.songStart; }
+function songTime(){ if(!state.playing) return 0; if(state.currentSong.chartSource === "sporting" && state.audio.inst) return state.audio.inst.currentTime; if(state.currentSong.chartSource === "boxingMatch" && state.audio.boxingInst) return state.audio.boxingInst.currentTime; if(state.currentSong.chartSource === "perseverance" && state.audio.inst2) return state.audio.inst2.currentTime; return !state.audio.ctx ? 0 : state.audio.ctx.currentTime - state.songStart; }
 function feed(side, text, color){ state.feeds[side] = { text, color, time: performance.now() / 1000 }; }
 function pose(char, lane, kind="hit"){
     if(!state.poses[char]) return;
@@ -1431,7 +1439,7 @@ function arrow(x, y, size, angle, fill, stroke, alpha=1){
     ctx.restore();
 }
 function bg(song, t){
-    if(state.selectedSong === "sporting" && sportingSpritesReady()){
+    if((state.selectedSong === "sporting" || state.selectedSong === "boxingMatch") && sportingSpritesReady()){
         ctx.fillStyle = "#05070b";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         return;
@@ -1569,7 +1577,7 @@ function stage(t){
         drawSnow(t);
         return;
     }
-    if(state.selectedSong === "sporting" && sportingSpritesReady()){
+    if((state.selectedSong === "sporting" || state.selectedSong === "boxingMatch") && sportingSpritesReady()){
         const bgScale = 0.68;
         const charScale = 0.66;
         const bgW = spriteState.images.arenaBack.naturalWidth * bgScale;
@@ -1602,7 +1610,7 @@ function stage(t){
     speaker(106,455,state.currentSong.palette[5]);
     speaker(canvas.width - 106,455,state.currentSong.palette[4]);
     const left = [];
-    if(state.selectedSong === "sporting") left.push({id:"matt",label:"Matt",body:"#ff8a3d",head:"#ffd4aa",detail:"#4d2508",accent:"#4de3ff",scale:1.08,phase:.55,x:314});
+    if(state.selectedSong === "sporting" || state.selectedSong === "boxingMatch") left.push({id:"matt",label:"Matt",body:"#ff8a3d",head:"#ffd4aa",detail:"#4d2508",accent:"#4de3ff",scale:1.08,phase:.55,x:314});
     else if(state.selectedSong === "perseverance") left.push({id:"sans",label:"Sans",body:"#dce7ff",head:"#f7fbff",detail:"#232a36",accent:"#8ec8ff",scale:1.02,phase:.55,x:314});
     left.forEach(c => actor(c.x, 482, c, t));
     actor(962, 486, {id:"player",label:state.mode === "versus" ? "P2" : "Boyfriend",body:"#4de3ff",head:"#ffd9cf",detail:"#0d2a6c",accent:"#ff4fa0",scale:1.02,phase:.4}, t);
@@ -1612,7 +1620,7 @@ function receptors(t){
     ctx.strokeStyle = "rgba(255,255,255,0.1)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(canvas.width * .5, 72); ctx.lineTo(canvas.width * .5, 452); ctx.stroke();
     for(let lane=0; lane<8; lane++){
         const x = laneX(lane);
-        if(state.selectedSong === "sporting" && sportingSpritesReady()){
+        if((state.selectedSong === "sporting" || state.selectedSong === "boxingMatch") && sportingSpritesReady()){
             drawSportingReceptor(lane, x, y);
         } else if(state.selectedSong === "perseverance" && perseveranceSpritesReady()){
             drawPerseveranceReceptor(lane, x, y);
@@ -1639,7 +1647,7 @@ function notes(t){
             drawPerseveranceSustain(n, laneX(lane), n.hit ? receptorY() : y, tailY, alpha * (n.hit ? 0.94 : 1));
         }
         if(n.hit && isHoldNote(n) && t > n.time) continue;
-        if(state.selectedSong === "sporting" && sportingSpritesReady()){
+        if((state.selectedSong === "sporting" || state.selectedSong === "boxingMatch") && sportingSpritesReady()){
             drawSportingNote(lane, laneX(lane), y, 0.76 * scale, alpha);
         } else if(state.selectedSong === "perseverance" && perseveranceSpritesReady()){
             drawPerseveranceNote(lane, laneX(lane), y, scale, alpha);
@@ -1738,7 +1746,7 @@ function frame(now){
         ctx.save();
         ctx.translate(Math.random() * s * 2 - s, Math.random() * s * 2 - s);
     }
-    if(state.playing && (state.audio.ctx || state.audio.inst || state.audio.inst2)){ const t = songTime(); if(t >= 0){ if(!isImportedSong(state.currentSong)) scheduleMusic(); if(state.selectedSong === "perseverance") updatePerseveranceState(Math.max(0, t)); handleMisses(t); updateHoldNotes(t); updateCamera(Math.max(0, t), dt); } refreshHUD(Math.max(0, t)); renderScene(Math.max(0, t), preview); drawHitGlows(); applyDustinBloom(Math.max(0, t)); if(state.health <= 0) finish(true); else if(t >= state.chart.totalTime + .4) finish(false); }
+    if(state.playing && (state.audio.ctx || state.audio.inst || state.audio.boxingInst || state.audio.inst2)){ const t = songTime(); if(t >= 0){ if(!isImportedSong(state.currentSong)) scheduleMusic(); if(state.selectedSong === "perseverance") updatePerseveranceState(Math.max(0, t)); handleMisses(t); updateHoldNotes(t); updateCamera(Math.max(0, t), dt); } refreshHUD(Math.max(0, t)); renderScene(Math.max(0, t), preview); drawHitGlows(); applyDustinBloom(Math.max(0, t)); if(state.health <= 0) finish(true); else if(t >= state.chart.totalTime + .4) finish(false); }
     else renderScene(0, preview);
     if(shakeAge < 0.15 && shakeAge >= 0) ctx.restore();
     requestAnimationFrame(window.frame || frame);
@@ -1758,6 +1766,16 @@ function startSong(id=state.selectedSong){
         state.playing = true;
         state.audio.inst.play();
         state.audio.voices.play();
+    } else if(state.currentSong.chartSource === "boxingMatch") {
+        ensureBoxingMatchAudio();
+        state.audio.boxingInst.currentTime = 0;
+        state.audio.boxingVoices.currentTime = 0;
+        state.songStart = 0;
+        state.nextStep = 0;
+        state.nextStepTime = 0;
+        state.playing = true;
+        state.audio.boxingInst.play();
+        state.audio.boxingVoices.play();
     } else if(state.currentSong.chartSource === "perseverance"){
         ensurePerseveranceAudio();
         state.audio.inst2.currentTime = 0;
@@ -1776,7 +1794,7 @@ function startSong(id=state.selectedSong){
         state.nextStepTime = state.songStart;
         state.playing = true;
     }
-    state.feeds.player.time = -10; state.feeds.opp.time = -10; Object.values(state.poses).forEach(p => { p.time = -10; p.kind = "hit"; }); state.receptorFx.forEach(fx => fx.time = -10); state.perseverance = { canDodge:false, prompt:false, dodging:false, dodged:false, resolved:false, dodgeStart:-10, flashTime:-10, gfAlpha:0 }; state.camera = { zoom: 1, focusX: canvas.width / 2, focusY: canvas.height * 0.45, sideTime: 0, lastSide: "both", highwayX: 0, highwayY: 0 }; ui.p1Box.style.display = state.mode === "versus" ? "block" : "none"; ui.songTitle.textContent = state.currentSong.title; ui.songSub.textContent = state.currentSong.subtitle; ui.statusText.textContent = "Get ready"; ui.statusSub.textContent = state.currentSong.chartSource === "sporting" ? "Sporting is using the original beat and vocal track at full speed." : state.currentSong.chartSource === "perseverance" ? "Perseverance is using the original hard chart, split vocals, pixel section, and dodge mechanic." : "Song starts on the next phrase. Hit right-side notes in solo, or both lanes in versus."; ui.timer.textContent = `0:00 / ${formatTime(state.chart.totalTime)}`; ui.menu.classList.remove("show"); ui.settings.classList.remove("show"); ui.resultsWrap.classList.remove("show");
+    state.feeds.player.time = -10; state.feeds.opp.time = -10; Object.values(state.poses).forEach(p => { p.time = -10; p.kind = "hit"; }); state.receptorFx.forEach(fx => fx.time = -10); state.perseverance = { canDodge:false, prompt:false, dodging:false, dodged:false, resolved:false, dodgeStart:-10, flashTime:-10, gfAlpha:0 }; state.camera = { zoom: 1, focusX: canvas.width / 2, focusY: canvas.height * 0.45, sideTime: 0, lastSide: "both", highwayX: 0, highwayY: 0 }; ui.p1Box.style.display = state.mode === "versus" ? "block" : "none"; ui.songTitle.textContent = state.currentSong.title; ui.songSub.textContent = state.currentSong.subtitle; ui.statusText.textContent = "Get ready"; ui.statusSub.textContent = state.currentSong.chartSource === "sporting" ? "Sporting is using the original beat and vocal track at full speed." : state.currentSong.chartSource === "boxingMatch" ? "Boxing Match is using the imported VS Matt chart with the real instrumental and vocals on the Sporting stage." : state.currentSong.chartSource === "perseverance" ? "Perseverance is using the original hard chart, split vocals, pixel section, and dodge mechanic." : "Song starts on the next phrase. Hit right-side notes in solo, or both lanes in versus."; ui.timer.textContent = `0:00 / ${formatTime(state.chart.totalTime)}`; ui.menu.classList.remove("show"); ui.settings.classList.remove("show"); ui.resultsWrap.classList.remove("show");
 }
 function keydown(e){
     const key = e.key.toLowerCase();
@@ -1824,6 +1842,7 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
   if (statusSub) statusSub.textContent = "Offline build: solo and local versus are available with no server setup.";
 })();
 </script>
+<script src="boxing-fight-mode.js"></script>
 <script src="broken-reality-mode.js"></script>
 <script src="broken-reality-soul-data.js"></script>
 <script src="broken-reality-fix.js"></script>
