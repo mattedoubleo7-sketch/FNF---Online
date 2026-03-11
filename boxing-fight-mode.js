@@ -36,6 +36,41 @@
     return isBoxingSong(song) ? BOXING_RATE : 1;
   }
 
+  function boxingLocalSide() {
+    if (state.mode === 'online' && typeof localSideKey === 'function') return localSideKey();
+    return 'player';
+  }
+
+  function boxingRemoteSide() {
+    return boxingLocalSide() === 'player' ? 'opp' : 'player';
+  }
+
+  function boxingLocalFeedSide() {
+    return boxingLocalSide();
+  }
+
+  function boxingSideForLane(lane) {
+    return lane < 4 ? 'opp' : 'player';
+  }
+
+  function boxingLocalLane(lane) {
+    return boxingSideForLane(lane) === boxingLocalSide() ? lane % 4 : null;
+  }
+
+  function boxingLocalStats() {
+    return state.stats?.[boxingLocalSide()] || state.stats?.player || null;
+  }
+
+  function setBoxingAction(kind, name, time, lane) {
+    if (!state.boxing) return;
+    const slot = kind === 'matt' ? 'mattAction' : 'playerAction';
+    state.boxing[slot] = { name, time, lane: lane ?? state.boxing.lastLane ?? 1 };
+  }
+
+  function setLocalBoxingAction(name, time, lane) {
+    setBoxingAction(boxingLocalSide() === 'opp' ? 'matt' : 'boyfriend', name, time, lane);
+  }
+
   function applyTrackRate(track, rate) {
     if (!track) return;
     try { track.defaultPlaybackRate = rate; } catch {}
@@ -225,7 +260,7 @@
       const t = songTime();
       bx.damageFlashAt = t;
       bx.currentDrain = damage;
-      bx.playerAction = { name: 'hit', time: t, lane: lane ?? bx.lastLane ?? 1 };
+      setLocalBoxingAction('hit', t, lane ?? bx.lastLane ?? 1);
       if (opts.superPunch) {
         bx.stamina = 0;
         bx.superWarnUntil = -10;
@@ -234,7 +269,7 @@
         bx.stamina = clamp(bx.stamina - opts.staminaLoss, 0, 1);
       }
     }
-    feed('player', label, opts.color || (opts.superPunch ? '#ff9c3d' : '#ff6d7a'));
+    feed(boxingLocalFeedSide(), label, opts.color || (opts.superPunch ? '#ff9c3d' : '#ff6d7a'));
     return damage;
   }
 
@@ -243,9 +278,9 @@
     if (state.boxing) {
       const t = songTime();
       state.boxing.stamina = clamp(state.boxing.stamina + staminaAmount, 0, 1);
-      state.boxing.playerAction = { name: actionName, time: t, lane: lane ?? state.boxing.lastLane ?? 1 };
+      setLocalBoxingAction(actionName, t, lane ?? state.boxing.lastLane ?? 1);
     }
-    feed('player', label, color);
+    feed(boxingLocalFeedSide(), label, color);
   }
 
   function resolveBoxingEvent(event, t) {
@@ -301,7 +336,7 @@
       bx.echoPending = null;
       bx.prompt = 'echo';
       bx.promptUntil = t + 1.1;
-      feed('player', 'ECHO', '#4de3ff');
+      feed(boxingLocalFeedSide(), 'ECHO', '#4de3ff');
     }
   }
 
@@ -530,21 +565,21 @@
     const result = originalJudge.apply(this, arguments);
     if (!isBoxingSong()) return result;
     const bx = state.boxing;
-    if (side === 'player') {
+    if (side === boxingLocalSide()) {
       bx.lastLane = lane % 4;
       bx.stamina = clamp(bx.stamina - (BOXING_NOTE_DRAIN[kind] || 0), 0, 1);
       if (kind === 'miss') {
-        bx.playerAction = { name: 'hit', time: songTime(), lane: lane % 4 };
+        setLocalBoxingAction('hit', songTime(), lane % 4);
         if (guardActive()) {
           bx.blockMissBoost = clamp(bx.blockMissBoost + BOXING_BLOCK_MISS_BOOST, 0, BOXING_MAX_BLOCK_BOOST);
           bx.superCharge = clamp(bx.superCharge + 0.12, 0, 3.2);
           updateBoxingScroll();
-          feed('player', 'BLOCK MISS', '#ffb347');
+          feed(boxingLocalFeedSide(), 'BLOCK MISS', '#ffb347');
         }
       }
       return result;
     }
-    if (side === 'opp' && kind !== 'miss') {
+    if (side === boxingRemoteSide() && kind !== 'miss') {
       const drain = mattNoteDrain(kind);
       applyMattNoteDrain(drain);
     }
@@ -570,12 +605,13 @@
 
   const originalHandlePress = handlePress;
   handlePress = function(lane) {
-    const beforeJudged = state.stats?.player?.judged || 0;
+    const beforeJudged = boxingLocalStats()?.judged || 0;
     const beforeTime = songTime();
     const result = originalHandlePress.apply(this, arguments);
-    if (!isBoxingSong() || lane < 4) return result;
-    state.boxing.lastLane = lane % 4;
-    const afterJudged = state.stats?.player?.judged || 0;
+    const localLane = boxingLocalLane(lane);
+    if (!isBoxingSong() || localLane == null) return result;
+    state.boxing.lastLane = localLane;
+    const afterJudged = boxingLocalStats()?.judged || 0;
     if (afterJudged > beforeJudged && state.boxing.echoWindowUntil > beforeTime && state.boxing.echoRemaining > 0 && !state.boxing.echoPending) {
       state.boxing.echoRemaining -= 1;
       state.boxing.echoPending = {
@@ -583,7 +619,7 @@
         dueAt: beforeTime + 0.16,
         expiresAt: beforeTime + 0.36
       };
-      feed('player', 'ECHO', '#4de3ff');
+      feed(boxingLocalFeedSide(), 'ECHO', '#4de3ff');
     }
     return result;
   };
@@ -678,7 +714,7 @@
     if (key === 'q' || key === 'e') {
       e.preventDefault();
       state.boxing.lastDodgeAt = t;
-      state.boxing.playerAction = { name: 'dodge', time: t, lane: state.boxing.lastLane };
+      setLocalBoxingAction('dodge', t, state.boxing.lastLane);
       resetGuardState(false, state.boxing.blockHeld);
       return;
     }
@@ -687,10 +723,10 @@
       if (state.boxing.stamina >= 0.1) {
         state.boxing.stamina = clamp(state.boxing.stamina - 0.1, 0, 1);
         state.boxing.lastParryAt = t;
-        state.boxing.playerAction = { name: 'parry', time: t, lane: state.boxing.lastLane };
-        feed('player', 'PARRY', '#4de3ff');
+        setLocalBoxingAction('parry', t, state.boxing.lastLane);
+        feed(boxingLocalFeedSide(), 'PARRY', '#4de3ff');
       } else {
-        feed('player', 'TIRED', '#ffd35b');
+        feed(boxingLocalFeedSide(), 'TIRED', '#ffd35b');
       }
       return;
     }
@@ -698,26 +734,27 @@
       e.preventDefault();
       if (e.repeat) return;
       if (t < state.boxing.blockCooldownUntil) {
-        feed('player', 'BLOCK CD', '#ffd35b');
+        feed(boxingLocalFeedSide(), 'BLOCK CD', '#ffd35b');
         return;
       }
       state.boxing.blockHeld = true;
       state.boxing.lastBlockAt = t;
-      state.boxing.playerAction = { name: 'block', time: t, lane: state.boxing.lastLane };
+      setLocalBoxingAction('block', t, state.boxing.lastLane);
       state.boxing.superCharge = clamp(state.boxing.superCharge + 0.14, 0, 3.2);
-      feed('player', 'BLOCK', '#b7ff65');
+      feed(boxingLocalFeedSide(), 'BLOCK', '#b7ff65');
       updateBoxingScroll();
       return;
     }
     const lane = state.keyMap[key];
     if (lane === undefined) return;
-    if (lane >= 4) state.boxing.lastLane = lane % 4;
+    const localLane = boxingLocalLane(lane);
+    if (localLane != null) state.boxing.lastLane = localLane;
     if (state.boxing.echoPending && lane === state.boxing.echoPending.lane && t >= state.boxing.echoPending.dueAt - 0.09 && t <= state.boxing.echoPending.dueAt + 0.14) {
       state.boxing.echoPending = null;
       state.health = clamp(state.health + 0.035, 0, 1);
       state.boxing.stamina = clamp(state.boxing.stamina + 0.04, 0, 1);
-      state.boxing.playerAction = { name: 'stando', time: t, lane: lane % 4 };
-      feed('player', 'ECHO', '#4de3ff');
+      setLocalBoxingAction('stando', t, lane % 4);
+      feed(boxingLocalFeedSide(), 'ECHO', '#4de3ff');
     }
   };
   window.addEventListener('keydown', boxingKeyListener);
@@ -766,6 +803,8 @@
 
   if (typeof renderSongs === 'function') renderSongs();
 })();
+
+
 
 
 
