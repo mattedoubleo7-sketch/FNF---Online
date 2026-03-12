@@ -115,6 +115,70 @@ function waitForTrackReady(track, timeoutMs = 12000) {
   });
 }
 
+function importedTracksForSong(songId = state.selectedSong) {
+  const chartSource = SONGS[songId]?.chartSource;
+  if (chartSource === "sporting") {
+    ensureSportingAudio();
+    return [state.audio.inst, state.audio.voices];
+  }
+  if (chartSource === "boxingMatch") {
+    ensureBoxingMatchAudio();
+    return [state.audio.boxingInst, state.audio.boxingVoices];
+  }
+  if (chartSource === "perseverance") {
+    ensurePerseveranceAudio();
+    return [state.audio.inst2, state.audio.voices2a, state.audio.voices2b];
+  }
+  if (chartSource === "brokenReality") {
+    if (typeof window.ensureBrokenRealityAudio === "function") window.ensureBrokenRealityAudio();
+    return [state.audio.inst3, state.audio.voices3a, state.audio.voices3b];
+  }
+  if (chartSource === "challengeEdd") {
+    if (typeof window.ensureChallengeEddAudio === "function") window.ensureChallengeEddAudio();
+    return [state.audio.challengeInst, state.audio.challengeVoices];
+  }
+  if (chartSource === "ourBrokenConstellations") {
+    if (typeof window.ensureFallenStarsAudio === "function") window.ensureFallenStarsAudio();
+    return [state.audio.fallenStarsInst, state.audio.fallenStarsVoices];
+  }
+  return [];
+}
+
+async function primeTrackPlayback(track) {
+  if (!track || track.__onlinePrimed) return;
+  const previousMuted = !!track.muted;
+  const previousVolume = Number.isFinite(track.volume) ? track.volume : 1;
+  const previousTime = Number.isFinite(track.currentTime) ? track.currentTime : 0;
+  try {
+    if (track.readyState === 0) {
+      try { track.load(); } catch {}
+    }
+    track.muted = true;
+    track.volume = 0;
+    const playAttempt = track.play();
+    track.__onlinePrimed = true;
+    if (playAttempt && typeof playAttempt.then === "function") {
+      await Promise.race([
+        playAttempt.catch(() => {}),
+        new Promise(resolve => setTimeout(resolve, 900))
+      ]);
+    }
+  } catch {
+    track.__onlinePrimed = false;
+  } finally {
+    try { track.pause(); } catch {}
+    try { track.currentTime = previousTime; } catch { try { track.currentTime = 0; } catch {} }
+    try { track.volume = previousVolume; } catch {}
+    try { track.muted = previousMuted; } catch {}
+  }
+}
+
+async function primeImportedSongPlayback(songId = state.selectedSong) {
+  const tracks = importedTracksForSong(songId).filter(Boolean);
+  if (!tracks.length) return;
+  await Promise.allSettled(tracks.map(track => primeTrackPlayback(track)));
+}
+
 async function preloadSongForMatch(songId, matchId) {
   state.network.preparing = true;
   state.network.prepareMatchId = matchId;
@@ -192,21 +256,45 @@ function expectedOnlineSongTime() {
   if (state.mode !== "online" || !state.playing || !state.network.matchStartAt) return null;
   return Math.max(0, (serverClockNow() - state.network.matchStartAt) / 1000);
 }
-function syncTrackToTime(track, targetTime, shouldPlay) {
+function syncTrackToTime(track, targetTime, shouldPlay, options = {}) {
   if (!track) return;
   if (track.readyState === 0) {
     try { track.load(); } catch {}
   }
   const duration = Number.isFinite(track.duration) && track.duration > 0 ? track.duration : null;
   const desiredTime = Math.max(0, duration == null ? targetTime : Math.min(targetTime, Math.max(0, duration - 0.05)));
-  const tolerance = shouldPlay ? 0.12 : 0.03;
+  const tolerance = shouldPlay ? Number(options.playTolerance || 0.045) : Number(options.pauseTolerance || 0.02);
   if (Math.abs((track.currentTime || 0) - desiredTime) > tolerance) {
     try { track.currentTime = desiredTime; } catch {}
   }
   if (shouldPlay) {
-    if (track.paused && (duration == null || desiredTime < duration - 0.05)) track.play().catch(() => {});
-  } else if (!track.paused) {
-    track.pause();
+    if (track.paused && !track.__onlineStarting && (duration == null || desiredTime < duration - 0.05)) {
+      track.__onlineStarting = true;
+      try {
+        const playAttempt = track.play();
+        if (playAttempt && typeof playAttempt.then === "function") {
+          playAttempt.then(() => {
+            track.__onlineStarting = false;
+            const freshTarget = expectedOnlineSongTime();
+            if (freshTarget == null) return;
+            const freshDuration = Number.isFinite(track.duration) && track.duration > 0 ? track.duration : null;
+            const freshDesired = Math.max(0, freshDuration == null ? freshTarget : Math.min(freshTarget, Math.max(0, freshDuration - 0.05)));
+            if (Math.abs((track.currentTime || 0) - freshDesired) > 0.016) {
+              try { track.currentTime = freshDesired; } catch {}
+            }
+          }).catch(() => {
+            track.__onlineStarting = false;
+          });
+        } else {
+          track.__onlineStarting = false;
+        }
+      } catch {
+        track.__onlineStarting = false;
+      }
+    }
+  } else {
+    track.__onlineStarting = false;
+    if (!track.paused) track.pause();
   }
 }
 
@@ -215,22 +303,24 @@ function syncOnlinePlayback(force = false) {
   if (targetTime == null) return null;
   const localNow = Date.now();
   const now = serverClockNow();
-  if (!force && localNow - (state.network.lastTrackSync || 0) < 120) return targetTime;
+  const syncGap = targetTime < 10 ? 55 : 85;
+  if (!force && localNow - (state.network.lastTrackSync || 0) < syncGap) return targetTime;
   state.network.lastTrackSync = localNow;
   const shouldPlay = now + 40 >= state.network.matchStartAt;
+  const syncOptions = { playTolerance: 0.045, pauseTolerance: 0.02 };
   if (state.currentSong.chartSource === "sporting") {
     ensureSportingAudio();
-    syncTrackToTime(state.audio.inst, targetTime, shouldPlay);
-    syncTrackToTime(state.audio.voices, targetTime, shouldPlay);
+    syncTrackToTime(state.audio.inst, targetTime, shouldPlay, syncOptions);
+    syncTrackToTime(state.audio.voices, targetTime, shouldPlay, syncOptions);
   } else if (state.currentSong.chartSource === "boxingMatch") {
     ensureBoxingMatchAudio();
-    syncTrackToTime(state.audio.boxingInst, targetTime, shouldPlay);
-    syncTrackToTime(state.audio.boxingVoices, targetTime, shouldPlay);
+    syncTrackToTime(state.audio.boxingInst, targetTime, shouldPlay, syncOptions);
+    syncTrackToTime(state.audio.boxingVoices, targetTime, shouldPlay, syncOptions);
   } else if (state.currentSong.chartSource === "perseverance") {
     ensurePerseveranceAudio();
-    syncTrackToTime(state.audio.inst2, targetTime, shouldPlay);
-    syncTrackToTime(state.audio.voices2a, targetTime, shouldPlay);
-    syncTrackToTime(state.audio.voices2b, targetTime, shouldPlay);
+    syncTrackToTime(state.audio.inst2, targetTime, shouldPlay, syncOptions);
+    syncTrackToTime(state.audio.voices2a, targetTime, shouldPlay, syncOptions);
+    syncTrackToTime(state.audio.voices2b, targetTime, shouldPlay, syncOptions);
   }
   return targetTime;
 }
@@ -910,7 +1000,7 @@ startSong = function(id = state.selectedSong, options = {}){
   }
   syncOnlinePlayback(true);
 };
-ui.playBtn.onclick = () => {
+ui.playBtn.onclick = async () => {
   if (!state.network.roomId) {
     setOnlineMessage("Join a room first", "Host a room or enter a room code before readying up.");
     return;
@@ -923,12 +1013,17 @@ ui.playBtn.onclick = () => {
     setOnlineMessage("Loading match", "Both players are already ready. Waiting for the 8 second load countdown.");
     return;
   }
-  emitReadyState(!localReady());
+  const nextReady = !localReady();
+  if (nextReady) {
+    try { await primeImportedSongPlayback(state.selectedSong); } catch {}
+  }
+  emitReadyState(nextReady);
 };
 
-ui.replayBtn.onclick = () => {
+ui.replayBtn.onclick = async () => {
   if (!state.network.socket || !state.network.roomId) return;
   ui.resultsWrap.classList.remove("show");
+  try { await primeImportedSongPlayback(state.selectedSong); } catch {}
   emitReadyState(true);
   updateOnlinePanel();
 };
