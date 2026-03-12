@@ -8,6 +8,13 @@
     const lerp = (a, b, t) => a + (b - a) * clamp01(t);
     const nowSec = () => performance.now() / 1000;
     const ce = { ready: false, images: {} };
+    const tordRenderCache = {
+      bg: { key: "", canvas: null, width: 0, height: 0 },
+      backdrops: {},
+      portrait: { key: "", canvas: null, width: 0, height: 0 }
+    };
+    const TORD_SIDE_CLIP_WIDTH = 290;
+    const TORD_SIDE_BACKDROP_WIDTH = 272;
     CE.stage.layout = {
       skyScale: 0.42,
       patioScale: 0.42,
@@ -240,24 +247,109 @@
       return { x: Math.sin(t * 90) * amount, y: Math.cos(t * 66) * amount * 0.58 };
     }
 
-    function drawSidePortraitBackdrop(side) {
-      const width = 272;
-      ctx.save();
+    function atlasFrameKey(frame) {
+      if (!frame) return "";
+      return [
+        frame.x, frame.y, frame.w, frame.h,
+        frame.fw || frame.w,
+        frame.fh || frame.h,
+        frame.fx || 0,
+        frame.fy || 0,
+        frame.rotated ? 1 : 0
+      ].join(",");
+    }
+
+    function createLayerCanvas(width, height) {
+      const layer = document.createElement("canvas");
+      layer.width = Math.max(1, Math.round(width));
+      layer.height = Math.max(1, Math.round(height));
+      return layer;
+    }
+
+    function prepareLayerCanvas(cacheEntry, width, height) {
+      if (!cacheEntry.canvas || cacheEntry.canvas.width !== width || cacheEntry.canvas.height !== height) {
+        cacheEntry.canvas = createLayerCanvas(width, height);
+      }
+      const layerCtx = cacheEntry.canvas.getContext("2d");
+      layerCtx.setTransform(1, 0, 0, 1, 0, 0);
+      layerCtx.clearRect(0, 0, cacheEntry.canvas.width, cacheEntry.canvas.height);
+      return layerCtx;
+    }
+
+    function drawAtlasSubToContext(layerCtx, image, frame, dx, dy, scale) {
+      layerCtx.imageSmoothingEnabled = true;
+      layerCtx.imageSmoothingQuality = "high";
+      if (frame.rotated) {
+        layerCtx.save();
+        layerCtx.translate(dx, dy + frame.w * scale);
+        layerCtx.rotate(-Math.PI / 2);
+        layerCtx.drawImage(image, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w * scale, frame.h * scale);
+        layerCtx.restore();
+        return;
+      }
+      layerCtx.drawImage(image, frame.x, frame.y, frame.w, frame.h, dx, dy, frame.w * scale, frame.h * scale);
+    }
+
+    function drawAtlasFrameToContext(layerCtx, image, frame, x, y, scale, alpha = 1, flipX = false) {
+      const fw = frame.fw || frame.w;
+      const fh = frame.fh || frame.h;
+      const fx = frame.fx || 0;
+      const fy = frame.fy || 0;
+      const dx = -fw * scale / 2 - fx * scale;
+      const dy = -fh * scale - fy * scale;
+      layerCtx.save();
+      layerCtx.globalAlpha = alpha;
+      layerCtx.translate(x, y);
+      if (flipX) layerCtx.scale(-1, 1);
+      drawAtlasSubToContext(layerCtx, image, frame, dx, dy, scale);
+      layerCtx.restore();
+    }
+
+    function cachedTordBackground(layout) {
+      const img = ce.images.tordBg;
+      if (!imageReady(img)) return null;
+      const width = Math.max(1, Math.round(img.naturalWidth * layout.tordBgScale));
+      const height = Math.max(1, Math.round(img.naturalHeight * layout.tordBgScale));
+      const key = [img.currentSrc || img.src || "tordBg", width, height].join("|");
+      if (tordRenderCache.bg.key !== key || !tordRenderCache.bg.canvas) {
+        const layer = createLayerCanvas(width, height);
+        const layerCtx = layer.getContext("2d");
+        layerCtx.imageSmoothingEnabled = true;
+        layerCtx.imageSmoothingQuality = "high";
+        layerCtx.drawImage(img, 0, 0, width, height);
+        tordRenderCache.bg = { key, canvas: layer, width, height };
+      }
+      return tordRenderCache.bg;
+    }
+
+    function cachedSideBackdrop(side) {
+      const height = Math.max(1, canvas.height);
+      const key = `${side}|${height}`;
+      const current = tordRenderCache.backdrops[side];
+      if (current?.key === key && current.canvas) return current.canvas;
+      const layer = createLayerCanvas(TORD_SIDE_BACKDROP_WIDTH, height);
+      const layerCtx = layer.getContext("2d");
+      const grad = layerCtx.createLinearGradient(0, 0, TORD_SIDE_BACKDROP_WIDTH, 0);
       if (side === "left") {
-        const grad = ctx.createLinearGradient(0, 0, width, 0);
         grad.addColorStop(0, "rgba(145,12,28,0.84)");
         grad.addColorStop(0.75, "rgba(145,12,28,0.36)");
         grad.addColorStop(1, "rgba(145,12,28,0)");
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, width, canvas.height);
       } else {
-        const grad = ctx.createLinearGradient(canvas.width - width, 0, canvas.width, 0);
         grad.addColorStop(0, "rgba(145,12,28,0)");
         grad.addColorStop(0.25, "rgba(145,12,28,0.36)");
         grad.addColorStop(1, "rgba(145,12,28,0.84)");
-        ctx.fillStyle = grad;
-        ctx.fillRect(canvas.width - width, 0, width, canvas.height);
       }
+      layerCtx.fillStyle = grad;
+      layerCtx.fillRect(0, 0, layer.width, layer.height);
+      tordRenderCache.backdrops[side] = { key, canvas: layer };
+      return layer;
+    }
+
+    function drawSidePortraitBackdrop(side) {
+      const backdrop = cachedSideBackdrop(side);
+      if (!backdrop) return;
+      ctx.save();
+      ctx.drawImage(backdrop, side === "left" ? 0 : canvas.width - backdrop.width, 0);
       ctx.restore();
     }
 
@@ -282,16 +374,57 @@
       const info = sidePortraitState(t, playerKey);
       if (!info) return;
       const side = playerKey.startsWith("edd") ? "left" : "right";
+      const result = animationFrame(info.state.sprite, info.state.animName, info.state.elapsed, info.state.loop);
+      if (!result?.frame) return;
+      const drawScale = info.scale * (side === "left" ? 1.92 : 1.8);
+      const rawOffset = result.anim?.offset || result.anim?.offsets || [0, 0];
+      const localX = side === "left" ? 132 : TORD_SIDE_CLIP_WIDTH - 124;
+      const localY = side === "left" ? canvas.height - 16 : canvas.height - 12;
+      const portraitKey = [
+        side,
+        canvas.height,
+        info.image?.currentSrc || info.image?.src || playerKey,
+        info.state.animName,
+        atlasFrameKey(result.frame),
+        Number(rawOffset?.[0] || 0),
+        Number(rawOffset?.[1] || 0),
+        drawScale.toFixed(4)
+      ].join("|");
+      if (tordRenderCache.portrait.key !== portraitKey || !tordRenderCache.portrait.canvas) {
+        const layerCtx = prepareLayerCanvas(tordRenderCache.portrait, TORD_SIDE_CLIP_WIDTH, Math.max(1, canvas.height));
+        const backdrop = cachedSideBackdrop(side);
+        if (backdrop) {
+          const backdropX = side === "left" ? 0 : TORD_SIDE_CLIP_WIDTH - backdrop.width;
+          layerCtx.drawImage(backdrop, backdropX, 0);
+        }
+        drawAtlasFrameToContext(
+          layerCtx,
+          info.image,
+          result.frame,
+          localX + Number(rawOffset?.[0] || 0) * drawScale,
+          localY + Number(rawOffset?.[1] || 0) * drawScale,
+          drawScale,
+          0.96,
+          false
+        );
+        tordRenderCache.portrait.key = portraitKey;
+        tordRenderCache.portrait.width = TORD_SIDE_CLIP_WIDTH;
+        tordRenderCache.portrait.height = Math.max(1, canvas.height);
+      }
+      if (tordRenderCache.portrait.canvas) {
+        ctx.drawImage(tordRenderCache.portrait.canvas, side === "left" ? 0 : canvas.width - TORD_SIDE_CLIP_WIDTH, 0);
+        return;
+      }
       drawSidePortraitBackdrop(side);
       ctx.save();
       if (side === "left") {
         ctx.beginPath();
-        ctx.rect(0, 0, 290, canvas.height);
+        ctx.rect(0, 0, TORD_SIDE_CLIP_WIDTH, canvas.height);
         ctx.clip();
         drawSpriteState(info.state, info.image, 132, canvas.height - 16, info.scale * 1.92, false, 0.96);
       } else {
         ctx.beginPath();
-        ctx.rect(canvas.width - 290, 0, 290, canvas.height);
+        ctx.rect(canvas.width - TORD_SIDE_CLIP_WIDTH, 0, TORD_SIDE_CLIP_WIDTH, canvas.height);
         ctx.clip();
         drawSpriteState(info.state, info.image, canvas.width - 124, canvas.height - 12, info.scale * 1.8, false, 0.96);
       }
@@ -735,19 +868,19 @@
 
     function drawTordStage(t, phase) {
       const layout = CE.stage.layout;
-      const img = ce.images.tordBg;
-      if (!imageReady(img)) {
+      const bgCache = cachedTordBackground(layout);
+      if (!bgCache?.canvas) {
         drawNormalStage(t, phase);
         return;
       }
       const shake = challengeTordShake(t, phase);
-      const width = img.naturalWidth * layout.tordBgScale;
-      const height = img.naturalHeight * layout.tordBgScale;
+      const width = bgCache.width;
+      const height = bgCache.height;
       const x = (canvas.width - width) / 2;
       const y = (canvas.height - height) / 2;
       ctx.save();
       ctx.translate(shake.x, shake.y);
-      drawSimpleImage("tordBg", x, y, layout.tordBgScale);
+      ctx.drawImage(bgCache.canvas, x, y);
       const oppState = opponentSpriteState(t, phase.opp);
       if (oppState) drawGroundedSpriteState(oppState.state, oppState.image, canvas.width * 0.5, 654, oppState.scale * 1.18, oppState.flipX, 1);
       ctx.restore();
