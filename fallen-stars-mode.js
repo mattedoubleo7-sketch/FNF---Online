@@ -8,6 +8,7 @@
     const fsState = { ready: false, images: {}, groundCache: {} };
     const DEFAULT_NOTE_HOLD = window.PERSEVERANCE_DATA?.sprites?.notes?.default?.hold || null;
     const nowSec = () => performance.now() / 1000;
+    const clamp01 = value => Math.max(0, Math.min(1, value));
     const DIR_TO_ANIM = {
       left: "singLEFT",
       down: "singDOWN",
@@ -40,6 +41,8 @@
         boyfriend: { x: 806, y: 632 }
       }
     };
+    const FS_ADD_CAMERA_ZOOM_TIMES = [19.672131, 27.540984, 29.508197, 31.47541, 33.442623, 35.409836, 37.377049, 39.344262, 41.311475, 45.491803, 49.180328, 51.147541, 53.114754, 55.081967, 57.04918, 64.918033, 82.622951, 94.42623, 96.393443, 97.377049, 110.163934, 112.131148, 113.114754, 127.868852, 129.836066, 131.803279, 143.606557, 145.57377, 180.983607, 182.95082, 184.918033, 186.885246, 188.852459, 190.819672, 192.786885, 194.754098, 196.721311, 204.590164, 212.459016, 228.196721];
+    const FS_WILTER_CAMERA_ZOOMS = [[180.980533, 0.92], [182.947746, 0.92], [184.914959, 0.92], [186.882172, 0.92], [188.849385, 0.92], [190.816598, 0.92], [192.783811, 0.92], [194.751025, 0.92], [228.193648, 0.72], [230.163934, 0.72], [232.131148, 0.72], [234.098361, 0.72], [236.065574, 0.72], [238.032787, 0.72], [240, 0.72], [241.967213, 0.72], [243.934426, 0.72], [245.901639, 0.72], [247.868852, 0.72], [249.836066, 0.72], [251.803279, 0.72], [253.770492, 0.72], [255.737705, 0.72], [257.704918, 0.72]];
 
     state.poses.sans = state.poses.sans || { lane: 1, time: -10, kind: "hit" };
     state.poses.gf = state.poses.gf || { lane: 1, time: -10, kind: "hit" };
@@ -70,6 +73,7 @@
     const baseFinish = finish;
     const baseBg = bg;
     const baseStage = stage;
+    const baseUpdateCamera = updateCamera;
     const baseReceptors = receptors;
     const baseNotes = notes;
     const baseCameraTargets = cameraTargets;
@@ -88,6 +92,30 @@
       if (role === "opponent") return FS.sprites.sans;
       if (role === "girlfriend") return FS.sprites.gf;
       return FS.sprites.boyfriend;
+    }
+
+    function resetVfxState() {
+      return {
+        addIndex: 0,
+        wilterIndex: 0,
+        pulses: [],
+        trails: [],
+        blackAlpha: 0,
+        blackHoldUntil: -1,
+        blackCount: 0,
+        lastTime: -1
+      };
+    }
+
+    function fallenStarsVfx() {
+      state.fallenStars = state.fallenStars || resetVfxState();
+      return state.fallenStars;
+    }
+
+    function elasticOut(value) {
+      const t = clamp01(value);
+      if (t === 0 || t === 1) return t;
+      return Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * (2 * Math.PI / 3)) + 1;
     }
 
     function roleBaseScale(role) {
@@ -201,6 +229,42 @@
       };
     }
 
+    function roleRenderState(role, poseKey, t) {
+      const sprite = spriteByRole(role);
+      const imageKey = role === "boyfriend" ? "boyfriend" : (role === "girlfriend" ? "gf" : "sans");
+      const image = fsState.images[imageKey];
+      if (!sprite || !imageReady(image)) return null;
+      const animState = spriteAnimState(sprite, poseKey, t);
+      const anim = sprite.animations[animState.name] || sprite.animations.idle;
+      if (!anim?.frames?.length) return null;
+      const frame = frameFromList(anim.frames, animState.elapsed, Number(anim.fps || 24), animState.loop);
+      if (!frame) return null;
+      const scale = roleBaseScale(role) * Number(sprite.scale || 1);
+      const groundAnchor = roleGroundAnchor(role);
+      const fw = Number(frame.fw || frame.w || 0);
+      const fh = Number(frame.fh || frame.h || 0);
+      const fx = Number(frame.fx || 0);
+      const fy = Number(frame.fy || 0);
+      const currentOffset = animOffset(anim);
+      const currentGround = frameGroundPoint(image, frame);
+      const pos = {
+        x: groundAnchor.x + (fw * 0.5 + fx - currentGround.x - currentOffset.x) * scale,
+        y: groundAnchor.y + (fh + fy - currentGround.y - currentOffset.y) * scale
+      };
+      const flipX = role === "boyfriend" ? false : !!sprite.flipX;
+      return {
+        role,
+        sprite,
+        image,
+        anim,
+        frame,
+        scale,
+        pos,
+        flipX,
+        frameHeight: Number(frame.fh || frame.h || 0) * scale
+      };
+    }
+
     function drawShadow(x, y, width, alpha = 0.24) {
       ctx.save();
       ctx.globalAlpha = alpha;
@@ -266,40 +330,113 @@
 
 
     function drawRole(role, poseKey, t) {
-      const sprite = spriteByRole(role);
-      const imageKey = role === "boyfriend" ? "boyfriend" : (role === "girlfriend" ? "gf" : "sans");
-      const image = fsState.images[imageKey];
-      if (!sprite || !imageReady(image)) return;
-      const animState = spriteAnimState(sprite, poseKey, t);
-      const anim = sprite.animations[animState.name] || sprite.animations.idle;
-      if (!anim?.frames?.length) return;
-      const frame = frameFromList(anim.frames, animState.elapsed, Number(anim.fps || 24), animState.loop);
-      if (!frame) return;
-      const scale = roleBaseScale(role) * Number(sprite.scale || 1);
-      const groundAnchor = roleGroundAnchor(role);
-      const fw = Number(frame.fw || frame.w || 0);
-      const fh = Number(frame.fh || frame.h || 0);
-      const fx = Number(frame.fx || 0);
-      const fy = Number(frame.fy || 0);
-      const currentOffset = animOffset(anim);
-      const currentGround = frameGroundPoint(image, frame);
-      const pos = {
-        x: groundAnchor.x + (fw * 0.5 + fx - currentGround.x - currentOffset.x) * scale,
-        y: groundAnchor.y + (fh + fy - currentGround.y - currentOffset.y) * scale
-      };
-      const shadowWidth = Math.max(92, (frame.fw || frame.w || 240) * scale * (role === "opponent" ? 0.48 : 0.42));
+      const render = roleRenderState(role, poseKey, t);
+      if (!render) return;
+      const shadowWidth = Math.max(92, (render.frame.fw || render.frame.w || 240) * render.scale * (role === "opponent" ? 0.48 : 0.42));
 
       if (role !== "girlfriend") {
         drawShadow(
-          pos.x,
-          pos.y + 12,
+          render.pos.x,
+          render.pos.y + 12,
           shadowWidth,
           role === "boyfriend" ? 0.22 : 0.28
         );
       }
 
-      const flipX = role === "boyfriend" ? false : !!sprite.flipX;
-      drawAtlasFrame(image, frame, pos.x, pos.y, scale, 1, flipX);
+      drawAtlasFrame(render.image, render.frame, render.pos.x, render.pos.y, render.scale, 1, render.flipX);
+    }
+
+    function spawnRoleTrail(role, poseKey, t, alpha = 0.6) {
+      const render = roleRenderState(role, poseKey, t);
+      if (!render) return;
+      fallenStarsVfx().trails.push({
+        ...render,
+        createdAt: t,
+        alpha
+      });
+    }
+
+    function triggerWilterZoom(t, targetZoom) {
+      const vfx = fallenStarsVfx();
+      vfx.pulses.push({ type: "wilter", createdAt: t, amount: 0.045 + targetZoom * 0.068 });
+      if (vfx.blackCount < 3) {
+        vfx.blackAlpha = Math.max(vfx.blackAlpha, (vfx.blackCount + 1) * 0.22);
+        vfx.blackHoldUntil = t + 0.08;
+      }
+      vfx.blackCount += 1;
+      spawnRoleTrail("boyfriend", "player", t, 0.6);
+      spawnRoleTrail("opponent", "sans", t, 1);
+    }
+
+    function updateVfxTimeline(t, dt) {
+      const vfx = fallenStarsVfx();
+      if (vfx.lastTime >= 0 && t + 0.25 < vfx.lastTime) {
+        state.fallenStars = resetVfxState();
+      }
+      vfx.lastTime = t;
+      while (vfx.addIndex < FS_ADD_CAMERA_ZOOM_TIMES.length && t >= FS_ADD_CAMERA_ZOOM_TIMES[vfx.addIndex] - 0.001) {
+        vfx.pulses.push({ type: "add", createdAt: FS_ADD_CAMERA_ZOOM_TIMES[vfx.addIndex], amount: 0.055 });
+        vfx.addIndex += 1;
+      }
+      while (vfx.wilterIndex < FS_WILTER_CAMERA_ZOOMS.length && t >= FS_WILTER_CAMERA_ZOOMS[vfx.wilterIndex][0] - 0.001) {
+        const [eventTime, targetZoom] = FS_WILTER_CAMERA_ZOOMS[vfx.wilterIndex];
+        triggerWilterZoom(eventTime, targetZoom);
+        vfx.wilterIndex += 1;
+      }
+      vfx.pulses = vfx.pulses.filter(pulse => {
+        const age = t - pulse.createdAt;
+        return age >= 0 && age <= (pulse.type === "wilter" ? 0.76 : 0.22);
+      });
+      vfx.trails = vfx.trails.filter(trail => {
+        const age = t - trail.createdAt;
+        return age >= 0 && age <= 1.02;
+      });
+      if (t > vfx.blackHoldUntil) {
+        vfx.blackAlpha = Math.max(0, vfx.blackAlpha - Math.max(0.0001, dt) * 1.9);
+      }
+    }
+
+    function currentVfxZoom(t) {
+      let zoom = 0;
+      for (const pulse of fallenStarsVfx().pulses) {
+        const age = Math.max(0, t - pulse.createdAt);
+        if (pulse.type === "add") {
+          const p = clamp01(age / 0.22);
+          zoom += pulse.amount * (1 - p) * (1 - p);
+          continue;
+        }
+        const p = clamp01(age / 0.76);
+        const settle = 1 - p;
+        zoom += pulse.amount * (0.22 + 0.78 * settle + Math.sin(p * Math.PI * 3.2) * 0.16 * settle);
+      }
+      return zoom;
+    }
+
+    function drawVfxTrails(t) {
+      const vfx = fallenStarsVfx();
+      for (const trail of vfx.trails) {
+        const age = Math.max(0, t - trail.createdAt);
+        const p = clamp01(age / 1);
+        const alpha = trail.alpha * (1 - p);
+        if (alpha <= 0.001) continue;
+        const scaleMul = 1 + 0.35 * p;
+        const lift = (trail.frameHeight / 6) * p;
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.filter = `blur(${(1.5 + p * 2.4).toFixed(1)}px) brightness(${trail.role === "opponent" ? 1.95 : 1.45})`;
+        drawAtlasFrame(trail.image, trail.frame, trail.pos.x, trail.pos.y - lift, trail.scale * scaleMul, alpha, trail.flipX);
+        ctx.restore();
+      }
+    }
+
+    function drawVfxBlackOverlay() {
+      const alpha = Math.min(0.66, fallenStarsVfx().blackAlpha);
+      if (alpha <= 0.001) return;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
     }
 
     function drawStageBackdrop(t) {
@@ -490,6 +627,7 @@
         state.camera.sideTime = 0;
         state.camera.lastSide = "both";
       }
+      state.fallenStars = resetVfxState();
     }
 
     startSong = function(id = state.selectedSong, options = {}) {
@@ -606,14 +744,23 @@
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     };
 
+    updateCamera = function(t, dt) {
+      baseUpdateCamera(t, dt);
+      if (state.selectedSong !== SONG_ID) return;
+      updateVfxTimeline(t, dt);
+      state.camera.zoom += currentVfxZoom(t);
+    };
+
     stage = function(t) {
       if (state.selectedSong !== SONG_ID) return baseStage(t);
       initAssets();
       drawStageBackdrop(t);
       drawStageGround();
+      drawVfxTrails(t);
       drawRole("girlfriend", "gf", t);
       drawRole("opponent", "sans", t);
       drawRole("boyfriend", "player", t);
+      drawVfxBlackOverlay();
     };
 
     receptors = function(t) {
