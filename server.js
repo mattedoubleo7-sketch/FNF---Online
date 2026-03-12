@@ -237,9 +237,13 @@ function createGameServer({ port = Number(process.env.PORT) || 3000, host = proc
     res.sendFile(path.join(ROOT, "downloads.html"));
   });
 
-  app.get("/play", (_req, res) => {
-    res.sendFile(path.join(ROOT, "FNF - Online.html"));
-  });
+app.get("/play", (_req, res) => {
+  res.sendFile(path.join(ROOT, "FNF - Online.html"));
+});
+
+app.get("/offline", (_req, res) => {
+  res.sendFile(path.join(ROOT, "FNF - Offline.html"));
+});
 
   io.on("connection", socket => {
     socket.data.user = { id: socket.id, username: makePlayerName() };
