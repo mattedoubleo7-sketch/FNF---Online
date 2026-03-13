@@ -1257,6 +1257,7 @@ function scheduleMusic(){
     }
 }
 function songTime(){ if(!state.playing) return 0; if(state.currentSong.chartSource === "sporting" && state.audio.inst) return state.audio.inst.currentTime; if(state.currentSong.chartSource === "boxingMatch" && state.audio.boxingInst) return state.audio.boxingInst.currentTime; if(state.currentSong.chartSource === "perseverance" && state.audio.inst2) return state.audio.inst2.currentTime; return !state.audio.ctx ? 0 : state.audio.ctx.currentTime - state.songStart; }
+function songEndTime(){ return Number(state.chart?.totalTime || 0); }
 function feed(side, text, color){ state.feeds[side] = { text, color, time: performance.now() / 1000 }; }
 function pose(char, lane, kind="hit"){
     if(!state.poses[char]) return;
@@ -1395,7 +1396,7 @@ function updateCamera(t, dt){
 }
 function refreshHUD(t){
     const acc = accuracy(state.stats.player), sec = currentSection(t / state.chart.spb), p = state.stats.player;
-    ui.score.textContent = p.score.toLocaleString(); ui.combo.textContent = `Max Combo ${p.maxCombo}`; ui.accuracy.textContent = (acc * 100).toFixed(2) + "%"; ui.rating.textContent = rating(acc); ui.healthFill.style.width = (state.health * 100).toFixed(1) + "%"; ui.timer.textContent = `${formatTime(t)} / ${formatTime(state.chart.totalTime)}`;
+    ui.score.textContent = p.score.toLocaleString(); ui.combo.textContent = `Max Combo ${p.maxCombo}`; ui.accuracy.textContent = (acc * 100).toFixed(2) + "%"; ui.rating.textContent = rating(acc); ui.healthFill.style.width = (state.health * 100).toFixed(1) + "%"; ui.timer.textContent = `${formatTime(t)} / ${formatTime(songEndTime())}`;
     if(state.mode === "versus"){ ui.p1Score.textContent = state.stats.opp.score.toLocaleString(); ui.p1Combo.textContent = `Combo ${state.stats.opp.combo}`; }
     if(state.selectedSong === "perseverance" && window.PERSEVERANCE_DATA){ const sec = perseveranceSection(t); if(sec && !state.perseverance.prompt){ ui.statusText.textContent = sec.label; ui.statusSub.textContent = sec.mode === "pixel" ? "Sans swaps into the original pixel phase and the noteskin changes with him." : sec.mode === "forest-dodge" ? "Keep playing. The gaster blaster dodge is scripted near the end." : "Imported Friday Night Dustin chart and stage are active."; } return; }
     if(sec){ ui.statusText.textContent = sec.label; ui.statusSub.textContent = state.mode === "solo" ? (sec.turn === "player" ? "Your phrase. Hold the right lane and keep the combo alive." : sec.turn === "opp" ? "Opponent verse. Watch the left side perform before your answer." : sec.turn === "trade" ? "Trade bars. Each side gets a clean reply window." : "Both sides are active. Expect denser patterns.") : "Versus mode active. Player 1 owns the left lane, Player 2 owns the right lane."; }
@@ -1747,7 +1748,7 @@ function frame(now){
         ctx.save();
         ctx.translate(Math.random() * s * 2 - s, Math.random() * s * 2 - s);
     }
-    if(state.playing && (state.audio.ctx || state.audio.inst || state.audio.boxingInst || state.audio.inst2)){ const t = songTime(); if(t >= 0){ if(!isImportedSong(state.currentSong)) scheduleMusic(); if(state.selectedSong === "perseverance") updatePerseveranceState(Math.max(0, t)); handleMisses(t); updateHoldNotes(t); updateCamera(Math.max(0, t), dt); } refreshHUD(Math.max(0, t)); renderScene(Math.max(0, t), preview); drawHitGlows(); applyDustinBloom(Math.max(0, t)); if(state.health <= 0) finish(true); else if(t >= state.chart.totalTime + .4) finish(false); }
+    if(state.playing && (state.audio.ctx || state.audio.inst || state.audio.boxingInst || state.audio.inst2)){ const t = songTime(); if(t >= 0){ if(!isImportedSong(state.currentSong)) scheduleMusic(); if(state.selectedSong === "perseverance") updatePerseveranceState(Math.max(0, t)); handleMisses(t); updateHoldNotes(t); updateCamera(Math.max(0, t), dt); } refreshHUD(Math.max(0, t)); renderScene(Math.max(0, t), preview); drawHitGlows(); applyDustinBloom(Math.max(0, t)); if(state.health <= 0) finish(true); else if(t >= songEndTime() + .4) finish(false); }
     else renderScene(0, preview);
     if(shakeAge < 0.15 && shakeAge >= 0) ctx.restore();
     requestAnimationFrame(window.frame || frame);

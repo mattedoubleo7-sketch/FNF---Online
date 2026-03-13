@@ -112,6 +112,7 @@
     const baseMakeChart = makeChart;
     const baseStopExternalAudio = stopExternalAudio;
     const baseSongTime = songTime;
+    const baseSongEndTime = songEndTime;
     const baseStartSong = startSong;
     const baseHandleMisses = handleMisses;
     const baseUpdateHoldNotes = updateHoldNotes;
@@ -469,9 +470,8 @@
 
     function totalTime() {
       const noteEnd = noteEndTime();
-      const timelineEnd = (CE.chart?.timeline || []).reduce((max, section) => Math.max(max, Number(section.endTime || 0)), 0);
       const durations = [state.audio.challengeInst?.duration, state.audio.challengeVoices?.duration].filter(value => Number.isFinite(value) && value > 0);
-      const chartEnd = Math.max(Number(CE.chart?.totalTime || 0), timelineEnd, noteEnd + 2);
+      const chartEnd = Math.max(Number(CE.chart?.totalTime || 0), noteEnd + 2);
       return durations.length ? Math.max(chartEnd, ...durations) : chartEnd;
     }
 
@@ -989,6 +989,7 @@
     };
 
     songTime = () => state.currentSong?.chartSource === "challengeEdd" && state.audio.challengeInst ? state.audio.challengeInst.currentTime : baseSongTime();
+    songEndTime = () => state.currentSong?.chartSource === "challengeEdd" ? totalTime() : baseSongEndTime();
 
     startSong = function(id = state.selectedSong, options = {}) {
       const song = SONGS[id] || state.currentSong;

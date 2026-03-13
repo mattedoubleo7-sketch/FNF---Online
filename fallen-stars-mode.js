@@ -68,6 +68,7 @@
     const baseMakeChart = makeChart;
     const baseStopExternalAudio = stopExternalAudio;
     const baseSongTime = songTime;
+    const baseSongEndTime = songEndTime;
     const baseStartSong = startSong;
     const baseRefreshHUD = refreshHUD;
     const baseFinish = finish;
@@ -173,13 +174,18 @@
       return [state.audio.fallenStarsInst, state.audio.fallenStarsVoices];
     };
 
+    function noteEndTime() {
+      return (FS.chart?.notes || []).reduce((max, note) => Math.max(max, Number(note.time || 0) + Math.max(0, Number(note.sLen || 0))), 0);
+    }
+
     function totalTime() {
       ensureAudioTracks();
       const tracks = [state.audio.fallenStarsInst, state.audio.fallenStarsVoices].filter(Boolean);
       const durations = tracks
         .map(track => Number(track.duration || 0))
         .filter(duration => Number.isFinite(duration) && duration > 0);
-      return durations.length ? Math.max(Number(FS.chart.totalTime || 0), ...durations) : Number(FS.chart.totalTime || 0);
+      const chartEnd = Math.max(noteEndTime() + 2, Number(FS.chart?.songEndTime || 0));
+      return durations.length ? Math.max(chartEnd, ...durations) : chartEnd;
     }
 
     function animDuration(anim) {
@@ -609,6 +615,10 @@
         return state.audio.fallenStarsInst.currentTime;
       }
       return baseSongTime();
+    };
+    songEndTime = function() {
+      if (state.currentSong?.chartSource === SONG_SOURCE) return totalTime();
+      return baseSongEndTime();
     };
 
     function resetSceneState() {
