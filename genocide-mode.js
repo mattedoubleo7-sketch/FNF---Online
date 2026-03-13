@@ -5,7 +5,7 @@
 
     const SONG_ID = "genocide";
     const SONG_SOURCE = "genocide";
-    const genState = { ready: false, images: {}, groundCache: {}, clockStart: 0, cacheKey: "genocide-v2" };
+    const genState = { ready: false, images: {}, groundCache: {}, referenceCache: {}, clockStart: 0, cacheKey: "genocide-v3" };
     const clamp01 = value => Math.max(0, Math.min(1, value));
     const DIR_TO_ANIM = {
       left: "singLEFT",
@@ -14,27 +14,33 @@
       right: "singRIGHT"
     };
     const LAYOUT = {
-      destroyedScale: 1.04,
-      destroyedX: 0,
-      destroyedY: -6,
+      stageScale: 0.5,
+      stageX: 0,
+      stageY: 10,
+      destroyedAlpha: 0.22,
       fireX: 640,
-      fireY: 600,
-      fireScale: 0.8,
-      fireAlpha: 0.48,
-      fireGlowAlpha: 0.11,
-      speakerX: 654,
-      speakerY: 624,
-      speakerScale: 0.42,
+      fireY: 708,
+      fireScale: 0.86,
+      fireAlpha: 0.56,
+      fireGlowAlpha: 0.17,
+      speakerX: 650,
+      speakerY: 594,
+      speakerScale: 0.5,
+      vignetteAlpha: 0.38,
       roleScale: {
-        opponent: 0.72,
-        girlfriend: 0.56,
-        boyfriend: 0.68
+        opponent: 0.78,
+        girlfriend: 0.58,
+        boyfriend: 0.76
       },
-      roleGround: {
-        opponent: { x: 334, y: 644 },
-        boyfriend: { x: 1072, y: 644 }
+      roleAnchor: {
+        opponent: { x: 448, y: 646, mode: "ground" },
+        boyfriend: { x: 930, y: 648, mode: "ground" },
+        girlfriend: { x: 650, y: 404, mode: "fixed" }
       },
-      girlfriendAnchor: { x: 650, y: 548 }
+      camera: {
+        opponent: { x: 405, y: 480 },
+        boyfriend: { x: 820, y: 500 }
+      }
     };
 
     state.poses.tabi = state.poses.tabi || { lane: 1, time: -10, kind: "hit" };
@@ -94,6 +100,7 @@
         sticks: G.stage.images.sticks,
         boombox: G.stage.images.boombox,
         destroyed: G.stage.images.destroyed,
+        vignette: "assets/genocide-vignette.png",
         tabi: G.sprites.tabi.image,
         boyfriend: G.sprites.boyfriend.image,
         gf: G.sprites.gf.image,
@@ -253,12 +260,38 @@
       return point;
     }
 
-    function roleGroundAnchor(role) {
-      const anchor = LAYOUT.roleGround[role];
+    function roleAnchor(role) {
+      const anchor = LAYOUT.roleAnchor?.[role];
       return {
         x: Number(anchor?.x || 0),
-        y: Number(anchor?.y || 0)
+        y: Number(anchor?.y || 0),
+        mode: anchor?.mode || "ground"
       };
+    }
+
+    function referenceAnimName(sprite, role) {
+      if (role === "girlfriend" && sprite.animations?.danceLeft) return "danceLeft";
+      if (sprite.animations?.idle) return "idle";
+      return Object.keys(sprite.animations || {})[0];
+    }
+
+    function spriteReference(role) {
+      if (genState.referenceCache[role]) return genState.referenceCache[role];
+      const sprite = spriteByRole(role);
+      const image = genState.images[roleImageKey(role)];
+      if (!sprite || !imageReady(image)) return null;
+      const animName = referenceAnimName(sprite, role);
+      const anim = sprite.animations?.[animName];
+      const frame = anim?.frames?.[0];
+      if (!anim || !frame) return null;
+      const reference = {
+        anim,
+        frame,
+        offset: animOffset(anim),
+        ground: frameGroundPoint(image, frame)
+      };
+      genState.referenceCache[role] = reference;
+      return reference;
     }
 
     function roleRenderState(role, poseKey, t) {
@@ -271,24 +304,23 @@
       const frame = frameFromList(anim.frames, animState.elapsed, Number(anim.fps || 24), animState.loop);
       if (!frame) return null;
       const scale = Number(LAYOUT.roleScale[role] || 1) * Number(sprite.scale || 1);
-      const fw = Number(frame.fw || frame.w || 0);
-      const fh = Number(frame.fh || frame.h || 0);
-      const fx = Number(frame.fx || 0);
-      const fy = Number(frame.fy || 0);
       const currentOffset = animOffset(anim);
+      const anchor = roleAnchor(role);
+      const reference = spriteReference(role);
+      if (!reference?.frame) return null;
       let pos;
-      if (role === "girlfriend") {
-        const anchor = LAYOUT.girlfriendAnchor;
+      if (anchor.mode === "fixed") {
+        const refOffset = reference.offset;
         pos = {
-          x: Number(anchor.x || 0),
-          y: Number(anchor.y || 0)
+          x: anchor.x + (refOffset.x - currentOffset.x) * scale,
+          y: anchor.y + (refOffset.y - currentOffset.y) * scale
         };
       } else {
-        const groundAnchor = roleGroundAnchor(role);
-        const currentGround = frameGroundPoint(image, frame);
+        const refFrame = reference.frame;
+        const refGround = reference.ground;
         pos = {
-          x: groundAnchor.x + (fw * 0.5 + fx - currentGround.x - currentOffset.x) * scale,
-          y: groundAnchor.y + (fh + fy - currentGround.y - currentOffset.y) * scale
+          x: anchor.x + (Number(refFrame.fw || refFrame.w || 0) * 0.5 + Number(refFrame.fx || 0) - refGround.x - currentOffset.x) * scale,
+          y: anchor.y + (Number(refFrame.fh || refFrame.h || 0) + Number(refFrame.fy || 0) - refGround.y - currentOffset.y) * scale
         };
       }
       return {
@@ -296,7 +328,7 @@
         frame,
         scale,
         pos,
-        flipX: !!sprite.flipX
+        flipX: role === "boyfriend" ? false : !!sprite.flipX
       };
     }
 
@@ -322,13 +354,39 @@
       if (!imageReady(image)) return;
       const width = image.naturalWidth * scale;
       const height = image.naturalHeight * scale;
-      const x = (canvas.width - width) / 2 + Number(LAYOUT.destroyedX || 0);
-      const y = (canvas.height - height) / 2 + yOffset;
+      const x = (canvas.width - width) / 2 + Number(LAYOUT.stageX || 0);
+      const y = Number(LAYOUT.stageY || 0) + yOffset;
       ctx.save();
       ctx.globalAlpha = alpha;
       ctx.globalCompositeOperation = composite;
       ctx.drawImage(image, x, y, width, height);
       ctx.restore();
+    }
+
+    function drawAtlasBottomCentered(image, frame, x, y, scale, alpha = 1, flipX = false, composite = "source-over") {
+      if (!imageReady(image) || !frame) return;
+      const fw = Number(frame.fw || frame.w || 0);
+      const fh = Number(frame.fh || frame.h || 0);
+      const fx = Number(frame.fx || 0);
+      const fy = Number(frame.fy || 0);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.globalCompositeOperation = composite;
+      ctx.translate(x, y);
+      if (flipX) ctx.scale(-1, 1);
+      if (frame.rotated) {
+        ctx.rotate(-Math.PI / 2);
+        ctx.drawImage(image, frame.x, frame.y, frame.w, frame.h, -fh * scale / 2 - fx * scale, -fw * scale - fy * scale, fh * scale, fw * scale);
+      } else {
+        ctx.drawImage(image, frame.x, frame.y, frame.w, frame.h, -fw * scale / 2 - fx * scale, -fh * scale - fy * scale, fw * scale, fh * scale);
+      }
+      ctx.restore();
+    }
+
+    function genocideBeatPulse(t, sharpness = 0.22) {
+      const spb = Math.max(0.001, Number(G.chart?.spb || 60 / Number(G.song?.bpm || 213)));
+      const phase = (t / spb) % 1;
+      return phase <= sharpness ? Math.pow(1 - phase / sharpness, 2.35) : 0;
     }
 
     function drawBottomCenteredImage(image, x, y, scale, alpha = 1, composite = "source-over") {
@@ -343,22 +401,38 @@
     }
 
     function drawStageBackdrop(t) {
-      drawBackdropLayer(genState.images.destroyed, LAYOUT.destroyedScale, LAYOUT.destroyedY);
+      const pulse = genocideBeatPulse(t, 0.18);
+      drawBackdropLayer(genState.images.back, LAYOUT.stageScale, 0, 1);
+      drawBackdropLayer(genState.images.destroyed, LAYOUT.stageScale, 0, LAYOUT.destroyedAlpha + pulse * 0.08, "screen");
+      drawBackdropLayer(genState.images.furniture, LAYOUT.stageScale, 0, 0.96);
     }
 
     function drawStageFire(t) {
       const frame = frameFromList(G.stage.fireFrames || [], t * 0.7, 24, true);
       if (!frame || !imageReady(genState.images.fire)) return;
-      drawAtlasFrame(genState.images.fire, frame, LAYOUT.fireX, LAYOUT.fireY, LAYOUT.fireScale, LAYOUT.fireAlpha);
+      const pulse = genocideBeatPulse(t, 0.22);
+      const fireAlpha = LAYOUT.fireAlpha + pulse * 0.12;
+      drawAtlasBottomCentered(genState.images.fire, frame, LAYOUT.fireX, LAYOUT.fireY, LAYOUT.fireScale, fireAlpha);
       ctx.save();
       ctx.globalCompositeOperation = "screen";
-      ctx.globalAlpha = LAYOUT.fireGlowAlpha + Math.sin(t * 3.6) * 0.03;
-      drawAtlasFrame(genState.images.fire, frame, LAYOUT.fireX, LAYOUT.fireY, LAYOUT.fireScale * 1.02, 1);
+      ctx.globalAlpha = LAYOUT.fireGlowAlpha + pulse * 0.16 + Math.sin(t * 3.6) * 0.025;
+      drawAtlasBottomCentered(genState.images.fire, frame, LAYOUT.fireX, LAYOUT.fireY, LAYOUT.fireScale * 1.03, 1);
       ctx.restore();
     }
 
     function drawStageForeground() {
       drawBottomCenteredImage(genState.images.boombox, LAYOUT.speakerX, LAYOUT.speakerY, LAYOUT.speakerScale, 1);
+    }
+
+    function drawStagePostFX(t) {
+      const pulse = genocideBeatPulse(t, 0.2);
+      drawBackdropLayer(genState.images.sticks, LAYOUT.stageScale, 0, 0.82 + pulse * 0.08, "screen");
+      if (imageReady(genState.images.vignette)) {
+        ctx.save();
+        ctx.globalAlpha = LAYOUT.vignetteAlpha + pulse * 0.1;
+        ctx.drawImage(genState.images.vignette, 0, 0, canvas.width, canvas.height);
+        ctx.restore();
+      }
     }
 
     function currentNoteSkin() {
@@ -530,13 +604,13 @@
     bg = function(song, t) {
       if (state.selectedSong !== SONG_ID) return baseBg(song, t);
       const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-      gradient.addColorStop(0, "#0b0104");
-      gradient.addColorStop(0.46, "#2a0710");
-      gradient.addColorStop(1, "#110205");
+      gradient.addColorStop(0, "#030002");
+      gradient.addColorStop(0.56, "#140306");
+      gradient.addColorStop(1, "#090102");
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      const haze = ctx.createRadialGradient(canvas.width * 0.5, canvas.height * 0.32, 48, canvas.width * 0.5, canvas.height * 0.32, 560);
-      haze.addColorStop(0, "rgba(255,150,102,0.14)");
+      const haze = ctx.createRadialGradient(canvas.width * 0.5, canvas.height * 0.34, 48, canvas.width * 0.5, canvas.height * 0.34, 560);
+      haze.addColorStop(0, "rgba(255,144,88,0.12)");
       haze.addColorStop(1, "rgba(0,0,0,0)");
       ctx.fillStyle = haze;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -551,6 +625,7 @@
       drawRole("girlfriend", "gf", t);
       drawRole("opponent", "tabi", t);
       drawRole("boyfriend", "player", t);
+      drawStagePostFX(t);
     };
 
     receptors = function(t) {
@@ -598,7 +673,7 @@
     if (baseCameraTargets) {
       cameraTargets = function() {
         if (state.selectedSong === SONG_ID) {
-          return { oppX: 430, playerX: 876, focusY: canvas.height * 0.49 };
+          return { oppX: Number(LAYOUT.camera.opponent.x || 405), playerX: Number(LAYOUT.camera.boyfriend.x || 820), focusY: Number(LAYOUT.camera.boyfriend.y || 500) };
         }
         return baseCameraTargets();
       };
@@ -607,7 +682,7 @@
     if (baseCameraPanProfile) {
       cameraPanProfile = function() {
         if (state.selectedSong === SONG_ID) {
-          return { zoom: 1.12, bias: 1.18, hud: 0.22, hudClamp: 68, speed: 3.6 };
+          return { zoom: 1.04, bias: 1.15, hud: 0.18, hudClamp: 58, speed: 3.4 };
         }
         return baseCameraPanProfile();
       };
