@@ -376,7 +376,7 @@
     function cleanupAfterimages(role, now) {
       const list = genState.afterimages[role];
       if (!list) return;
-      while (list.length && now - list[0].time > 0.2) list.shift();
+      while (list.length && now - list[0].time > 0.16) list.shift();
     }
 
     function recordAfterimage(role, render) {
@@ -394,6 +394,7 @@
         flipX: render.flipX,
         lane: Number(state.poses[poseKey]?.lane || 0)
       });
+      while (list.length > 4) list.shift();
     }
 
     function drawAfterimages(role) {
@@ -402,23 +403,23 @@
       const now = performance.now() / 1000;
       cleanupAfterimages(role, now);
       const tint = role === "opponent" ? "#ff8d61" : "#9bddff";
-      for (const echo of list) {
+      for (const echo of list.slice(-4)) {
         const age = now - echo.time;
-        const alpha = clamp01(1 - age / 0.2);
+        const alpha = clamp01(1 - age / 0.16);
         if (alpha <= 0.02) continue;
         const drift = trailVector(echo.lane);
-        const offset = (1 - alpha) * 52;
+        const offset = (1 - alpha) * 38;
         const x = echo.pos.x - drift.x * offset;
         const y = echo.pos.y - drift.y * offset * 0.9;
         ctx.save();
         ctx.globalCompositeOperation = "screen";
-        ctx.filter = `blur(${(4 + (1 - alpha) * 9).toFixed(2)}px) brightness(1.28)`;
-        drawAtlasFrameSilhouette(genState.images[role === "opponent" ? "tabi" : "boyfriend"], echo.frame, x, y, echo.scale * (1 + (1 - alpha) * 0.035), alpha * 0.44, echo.flipX, tint);
+        ctx.filter = `blur(${(2.4 + (1 - alpha) * 4.4).toFixed(2)}px) brightness(1.24)`;
+        drawAtlasFrameSilhouette(genState.images[role === "opponent" ? "tabi" : "boyfriend"], echo.frame, x, y, echo.scale * (1 + (1 - alpha) * 0.02), alpha * 0.3, echo.flipX, tint);
         ctx.restore();
         ctx.save();
         ctx.globalCompositeOperation = "screen";
-        ctx.filter = `blur(${(2.2 + (1 - alpha) * 4.2).toFixed(2)}px) brightness(1.12)`;
-        drawAtlasFrame(genState.images[role === "opponent" ? "tabi" : "boyfriend"], echo.frame, x, y, echo.scale, alpha * 0.24, echo.flipX);
+        ctx.filter = `blur(${(1.1 + (1 - alpha) * 2.1).toFixed(2)}px) brightness(1.08)`;
+        drawAtlasFrame(genState.images[role === "opponent" ? "tabi" : "boyfriend"], echo.frame, x, y, echo.scale, alpha * 0.12, echo.flipX);
         ctx.restore();
       }
     }

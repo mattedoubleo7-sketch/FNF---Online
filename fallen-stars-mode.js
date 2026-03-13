@@ -355,11 +355,13 @@
     function spawnRoleTrail(role, poseKey, t, alpha = 0.6) {
       const render = roleRenderState(role, poseKey, t);
       if (!render) return;
-      fallenStarsVfx().trails.push({
+      const trails = fallenStarsVfx().trails;
+      trails.push({
         ...render,
         createdAt: t,
         alpha
       });
+      while (trails.length > 8) trails.shift();
     }
 
     function triggerWilterZoom(t, targetZoom) {
@@ -395,7 +397,7 @@
       });
       vfx.trails = vfx.trails.filter(trail => {
         const age = t - trail.createdAt;
-        return age >= 0 && age <= 1.02;
+        return age >= 0 && age <= 0.5;
       });
       if (t > vfx.blackHoldUntil) {
         vfx.blackAlpha = Math.max(0, vfx.blackAlpha - Math.max(0.0001, dt) * 1.9);
@@ -422,14 +424,14 @@
       const vfx = fallenStarsVfx();
       for (const trail of vfx.trails) {
         const age = Math.max(0, t - trail.createdAt);
-        const p = clamp01(age / 1);
+        const p = clamp01(age / 0.5);
         const alpha = trail.alpha * (1 - p);
         if (alpha <= 0.001) continue;
-        const scaleMul = 1 + 0.35 * p;
-        const lift = (trail.frameHeight / 6) * p;
+        const scaleMul = 1 + 0.16 * p;
+        const lift = (trail.frameHeight / 9) * p;
         ctx.save();
         ctx.globalCompositeOperation = "screen";
-        ctx.filter = `blur(${(1.5 + p * 2.4).toFixed(1)}px) brightness(${trail.role === "opponent" ? 1.95 : 1.45})`;
+        ctx.filter = `blur(${(0.8 + p * 1.5).toFixed(1)}px) brightness(${trail.role === "opponent" ? 1.6 : 1.28})`;
         drawAtlasFrame(trail.image, trail.frame, trail.pos.x, trail.pos.y - lift, trail.scale * scaleMul, alpha, trail.flipX);
         ctx.restore();
       }

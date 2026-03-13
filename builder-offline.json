@@ -35,6 +35,7 @@
     "challenge-edd-bf-data.js",
     "fallen-stars-data.js",
     "fallen-stars-mode.js",
+    "playback-stability-fix.js",
     "genocide-data.js",
     "genocide-mode.js"
   ],
