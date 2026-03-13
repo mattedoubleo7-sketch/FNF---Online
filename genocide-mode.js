@@ -5,7 +5,7 @@
 
     const SONG_ID = "genocide";
     const SONG_SOURCE = "genocide";
-    const genState = { ready: false, images: {}, groundCache: {}, referenceCache: {}, afterimages: { opponent: [], boyfriend: [] }, clockStart: 0, cacheKey: "genocide-v5" };
+    const genState = { ready: false, images: {}, groundCache: {}, referenceCache: {}, afterimages: { opponent: [], boyfriend: [] }, clockStart: 0, cacheKey: "genocide-v6" };
     const clamp01 = value => Math.max(0, Math.min(1, value));
     const DIR_TO_ANIM = {
       left: "singLEFT",
@@ -365,36 +365,28 @@
       return role === "opponent" ? "tabi" : "player";
     }
 
-    function trailVector(lane) {
-      const dir = DIRS[(lane || 0) % 4] || "left";
-      if (dir === "left") return { x: -1, y: 0 };
-      if (dir === "right") return { x: 1, y: 0 };
-      if (dir === "up") return { x: 0, y: -0.55 };
-      return { x: 0, y: 0.65 };
-    }
-
     function cleanupAfterimages(role, now) {
       const list = genState.afterimages[role];
       if (!list) return;
-      while (list.length && now - list[0].time > 0.16) list.shift();
+      while (list.length && now - list[0].time > 0.11) list.shift();
     }
 
     function recordAfterimage(role, render) {
       const poseKey = trailPoseKey(role);
-      if (!render || poseAge(poseKey) > 0.17) return;
+      if (!render || poseAge(poseKey) > 0.16) return;
       const now = performance.now() / 1000;
       cleanupAfterimages(role, now);
       const list = genState.afterimages[role];
-      if (list.length && now - list[list.length - 1].time < 0.018) return;
+      if (list.length && now - list[list.length - 1].time < 0.024) return;
       list.push({
         time: now,
         frame: render.frame,
         pos: { x: render.pos.x, y: render.pos.y },
         scale: render.scale,
         flipX: render.flipX,
-        lane: Number(state.poses[poseKey]?.lane || 0)
+        frameHeight: Number(render.frame?.fh || render.frame?.h || 0)
       });
-      while (list.length > 4) list.shift();
+      while (list.length > 3) list.shift();
     }
 
     function drawAfterimages(role) {
@@ -402,24 +394,18 @@
       if (!list?.length) return;
       const now = performance.now() / 1000;
       cleanupAfterimages(role, now);
-      const tint = role === "opponent" ? "#ff8d61" : "#9bddff";
-      for (const echo of list.slice(-4)) {
+      const image = genState.images[role === "opponent" ? "tabi" : "boyfriend"];
+      if (!imageReady(image)) return;
+      for (const echo of list.slice(-3)) {
         const age = now - echo.time;
-        const alpha = clamp01(1 - age / 0.16);
+        const p = clamp01(age / 0.11);
+        const alpha = (role === "opponent" ? 0.85 : 0.62) * (1 - p);
         if (alpha <= 0.02) continue;
-        const drift = trailVector(echo.lane);
-        const offset = (1 - alpha) * 38;
-        const x = echo.pos.x - drift.x * offset;
-        const y = echo.pos.y - drift.y * offset * 0.9;
+        const lift = (echo.frameHeight / 14) * p;
         ctx.save();
         ctx.globalCompositeOperation = "screen";
-        ctx.filter = `blur(${(2.4 + (1 - alpha) * 4.4).toFixed(2)}px) brightness(1.24)`;
-        drawAtlasFrameSilhouette(genState.images[role === "opponent" ? "tabi" : "boyfriend"], echo.frame, x, y, echo.scale * (1 + (1 - alpha) * 0.02), alpha * 0.3, echo.flipX, tint);
-        ctx.restore();
-        ctx.save();
-        ctx.globalCompositeOperation = "screen";
-        ctx.filter = `blur(${(1.1 + (1 - alpha) * 2.1).toFixed(2)}px) brightness(1.08)`;
-        drawAtlasFrame(genState.images[role === "opponent" ? "tabi" : "boyfriend"], echo.frame, x, y, echo.scale, alpha * 0.12, echo.flipX);
+        ctx.filter = `blur(${(0.5 + p * 0.9).toFixed(1)}px) brightness(${role === "opponent" ? 1.42 : 1.18})`;
+        drawAtlasFrame(image, echo.frame, echo.pos.x, echo.pos.y - lift, echo.scale, alpha, echo.flipX);
         ctx.restore();
       }
     }
