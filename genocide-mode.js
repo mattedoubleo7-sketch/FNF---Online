@@ -5,7 +5,7 @@
 
     const SONG_ID = "genocide";
     const SONG_SOURCE = "genocide";
-    const genState = { ready: false, images: {}, groundCache: {} };
+    const genState = { ready: false, images: {}, groundCache: {}, clockStart: 0, cacheKey: "genocide-v2" };
     const clamp01 = value => Math.max(0, Math.min(1, value));
     const DIR_TO_ANIM = {
       left: "singLEFT",
@@ -77,6 +77,12 @@
       return JSON.parse(JSON.stringify(value));
     }
 
+    function assetUrl(src) {
+      if (!src) return src;
+      const text = String(src);
+      return text.includes("?") ? text : `${text}?v=${genState.cacheKey}`;
+    }
+
     function initAssets() {
       if (genState.ready) return;
       genState.ready = true;
@@ -96,7 +102,7 @@
       Object.entries(sources).forEach(([key, src]) => {
         if (!src) return;
         const image = new Image();
-        image.src = src;
+        image.src = assetUrl(src);
         genState.images[key] = image;
       });
     }
@@ -107,12 +113,12 @@
 
     function ensureAudioTracks() {
       if (!state.audio.genocideInst) {
-        state.audio.genocideInst = new Audio(G.audio.inst);
+        state.audio.genocideInst = new Audio(assetUrl(G.audio.inst));
         state.audio.genocideInst.preload = "auto";
         state.audio.genocideInst.volume = 0.92;
       }
       if (!state.audio.genocideVoices) {
-        state.audio.genocideVoices = new Audio(G.audio.voices);
+        state.audio.genocideVoices = new Audio(assetUrl(G.audio.voices));
         state.audio.genocideVoices.preload = "auto";
         state.audio.genocideVoices.volume = 0.88;
       }
@@ -432,7 +438,12 @@
     };
 
     songTime = function() {
-      if (state.currentSong?.chartSource === SONG_SOURCE && state.audio.genocideInst) return state.audio.genocideInst.currentTime;
+      if (state.currentSong?.chartSource === SONG_SOURCE && state.audio.genocideInst) {
+        const trackTime = Number(state.audio.genocideInst.currentTime || 0);
+        if (!state.playing) return trackTime;
+        const fallback = Math.max(0, performance.now() / 1000 - Number(genState.clockStart || 0));
+        return Math.max(trackTime, fallback);
+      }
       return baseSongTime();
     };
 
@@ -459,6 +470,7 @@
       state.chart.notes = state.chart.notes.map(note => ({ ...note }));
       resetStats();
       state.health = 0.65;
+      genState.clockStart = performance.now() / 1000;
       state.audio.genocideInst.currentTime = 0;
       state.audio.genocideVoices.currentTime = 0;
       state.songStart = 0;
