@@ -5,7 +5,7 @@
 
     const SONG_ID = "genocide";
     const SONG_SOURCE = "genocide";
-    const genState = { ready: false, images: {}, groundCache: {}, referenceCache: {}, clockStart: 0, cacheKey: "genocide-v3" };
+    const genState = { ready: false, images: {}, groundCache: {}, referenceCache: {}, afterimages: { opponent: [], boyfriend: [] }, clockStart: 0, cacheKey: "genocide-v5" };
     const clamp01 = value => Math.max(0, Math.min(1, value));
     const DIR_TO_ANIM = {
       left: "singLEFT",
@@ -35,7 +35,7 @@
       roleAnchor: {
         opponent: { x: 448, y: 646, mode: "ground" },
         boyfriend: { x: 930, y: 648, mode: "ground" },
-        girlfriend: { x: 650, y: 404, mode: "fixed" }
+        girlfriend: { x: 398, y: 252, mode: "ground" }
       },
       camera: {
         opponent: { x: 405, y: 480 },
@@ -306,21 +306,20 @@
       const scale = Number(LAYOUT.roleScale[role] || 1) * Number(sprite.scale || 1);
       const currentOffset = animOffset(anim);
       const anchor = roleAnchor(role);
-      const reference = spriteReference(role);
-      if (!reference?.frame) return null;
       let pos;
       if (anchor.mode === "fixed") {
+        const reference = spriteReference(role);
+        if (!reference?.frame) return null;
         const refOffset = reference.offset;
         pos = {
           x: anchor.x + (refOffset.x - currentOffset.x) * scale,
           y: anchor.y + (refOffset.y - currentOffset.y) * scale
         };
       } else {
-        const refFrame = reference.frame;
-        const refGround = reference.ground;
+        const ground = frameGroundPoint(image, frame);
         pos = {
-          x: anchor.x + (Number(refFrame.fw || refFrame.w || 0) * 0.5 + Number(refFrame.fx || 0) - refGround.x - currentOffset.x) * scale,
-          y: anchor.y + (Number(refFrame.fh || refFrame.h || 0) + Number(refFrame.fy || 0) - refGround.y - currentOffset.y) * scale
+          x: anchor.x + (Number(frame.fw || frame.w || 0) * 0.5 + Number(frame.fx || 0) - ground.x - currentOffset.x) * scale,
+          y: anchor.y + (Number(frame.fh || frame.h || 0) + Number(frame.fy || 0) - ground.y - currentOffset.y) * scale
         };
       }
       return {
@@ -342,12 +341,86 @@
       ctx.restore();
     }
 
+    function drawRoleRender(role, render, alpha = 1) {
+      if (!render) return;
+      if (role !== "girlfriend") {
+        const shadowWidth = Math.max(88, (render.frame.fw || render.frame.w || 240) * render.scale * 0.44);
+        drawShadow(render.pos.x, render.pos.y + 12, shadowWidth, (role === "opponent" ? 0.3 : 0.22) * alpha);
+      }
+      drawAtlasFrame(render.image, render.frame, render.pos.x, render.pos.y, render.scale, alpha, render.flipX);
+    }
+
     function drawRole(role, poseKey, t) {
       const render = roleRenderState(role, poseKey, t);
-      if (!render) return;
-      const shadowWidth = Math.max(88, (render.frame.fw || render.frame.w || 240) * render.scale * (role === "girlfriend" ? 0.36 : 0.44));
-      drawShadow(render.pos.x, render.pos.y + 12, shadowWidth, role === "opponent" ? 0.3 : 0.22);
-      drawAtlasFrame(render.image, render.frame, render.pos.x, render.pos.y, render.scale, 1, render.flipX);
+      if (!render) return null;
+      drawRoleRender(role, render);
+      return render;
+    }
+
+    function poseAge(poseKey) {
+      return performance.now() / 1000 - Number(state.poses[poseKey]?.time || -10);
+    }
+
+    function trailPoseKey(role) {
+      return role === "opponent" ? "tabi" : "player";
+    }
+
+    function trailVector(lane) {
+      const dir = DIRS[(lane || 0) % 4] || "left";
+      if (dir === "left") return { x: -1, y: 0 };
+      if (dir === "right") return { x: 1, y: 0 };
+      if (dir === "up") return { x: 0, y: -0.55 };
+      return { x: 0, y: 0.65 };
+    }
+
+    function cleanupAfterimages(role, now) {
+      const list = genState.afterimages[role];
+      if (!list) return;
+      while (list.length && now - list[0].time > 0.2) list.shift();
+    }
+
+    function recordAfterimage(role, render) {
+      const poseKey = trailPoseKey(role);
+      if (!render || poseAge(poseKey) > 0.17) return;
+      const now = performance.now() / 1000;
+      cleanupAfterimages(role, now);
+      const list = genState.afterimages[role];
+      if (list.length && now - list[list.length - 1].time < 0.018) return;
+      list.push({
+        time: now,
+        frame: render.frame,
+        pos: { x: render.pos.x, y: render.pos.y },
+        scale: render.scale,
+        flipX: render.flipX,
+        lane: Number(state.poses[poseKey]?.lane || 0)
+      });
+    }
+
+    function drawAfterimages(role) {
+      const list = genState.afterimages[role];
+      if (!list?.length) return;
+      const now = performance.now() / 1000;
+      cleanupAfterimages(role, now);
+      const tint = role === "opponent" ? "#ff8d61" : "#9bddff";
+      for (const echo of list) {
+        const age = now - echo.time;
+        const alpha = clamp01(1 - age / 0.2);
+        if (alpha <= 0.02) continue;
+        const drift = trailVector(echo.lane);
+        const offset = (1 - alpha) * 52;
+        const x = echo.pos.x - drift.x * offset;
+        const y = echo.pos.y - drift.y * offset * 0.9;
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.filter = `blur(${(4 + (1 - alpha) * 9).toFixed(2)}px) brightness(1.28)`;
+        drawAtlasFrameSilhouette(genState.images[role === "opponent" ? "tabi" : "boyfriend"], echo.frame, x, y, echo.scale * (1 + (1 - alpha) * 0.035), alpha * 0.44, echo.flipX, tint);
+        ctx.restore();
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.filter = `blur(${(2.2 + (1 - alpha) * 4.2).toFixed(2)}px) brightness(1.12)`;
+        drawAtlasFrame(genState.images[role === "opponent" ? "tabi" : "boyfriend"], echo.frame, x, y, echo.scale, alpha * 0.24, echo.flipX);
+        ctx.restore();
+      }
     }
 
     function drawBackdropLayer(image, scale, yOffset = 0, alpha = 1, composite = "source-over") {
@@ -564,6 +637,8 @@
       }
       state.feeds.player.time = -10;
       state.feeds.opp.time = -10;
+      genState.afterimages.opponent = [];
+      genState.afterimages.boyfriend = [];
       Object.values(state.poses).forEach(pose => {
         pose.time = -10;
         pose.kind = "hit";
@@ -622,9 +697,16 @@
       drawStageBackdrop(t);
       drawStageFire(t);
       drawStageForeground();
-      drawRole("girlfriend", "gf", t);
-      drawRole("opponent", "tabi", t);
-      drawRole("boyfriend", "player", t);
+      const gfRender = roleRenderState("girlfriend", "gf", t);
+      const oppRender = roleRenderState("opponent", "tabi", t);
+      const bfRender = roleRenderState("boyfriend", "player", t);
+      recordAfterimage("opponent", oppRender);
+      recordAfterimage("boyfriend", bfRender);
+      drawRoleRender("girlfriend", gfRender);
+      drawAfterimages("opponent");
+      drawRoleRender("opponent", oppRender);
+      drawAfterimages("boyfriend");
+      drawRoleRender("boyfriend", bfRender);
       drawStagePostFX(t);
     };
 
