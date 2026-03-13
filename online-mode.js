@@ -141,6 +141,10 @@ function importedTracksForSong(songId = state.selectedSong) {
     if (typeof window.ensureFallenStarsAudio === "function") window.ensureFallenStarsAudio();
     return [state.audio.fallenStarsInst, state.audio.fallenStarsVoices];
   }
+  if (chartSource === "genocide") {
+    if (typeof window.ensureGenocideAudio === "function") window.ensureGenocideAudio();
+    return [state.audio.genocideInst, state.audio.genocideVoices];
+  }
   return [];
 }
 
@@ -238,6 +242,15 @@ async function preloadSongForMatch(songId, matchId) {
         : []);
     const media = mediaListFrom(prepared);
     const tracks = media.length ? media : [state.audio.fallenStarsInst, state.audio.fallenStarsVoices];
+    await Promise.all(tracks.filter(Boolean).map(track => waitForTrackReady(track)));
+  } else if (SONGS[songId]?.chartSource === "genocide") {
+    const prepared = typeof window.prepareGenocideOnlineStart === "function"
+      ? window.prepareGenocideOnlineStart()
+      : (typeof window.ensureGenocideAudio === "function"
+        ? (window.ensureGenocideAudio(), [state.audio.genocideInst, state.audio.genocideVoices])
+        : []);
+    const media = mediaListFrom(prepared);
+    const tracks = media.length ? media : [state.audio.genocideInst, state.audio.genocideVoices];
     await Promise.all(tracks.filter(Boolean).map(track => waitForTrackReady(track)));
   }
   if (state.network.prepareMatchId !== matchId) return false;

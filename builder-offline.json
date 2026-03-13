@@ -34,7 +34,9 @@
     "challenge-edd-mode.js",
     "challenge-edd-bf-data.js",
     "fallen-stars-data.js",
-    "fallen-stars-mode.js"
+    "fallen-stars-mode.js",
+    "genocide-data.js",
+    "genocide-mode.js"
   ],
   "directories": {
     "output": "dist-offline"
