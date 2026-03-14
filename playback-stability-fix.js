@@ -74,7 +74,7 @@
       if (!master) return null;
       const targetTime = Number(master.currentTime || 0);
       syncTrackGroupToTime(targetTime, {
-        shouldPlay: !!state.playing && !master.paused,
+        shouldPlay: !!state.playing,
         tolerance: 0.014
       });
       return targetTime * importedPlaybackRate();
