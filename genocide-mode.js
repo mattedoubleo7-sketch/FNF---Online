@@ -5,7 +5,7 @@
 
     const SONG_ID = "genocide";
     const SONG_SOURCE = "genocide";
-    const genState = { ready: false, images: {}, groundCache: {}, referenceCache: {}, afterimages: { opponent: [], boyfriend: [] }, clockStart: 0, cacheKey: "genocide-v6" };
+    const genState = { ready: false, images: {}, groundCache: {}, referenceCache: {}, afterimages: { opponent: [], boyfriend: [] }, clockStart: 0, cacheKey: "genocide-v7" };
     const clamp01 = value => Math.max(0, Math.min(1, value));
     const DIR_TO_ANIM = {
       left: "singLEFT",
@@ -396,12 +396,21 @@
       cleanupAfterimages(role, now);
       const image = genState.images[role === "opponent" ? "tabi" : "boyfriend"];
       if (!imageReady(image)) return;
+      const purpleTint = role === "opponent" ? "#c36fff" : "#9d83ff";
+      const offsetDir = role === "opponent" ? -1 : 1;
       for (const echo of list.slice(-3)) {
         const age = now - echo.time;
         const p = clamp01(age / 0.11);
         const alpha = (role === "opponent" ? 0.85 : 0.62) * (1 - p);
         if (alpha <= 0.02) continue;
         const lift = (echo.frameHeight / 14) * p;
+        const offsetX = offsetDir * (3.5 + p * 1.5);
+        const offsetY = -(1.5 + p * 1.2) - lift * 0.25;
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.filter = `blur(${(0.35 + p * 0.45).toFixed(1)}px) brightness(1.18)`;
+        drawAtlasFrameSilhouette(image, echo.frame, echo.pos.x + offsetX, echo.pos.y + offsetY, echo.scale, alpha * 0.34, echo.flipX, purpleTint);
+        ctx.restore();
         ctx.save();
         ctx.globalCompositeOperation = "screen";
         ctx.filter = `blur(${(0.5 + p * 0.9).toFixed(1)}px) brightness(${role === "opponent" ? 1.42 : 1.18})`;
