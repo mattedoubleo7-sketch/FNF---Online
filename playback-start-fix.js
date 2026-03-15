@@ -54,8 +54,9 @@
     const originalStartSong = startSong;
     startSong = async function(id = state.selectedSong, options = {}) {
       try {
-        await unlockAudioContext();
+        const unlockPromise = unlockAudioContext();
         const result = await originalStartSong.apply(this, arguments);
+        await unlockPromise;
         const song = SONGS[id] || state.currentSong;
         if (!song?.chartSource) return result;
         if ((options.forceMode || state.mode) === "online") return result;
