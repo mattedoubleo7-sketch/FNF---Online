@@ -271,12 +271,11 @@ function expectedOnlineSongTime() {
 }
 function syncTrackToTime(track, targetTime, shouldPlay, options = {}) {
   if (!track) return;
-  if (track.readyState === 0) {
-    try { track.load(); } catch {}
-  }
   const duration = Number.isFinite(track.duration) && track.duration > 0 ? track.duration : null;
   const desiredTime = Math.max(0, duration == null ? targetTime : Math.min(targetTime, Math.max(0, duration - 0.05)));
-  const tolerance = shouldPlay ? Number(options.playTolerance || 0.045) : Number(options.pauseTolerance || 0.02);
+  const tolerance = shouldPlay
+    ? Number(options.isSecondary ? (options.secondaryPlayTolerance || 0.12) : (options.playTolerance || 0.045))
+    : Number(options.isSecondary ? (options.secondaryPauseTolerance || 0.06) : (options.pauseTolerance || 0.02));
   if (Math.abs((track.currentTime || 0) - desiredTime) > tolerance) {
     try { track.currentTime = desiredTime; } catch {}
   }
@@ -292,7 +291,8 @@ function syncTrackToTime(track, targetTime, shouldPlay, options = {}) {
             if (freshTarget == null) return;
             const freshDuration = Number.isFinite(track.duration) && track.duration > 0 ? track.duration : null;
             const freshDesired = Math.max(0, freshDuration == null ? freshTarget : Math.min(freshTarget, Math.max(0, freshDuration - 0.05)));
-            if (Math.abs((track.currentTime || 0) - freshDesired) > 0.016) {
+            const freshTolerance = options.isSecondary ? 0.12 : 0.02;
+            if (Math.abs((track.currentTime || 0) - freshDesired) > freshTolerance) {
               try { track.currentTime = freshDesired; } catch {}
             }
           }).catch(() => {
@@ -320,20 +320,20 @@ function syncOnlinePlayback(force = false) {
   if (!force && localNow - (state.network.lastTrackSync || 0) < syncGap) return targetTime;
   state.network.lastTrackSync = localNow;
   const shouldPlay = now + 40 >= state.network.matchStartAt;
-  const syncOptions = { playTolerance: 0.045, pauseTolerance: 0.02 };
+  const syncOptions = { playTolerance: 0.045, pauseTolerance: 0.02, secondaryPlayTolerance: 0.12, secondaryPauseTolerance: 0.06 };
   if (state.currentSong.chartSource === "sporting") {
     ensureSportingAudio();
     syncTrackToTime(state.audio.inst, targetTime, shouldPlay, syncOptions);
-    syncTrackToTime(state.audio.voices, targetTime, shouldPlay, syncOptions);
+    syncTrackToTime(state.audio.voices, targetTime, shouldPlay, { ...syncOptions, isSecondary: true });
   } else if (state.currentSong.chartSource === "boxingMatch") {
     ensureBoxingMatchAudio();
     syncTrackToTime(state.audio.boxingInst, targetTime, shouldPlay, syncOptions);
-    syncTrackToTime(state.audio.boxingVoices, targetTime, shouldPlay, syncOptions);
+    syncTrackToTime(state.audio.boxingVoices, targetTime, shouldPlay, { ...syncOptions, isSecondary: true });
   } else if (state.currentSong.chartSource === "perseverance") {
     ensurePerseveranceAudio();
     syncTrackToTime(state.audio.inst2, targetTime, shouldPlay, syncOptions);
-    syncTrackToTime(state.audio.voices2a, targetTime, shouldPlay, syncOptions);
-    syncTrackToTime(state.audio.voices2b, targetTime, shouldPlay, syncOptions);
+    syncTrackToTime(state.audio.voices2a, targetTime, shouldPlay, { ...syncOptions, isSecondary: true });
+    syncTrackToTime(state.audio.voices2b, targetTime, shouldPlay, { ...syncOptions, isSecondary: true });
   }
   return targetTime;
 }

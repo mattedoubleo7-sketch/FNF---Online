@@ -46,13 +46,16 @@
       const tracks = importedTrackGroup().filter(Boolean);
       if (!tracks.length) return null;
       const shouldPlay = !!options.shouldPlay;
-      const tolerance = Number.isFinite(options.tolerance) ? options.tolerance : 0.018;
-      for (const track of tracks) {
-        if (!track) continue;
-        if (track.readyState === 0) {
-          try { track.load(); } catch {}
-        }
+      const masterTolerance = Number.isFinite(options.masterTolerance)
+        ? options.masterTolerance
+        : (Number.isFinite(options.tolerance) ? options.tolerance : 0.02);
+      const secondaryTolerance = Number.isFinite(options.secondaryTolerance)
+        ? options.secondaryTolerance
+        : Math.max(masterTolerance * 3, shouldPlay ? 0.09 : 0.05);
+      tracks.forEach((track, index) => {
+        if (!track) return;
         const desired = clampTrackTime(track, targetTime);
+        const tolerance = index === 0 ? masterTolerance : secondaryTolerance;
         if (Math.abs(Number(track.currentTime || 0) - desired) > tolerance) {
           try { track.currentTime = desired; } catch {}
         }
@@ -64,7 +67,7 @@
         } else if (!track.paused) {
           try { track.pause(); } catch {}
         }
-      }
+      });
       return targetTime;
     }
 
@@ -75,7 +78,8 @@
       const targetTime = Number(master.currentTime || 0);
       syncTrackGroupToTime(targetTime, {
         shouldPlay: !!state.playing,
-        tolerance: 0.014
+        masterTolerance: 0.02,
+        secondaryTolerance: 0.09
       });
       return targetTime * importedPlaybackRate();
     }
@@ -89,7 +93,8 @@
         : true;
       syncTrackGroupToTime(targetTime, {
         shouldPlay,
-        tolerance: shouldPlay ? 0.028 : 0.016
+        masterTolerance: shouldPlay ? 0.04 : 0.02,
+        secondaryTolerance: shouldPlay ? 0.12 : 0.06
       });
       return targetTime * importedPlaybackRate();
     }

@@ -52,9 +52,6 @@
         try { track.muted = previousMuted; } catch {}
       };
       try {
-        if (track.readyState === 0) {
-          try { track.load(); } catch {}
-        }
         track.muted = true;
         track.volume = 0;
         const playAttempt = track.play();
@@ -80,15 +77,13 @@
 
     async function attemptTrackPlayback(track) {
       if (!track) return false;
+      if (!track.paused) return true;
       try {
-        if (track.readyState === 0) {
-          try { track.load(); } catch {}
-        }
         const playAttempt = track.play();
         if (playAttempt && typeof playAttempt.then === "function") {
           await Promise.race([
             playAttempt.catch(() => {}),
-            new Promise(resolve => setTimeout(resolve, 900))
+            new Promise(resolve => setTimeout(resolve, 220))
           ]);
         }
       } catch {}
@@ -107,23 +102,29 @@
     startSong = async function(id = state.selectedSong, options = {}) {
       try {
         const song = SONGS[id] || state.currentSong;
+        const songKey = String(song?.id || id || song?.title || "");
         if (song?.chartSource && (options.forceMode || state.mode) !== "online") {
           primeSongTracksForGesture(song);
         }
         const unlockPromise = unlockAudioContext();
         const result = await originalStartSong.apply(this, arguments);
-        await unlockPromise;
         if (!song?.chartSource) return result;
         if ((options.forceMode || state.mode) === "online") return result;
-        const started = await nudgeImportedPlayback(song);
-        if (!started && state.playing) {
-          ui.statusText.textContent = "Audio still loading";
-          ui.statusSub.textContent = "The song tracks are still unlocking. If vocals stay missing, press Play again.";
-          setTimeout(() => {
-            if (!state.playing) return;
-            nudgeImportedPlayback(song).catch(() => {});
-          }, 320);
-        }
+        Promise.resolve(unlockPromise).then(() => {
+          return nudgeImportedPlayback(song).then(started => {
+            if (started || !state.playing) return;
+            const currentKey = String(state.currentSong?.id || state.selectedSong || state.currentSong?.title || "");
+            if (currentKey !== songKey) return;
+            ui.statusText.textContent = "Audio still loading";
+            ui.statusSub.textContent = "The song tracks are still unlocking. If vocals stay missing, press Play again.";
+            setTimeout(() => {
+              if (!state.playing) return;
+              const retryKey = String(state.currentSong?.id || state.selectedSong || state.currentSong?.title || "");
+              if (retryKey !== songKey) return;
+              nudgeImportedPlayback(song).catch(() => {});
+            }, 420);
+          });
+        }).catch(() => {});
         return result;
       } catch (error) {
         console.error("Playback start fix failed", error);
