@@ -5,6 +5,7 @@
   const SPORTING_SCROLL_MULT = 1.5;
   const BOXING_SCROLL_MULT = 2;
   const BOXING_SONGS = new Set(['boxingMatch']);
+  const BOXING_STAGE_SONGS = new Set(['sporting', 'boxingMatch']);
   const BOXING_SPRITE_SONG = 'boxingMatch';
   const BOXING_NOTE_DRAIN = { perfect: 0.008, good: 0.012, bad: 0.02, miss: 0.03 };
   const BOXING_STAMINA_REGEN = 0;
@@ -12,7 +13,15 @@
   const BOXING_BLOCK_COOLDOWN = 5;
   const BOXING_BLOCK_MISS_BOOST = 0.09;
   const BOXING_MAX_BLOCK_BOOST = 0.78;
-  const boxingSpriteState = { initialized: false, images: {} };
+  const BOXING_STAGE_ASSETS = {
+    back: 'assets/boxing-fight/stageback.png',
+    front: 'assets/boxing-fight/stagefront.png',
+    curtains: 'assets/boxing-fight/stagecurtains.png',
+    light: 'assets/boxing-fight/stage_light.png',
+    gfImage: 'assets/boxing-fight/GFMIIBOXING_ass_sets.png',
+    gfAtlas: 'assets/boxing-fight/GFMIIBOXING_ass_sets.xml'
+  };
+  const boxingSpriteState = { initialized: false, images: {}, gfAnimations: null, gfAtlasRequested: false };
 
   function songIdFor(song) {
     if (!song) return '';
@@ -30,6 +39,10 @@
 
   function isBoxingSpriteSong(song) {
     return songIdFor(song || state.currentSong) === BOXING_SPRITE_SONG;
+  }
+
+  function usesMattStage(song) {
+    return BOXING_STAGE_SONGS.has(songIdFor(song || state.currentSong));
   }
 
   function importedPlaybackRate(song) {
@@ -80,6 +93,36 @@
     try { track.webkitPreservesPitch = false; } catch {}
   }
 
+  function parseAtlasNumber(node, name, fallback = 0) {
+    const value = Number(node.getAttribute(name));
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  function parseBoxingGfAtlas(xmlText) {
+    const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
+    const textures = Array.from(doc.getElementsByTagName('SubTexture'));
+    const animations = { dance: [], cheer: [], sad: [] };
+    textures.forEach(node => {
+      const name = node.getAttribute('name') || '';
+      let anim = '';
+      if (name.startsWith('GF Dancing Beat')) anim = 'dance';
+      else if (name.startsWith('GF Cheer')) anim = 'cheer';
+      else if (name.startsWith('gf sad')) anim = 'sad';
+      if (!anim) return;
+      animations[anim].push({
+        x: parseAtlasNumber(node, 'x'),
+        y: parseAtlasNumber(node, 'y'),
+        w: parseAtlasNumber(node, 'width'),
+        h: parseAtlasNumber(node, 'height'),
+        fx: parseAtlasNumber(node, 'frameX'),
+        fy: parseAtlasNumber(node, 'frameY'),
+        fw: parseAtlasNumber(node, 'frameWidth', parseAtlasNumber(node, 'width')),
+        fh: parseAtlasNumber(node, 'frameHeight', parseAtlasNumber(node, 'height'))
+      });
+    });
+    return animations;
+  }
+
   function initBoxingSprites() {
     if (boxingSpriteState.initialized || !window.BOXING_FIGHT_DATA) return;
     boxingSpriteState.initialized = true;
@@ -87,17 +130,34 @@
       boyfriend: window.BOXING_FIGHT_DATA.sprites.boyfriend.image,
       matt: window.BOXING_FIGHT_DATA.sprites.matt.image,
       texts: window.BOXING_FIGHT_DATA.sprites.texts.image,
-      warning: window.BOXING_FIGHT_DATA.sprites.warning
+      warning: window.BOXING_FIGHT_DATA.sprites.warning,
+      stageBack: BOXING_STAGE_ASSETS.back,
+      stageFront: BOXING_STAGE_ASSETS.front,
+      stageCurtains: BOXING_STAGE_ASSETS.curtains,
+      stageLight: BOXING_STAGE_ASSETS.light,
+      gf: BOXING_STAGE_ASSETS.gfImage
     };
     Object.entries(sources).forEach(([key, src]) => {
       const img = new Image();
       img.src = src;
       boxingSpriteState.images[key] = img;
     });
+    if (!boxingSpriteState.gfAtlasRequested) {
+      boxingSpriteState.gfAtlasRequested = true;
+      fetch(BOXING_STAGE_ASSETS.gfAtlas)
+        .then(resp => resp.ok ? resp.text() : Promise.reject(new Error(`GF atlas ${resp.status}`)))
+        .then(text => { boxingSpriteState.gfAnimations = parseBoxingGfAtlas(text); })
+        .catch(err => {
+          console.warn('Failed to load boxing GF atlas', err);
+          boxingSpriteState.gfAnimations = { dance: [], cheer: [], sad: [] };
+        });
+    }
   }
 
   function boxingSpritesReady() {
-    return boxingSpriteState.initialized && Object.values(boxingSpriteState.images).every(img => img && img.complete && img.naturalWidth);
+    return boxingSpriteState.initialized &&
+      boxingSpriteState.gfAnimations &&
+      Object.values(boxingSpriteState.images).every(img => img && img.complete && img.naturalWidth);
   }
 
   function boxingActionAnim(kind, t) {
@@ -155,6 +215,71 @@
     const pose = boxingActionAnim(kind, t);
     const frame = frameFromList(data.animations[pose.anim], pose.elapsed, pose.fps, pose.loop);
     if (frame) drawAtlasTopLeft(image, frame, x, y, scale);
+  }
+
+  function drawStageCover(image, scaleMult = 1, yOffset = 0, alpha = 1) {
+    if (!image?.naturalWidth) return;
+    const scale = Math.max(canvas.width / image.naturalWidth, canvas.height / image.naturalHeight) * scaleMult;
+    const width = image.naturalWidth * scale;
+    const height = image.naturalHeight * scale;
+    const x = (canvas.width - width) / 2;
+    const y = (canvas.height - height) / 2 + yOffset;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(image, x, y, width, height);
+    ctx.restore();
+  }
+
+  function drawBottomCentered(image, scale, y, alpha = 1, flipX = false) {
+    if (!image?.naturalWidth) return;
+    const width = image.naturalWidth * scale;
+    const height = image.naturalHeight * scale;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    if (flipX) {
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(image, (canvas.width - width) / 2, y, width, height);
+    } else {
+      ctx.drawImage(image, (canvas.width - width) / 2, y, width, height);
+    }
+    ctx.restore();
+  }
+
+  function boxingGfFrame(t) {
+    const anims = boxingSpriteState.gfAnimations;
+    return frameFromList(anims?.dance, t * 1.2, 12, true);
+  }
+
+  function drawMattStage(t, renderCharacters) {
+    const images = boxingSpriteState.images;
+    drawStageCover(images.stageBack, 1.02, -6, 1);
+    if (images.stageLight?.naturalWidth) {
+      const lightScale = 1.55;
+      const lightW = images.stageLight.naturalWidth * lightScale;
+      const lightH = images.stageLight.naturalHeight * lightScale;
+      ctx.save();
+      ctx.globalAlpha = 0.58;
+      ctx.drawImage(images.stageLight, 84, 26, lightW, lightH);
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(images.stageLight, 84, 26, lightW, lightH);
+      ctx.restore();
+    }
+    const gfFrame = boxingGfFrame(t);
+    if (gfFrame && images.gf?.naturalWidth) {
+      const gfScale = 0.485;
+      const gfWidth = (gfFrame.fw || gfFrame.w) * gfScale;
+      const gfX = (canvas.width - gfWidth) / 2;
+      drawAtlasTopLeft(images.gf, gfFrame, gfX, 194, gfScale);
+    }
+    renderCharacters();
+    drawBottomCentered(images.stageFront, 0.63, 456, 1);
+    drawStageCover(images.stageCurtains, 1.02, -6, 0.96);
   }
 
   function freshBoxingState(songId) {
@@ -656,49 +781,33 @@
 
   const originalStage = stage;
   stage = function(t) {
-    if (isBoxingSpriteSong() && window.BOXING_FIGHT_DATA) {
+    if (usesMattStage() && window.BOXING_FIGHT_DATA) {
       initBoxingSprites();
       initSportingSprites();
       if (boxingSpritesReady() && sportingSpritesReady()) {
-        const bgScale = 0.68;
-        const bgW = spriteState.images.arenaBack.naturalWidth * bgScale;
-        const bgH = spriteState.images.arenaBack.naturalHeight * bgScale;
-        const bgX = (canvas.width - bgW) / 2;
-        const bgY = 28;
-        const crowdFrame = sportingCrowdFrame(t);
-        ctx.save();
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.filter = 'contrast(1.08) saturate(1.06)';
-        ctx.drawImage(spriteState.images.arenaBack, bgX, bgY, bgW, bgH);
-        ctx.restore();
-        if (crowdFrame && spriteState.images.arenaCrowd) {
-          ctx.save();
-          ctx.globalAlpha = 0.96;
-          drawAtlasTopLeft(spriteState.images.arenaCrowd, crowdFrame, bgX, bgY + 170, bgScale);
-          ctx.restore();
-        }
-        ctx.save();
-        ctx.globalAlpha = 0.92;
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(spriteState.images.railing, bgX - 4, 540, spriteState.images.railing.naturalWidth * bgScale, spriteState.images.railing.naturalHeight * bgScale);
-        ctx.restore();
-        const superWarn = state.boxing?.active && (state.boxing.prompt === 'superPunch' || state.boxing.superWarnUntil > t - 0.14);
-        if (superWarn) {
-          const pulse = 0.55 + Math.sin(t * 18) * 0.22;
-          ctx.save();
-          ctx.globalAlpha = 0.35 + pulse * 0.18;
-          ctx.shadowBlur = 26 + pulse * 22;
-          ctx.shadowColor = '#ff9c3d';
-          ctx.fillStyle = 'rgba(255,145,55,0.34)';
-          ctx.beginPath();
-          ctx.ellipse(478, 470, 138 + pulse * 16, 190 + pulse * 18, 0, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.restore();
-        }
-        drawBoxingCharacter('matt', 346, 360, 0.62, t);
-        drawBoxingCharacter('boyfriend', 620, 380, 0.54, t);
+        const songId = songIdFor(state.currentSong);
+        drawMattStage(t, () => {
+          if (songId === 'boxingMatch') {
+            const superWarn = state.boxing?.active && (state.boxing.prompt === 'superPunch' || state.boxing.superWarnUntil > t - 0.14);
+            if (superWarn) {
+              const pulse = 0.55 + Math.sin(t * 18) * 0.22;
+              ctx.save();
+              ctx.globalAlpha = 0.35 + pulse * 0.18;
+              ctx.shadowBlur = 26 + pulse * 22;
+              ctx.shadowColor = '#ff9c3d';
+              ctx.fillStyle = 'rgba(255,145,55,0.34)';
+              ctx.beginPath();
+              ctx.ellipse(402, 458, 138 + pulse * 16, 190 + pulse * 18, 0, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.restore();
+            }
+            drawBoxingCharacter('matt', 262, 352, 0.62, t);
+            drawBoxingCharacter('boyfriend', 722, 370, 0.54, t);
+            return;
+          }
+          drawSportingSprite('matt', 242, 384, 0.64, t);
+          drawSportingSprite('boyfriend', 726, 398, 0.64, t);
+        });
         return;
       }
     }
