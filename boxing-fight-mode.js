@@ -1,6 +1,9 @@
 (() => {
   if (typeof SONGS === 'undefined' || typeof state === 'undefined' || typeof spriteState === 'undefined') return;
 
+  if (window.SPORTING_SPRITES?.matt) window.SPORTING_SPRITES.matt.image = 'assets/boxing-fight/mattangry.png';
+  if (window.SPORTING_SPRITES?.boyfriend) window.SPORTING_SPRITES.boyfriend.image = 'assets/boxing-fight/BOYFRIENDMII.png';
+
   const BOXING_RATE = 1;
   const SPORTING_SCROLL_MULT = 1.5;
   const BOXING_SCROLL_MULT = 2;
@@ -21,6 +24,30 @@
     light: 'assets/boxing-fight/stage_light.png',
     gfImage: 'assets/boxing-fight/GFMIIBOXING_ass_sets.png',
     gfAtlas: 'assets/boxing-fight/GFMIIBOXING_ass_sets.xml'
+  };
+  const BOXING_STAGE_LAYOUTS = {
+    sporting: {
+      stageScale: 1.62,
+      stageYOffset: -104,
+      gfScale: 0.5,
+      gfX: 454,
+      gfY: 74,
+      sportingMattX: 106,
+      sportingMattY: 358,
+      sportingBfX: 902,
+      sportingBfY: 374,
+      sportingCharScale: 0.66
+    },
+    boxingMatch: {
+      stageScale: 1,
+      stageYOffset: 0,
+      gfScale: 0.47,
+      gfY: 144,
+      mattX: 262,
+      mattY: 352,
+      bfX: 722,
+      bfY: 370
+    }
   };
   const boxingSpriteState = { initialized: false, images: {}, gfAnimations: null, gfAtlasRequested: false };
 
@@ -183,6 +210,7 @@
     return spriteState.initialized &&
       imageReady(spriteState.images.matt) &&
       imageReady(spriteState.images.boyfriend) &&
+      imageReady(spriteState.images.gf) &&
       imageReady(spriteState.images.notes);
   }
 
@@ -281,17 +309,33 @@
     return frameFromList(anims?.dance, t * 1.2, 12, true);
   }
 
-  function drawMattStage(t, renderCharacters) {
+  function mattStageLayout(songId) {
+    return BOXING_STAGE_LAYOUTS[songId] || BOXING_STAGE_LAYOUTS.boxingMatch;
+  }
+
+  function drawMattStage(songId, t, renderCharacters) {
     const images = boxingSpriteState.images;
-    drawStageCover(images.stageRing, 1, 0, 1);
+    const layout = mattStageLayout(songId);
+    drawStageCover(images.stageRing, layout.stageScale, layout.stageYOffset, 1);
     const gfFrame = boxingGfFrame(t);
     if (boxingGfReady() && gfFrame && images.gf?.naturalWidth) {
-      const gfScale = 0.47;
+      const gfScale = layout.gfScale;
       const gfWidth = (gfFrame.fw || gfFrame.w) * gfScale;
       const gfX = (canvas.width - gfWidth) / 2;
-      drawAtlasTopLeft(images.gf, gfFrame, gfX, 144, gfScale);
+      drawAtlasTopLeft(images.gf, gfFrame, gfX, layout.gfY, gfScale);
     }
     renderCharacters();
+  }
+
+  function drawSportingRingStage(t) {
+    const layout = BOXING_STAGE_LAYOUTS.sporting;
+    const images = boxingSpriteState.images;
+    drawStageCover(images.stageRing, layout.stageScale, layout.stageYOffset, 1);
+    if (spriteState.images.gf?.naturalWidth) {
+      drawSportingSprite('gf', layout.gfX, layout.gfY, layout.gfScale, t);
+    }
+    drawSportingSprite('matt', layout.sportingMattX, layout.sportingMattY, layout.sportingCharScale, t);
+    drawSportingSprite('boyfriend', layout.sportingBfX, layout.sportingBfY, layout.sportingCharScale, t);
   }
 
   function freshBoxingState(songId) {
@@ -805,30 +849,27 @@
       const songId = songIdFor(state.currentSong);
       const sportingReady = mattStageSportingReady();
       const boxingReady = boxingMatchSpritesReady();
-      if (boxingStageReady() && ((songId === 'boxingMatch' && boxingReady) || (songId !== 'boxingMatch' && sportingReady))) {
-        drawMattStage(t, () => {
-          if (songId === 'boxingMatch') {
-            const superWarn = state.boxing?.active && (state.boxing.prompt === 'superPunch' || state.boxing.superWarnUntil > t - 0.14);
-            if (superWarn) {
-              const pulse = 0.55 + Math.sin(t * 18) * 0.22;
-              ctx.save();
-              ctx.globalAlpha = 0.35 + pulse * 0.18;
-              ctx.shadowBlur = 26 + pulse * 22;
-              ctx.shadowColor = '#ff9c3d';
-              ctx.fillStyle = 'rgba(255,145,55,0.34)';
-              ctx.beginPath();
-              ctx.ellipse(402, 458, 138 + pulse * 16, 190 + pulse * 18, 0, 0, Math.PI * 2);
-              ctx.fill();
-              ctx.restore();
-            }
-            drawBoxingCharacter('matt', 262, 352, 0.62, t);
-            drawBoxingCharacter('boyfriend', 722, 370, 0.54, t);
-            return;
+      if (songId === 'sporting' && boxingStageReady() && sportingReady) {
+        drawSportingRingStage(t);
+        return;
+      }
+      if (boxingStageReady() && songId === 'boxingMatch' && boxingReady) {
+        drawMattStage(songId, t, () => {
+          const superWarn = state.boxing?.active && (state.boxing.prompt === 'superPunch' || state.boxing.superWarnUntil > t - 0.14);
+          if (superWarn) {
+            const pulse = 0.55 + Math.sin(t * 18) * 0.22;
+            ctx.save();
+            ctx.globalAlpha = 0.35 + pulse * 0.18;
+            ctx.shadowBlur = 26 + pulse * 22;
+            ctx.shadowColor = '#ff9c3d';
+            ctx.fillStyle = 'rgba(255,145,55,0.34)';
+            ctx.beginPath();
+            ctx.ellipse(402, 458, 138 + pulse * 16, 190 + pulse * 18, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
           }
-          if (sportingReady) {
-            drawSportingSprite('matt', 352, 482, 0.64, t);
-            drawSportingSprite('boyfriend', 944, 496, 0.64, t);
-          }
+          drawBoxingCharacter('matt', BOXING_STAGE_LAYOUTS.boxingMatch.mattX, BOXING_STAGE_LAYOUTS.boxingMatch.mattY, 0.62, t);
+          drawBoxingCharacter('boyfriend', BOXING_STAGE_LAYOUTS.boxingMatch.bfX, BOXING_STAGE_LAYOUTS.boxingMatch.bfY, 0.54, t);
         });
         return;
       }
