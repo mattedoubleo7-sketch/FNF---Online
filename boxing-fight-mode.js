@@ -44,8 +44,8 @@
     stageScale: 1,
     stageYOffset: 0,
     gfX: 490,
-    gfY: 206,
-    gfScale: 0.5,
+    gfY: 224,
+    gfScale: 0.54,
     mattX: 126,
     mattY: 386,
     mattScale: 0.66,
@@ -662,7 +662,7 @@
   }
 
   function drawPromptText(t) {
-    if (!state.boxing?.prompt || !boxingSpritesReady()) return;
+    if (!state.boxing?.prompt || !boxingMatchSpritesReady()) return;
     const promptKey = state.boxing.prompt;
     const frames = window.BOXING_FIGHT_DATA?.sprites?.texts?.prompts?.[promptKey];
     if (frames?.length) {

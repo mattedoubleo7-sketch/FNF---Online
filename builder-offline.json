@@ -39,7 +39,10 @@
     "playback-start-fix.js",
     "genocide-data.js",
     "genocide-commands.js",
-    "genocide-mode.js"
+    "genocide-mode.js",
+    "sansational-data.js",
+    "last-reel-data.js",
+    "indie-cross-mode.js"
   ],
   "directories": {
     "output": "dist-offline"

@@ -24,6 +24,10 @@
           return [state.audio.fallenStarsInst, state.audio.fallenStarsVoices];
         case "genocide":
           return [state.audio.genocideInst, state.audio.genocideVoices];
+        case "sansational":
+          return [state.audio.sansationalInst, state.audio.sansationalVoices];
+        case "lastReel":
+          return [state.audio.lastReelInst, state.audio.lastReelVoices];
         default:
           return [];
       }

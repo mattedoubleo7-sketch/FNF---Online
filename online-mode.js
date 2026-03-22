@@ -145,6 +145,14 @@ function importedTracksForSong(songId = state.selectedSong) {
     if (typeof window.ensureGenocideAudio === "function") window.ensureGenocideAudio();
     return [state.audio.genocideInst, state.audio.genocideVoices];
   }
+  if (chartSource === "sansational") {
+    if (typeof window.ensureSansationalAudio === "function") window.ensureSansationalAudio();
+    return [state.audio.sansationalInst, state.audio.sansationalVoices];
+  }
+  if (chartSource === "lastReel") {
+    if (typeof window.ensureLastReelAudio === "function") window.ensureLastReelAudio();
+    return [state.audio.lastReelInst, state.audio.lastReelVoices];
+  }
   return [];
 }
 
@@ -252,6 +260,24 @@ async function preloadSongForMatch(songId, matchId) {
     const media = mediaListFrom(prepared);
     const tracks = media.length ? media : [state.audio.genocideInst, state.audio.genocideVoices];
     await Promise.all(tracks.filter(Boolean).map(track => waitForTrackReady(track)));
+  } else if (SONGS[songId]?.chartSource === "sansational") {
+    const prepared = typeof window.prepareSansationalOnlineStart === "function"
+      ? window.prepareSansationalOnlineStart()
+      : (typeof window.ensureSansationalAudio === "function"
+        ? (window.ensureSansationalAudio(), [state.audio.sansationalInst, state.audio.sansationalVoices])
+        : []);
+    const media = mediaListFrom(prepared);
+    const tracks = media.length ? media : [state.audio.sansationalInst, state.audio.sansationalVoices];
+    await Promise.all(tracks.filter(Boolean).map(track => waitForTrackReady(track)));
+  } else if (SONGS[songId]?.chartSource === "lastReel") {
+    const prepared = typeof window.prepareLastReelOnlineStart === "function"
+      ? window.prepareLastReelOnlineStart()
+      : (typeof window.ensureLastReelAudio === "function"
+        ? (window.ensureLastReelAudio(), [state.audio.lastReelInst, state.audio.lastReelVoices])
+        : []);
+    const media = mediaListFrom(prepared);
+    const tracks = media.length ? media : [state.audio.lastReelInst, state.audio.lastReelVoices];
+    await Promise.all(tracks.filter(Boolean).map(track => waitForTrackReady(track)));
   }
   if (state.network.prepareMatchId !== matchId) return false;
   state.network.preparedSongId = songId;
@@ -334,6 +360,14 @@ function syncOnlinePlayback(force = false) {
     syncTrackToTime(state.audio.inst2, targetTime, shouldPlay, syncOptions);
     syncTrackToTime(state.audio.voices2a, targetTime, shouldPlay, { ...syncOptions, isSecondary: true });
     syncTrackToTime(state.audio.voices2b, targetTime, shouldPlay, { ...syncOptions, isSecondary: true });
+  } else if (state.currentSong.chartSource === "sansational") {
+    if (typeof window.ensureSansationalAudio === "function") window.ensureSansationalAudio();
+    syncTrackToTime(state.audio.sansationalInst, targetTime, shouldPlay, syncOptions);
+    syncTrackToTime(state.audio.sansationalVoices, targetTime, shouldPlay, { ...syncOptions, isSecondary: true });
+  } else if (state.currentSong.chartSource === "lastReel") {
+    if (typeof window.ensureLastReelAudio === "function") window.ensureLastReelAudio();
+    syncTrackToTime(state.audio.lastReelInst, targetTime, shouldPlay, syncOptions);
+    syncTrackToTime(state.audio.lastReelVoices, targetTime, shouldPlay, { ...syncOptions, isSecondary: true });
   }
   return targetTime;
 }

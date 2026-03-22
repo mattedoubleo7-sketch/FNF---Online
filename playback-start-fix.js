@@ -23,6 +23,8 @@
       if (chartSource === "challengeEdd") return [state.audio.challengeInst, state.audio.challengeVoices];
       if (chartSource === "ourBrokenConstellations") return [state.audio.fallenStarsInst, state.audio.fallenStarsVoices];
       if (chartSource === "genocide") return [state.audio.genocideInst, state.audio.genocideVoices];
+      if (chartSource === "sansational") return [state.audio.sansationalInst, state.audio.sansationalVoices];
+      if (chartSource === "lastReel") return [state.audio.lastReelInst, state.audio.lastReelVoices];
       return [];
     }
 
@@ -35,6 +37,8 @@
       else if (chartSource === "challengeEdd" && typeof window.ensureChallengeEddAudio === "function") window.ensureChallengeEddAudio();
       else if (chartSource === "ourBrokenConstellations" && typeof window.ensureFallenStarsAudio === "function") window.ensureFallenStarsAudio();
       else if (chartSource === "genocide" && typeof window.ensureGenocideAudio === "function") window.ensureGenocideAudio();
+      else if (chartSource === "sansational" && typeof window.ensureSansationalAudio === "function") window.ensureSansationalAudio();
+      else if (chartSource === "lastReel" && typeof window.ensureLastReelAudio === "function") window.ensureLastReelAudio();
       return importedTracksForSong(song).filter(Boolean);
     }
 
