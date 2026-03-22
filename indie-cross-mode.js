@@ -16,7 +16,8 @@
       images: {},
       groundCache: {},
       atlasRequested: {},
-      altSprites: {}
+      altSprites: {},
+      noteSkin: null
     };
 
     const CONFIGS = {
@@ -122,6 +123,7 @@
     const baseBg = bg;
     const baseStage = stage;
     const baseNotes = notes;
+    const baseReceptors = receptors;
     const baseCameraTargets = typeof cameraTargets === "function" ? cameraTargets : null;
     const baseCameraPanProfile = typeof cameraPanProfile === "function" ? cameraPanProfile : null;
     const baseCameraPoseKeys = typeof cameraPoseKeys === "function" ? cameraPoseKeys : null;
@@ -153,8 +155,8 @@
     }
 
     function frameOrder(name) {
-      const match = String(name || "").match(/instance\s+(\d+)/i);
-      return match ? Number(match[1]) : 0;
+      const match = String(name || "").match(/instance\s+(\d+)|(\d+)(?!.*\d)/i);
+      return match ? Number(match[1] || match[2]) : 0;
     }
 
     function parseAtlasFrames(xmlText) {
@@ -182,6 +184,52 @@
       return frames
         .filter(frame => wanted.has(frame.label))
         .sort((a, b) => frameOrder(a.name) - frameOrder(b.name));
+    }
+
+    function atlasFramesByPrefix(frames, prefix) {
+      return frames
+        .filter(frame => String(frame.name || "").toLowerCase().startsWith(String(prefix || "").toLowerCase()))
+        .sort((a, b) => frameOrder(a.name) - frameOrder(b.name));
+    }
+
+    function buildNoteSkin(xmlText) {
+      const frames = parseAtlasFrames(xmlText);
+      const map = {
+        left: { static: "arrowLEFT", tap: "purple alone", hold: "purple hold", tail: "purple tail", press: "left press", confirm: "left confirm" },
+        down: { static: "arrowDOWN", tap: "blue alone", hold: "blue hold", tail: "blue tail", press: "down press", confirm: "down confirm" },
+        up: { static: "arrowUP", tap: "green alone", hold: "green hold", tail: "green tail", press: "up press", confirm: "up confirm" },
+        right: { static: "arrowRIGHT", tap: "red alone", hold: "red hold", tail: "red tail", press: "right press", confirm: "right confirm" }
+      };
+      const skin = {};
+      Object.entries(map).forEach(([dir, info]) => {
+        skin[dir] = {
+          static: atlasFramesByPrefix(frames, info.static)[0] || null,
+          tap: atlasFramesByPrefix(frames, info.tap)[0] || null,
+          hold: atlasFramesByPrefix(frames, info.hold)[0] || null,
+          tail: atlasFramesByPrefix(frames, info.tail)[0] || null,
+          press: atlasFramesByPrefix(frames, info.press),
+          confirm: atlasFramesByPrefix(frames, info.confirm)
+        };
+      });
+      return skin;
+    }
+
+    function requestNoteSkin() {
+      if (indieState.atlasRequested.noteSkin) return;
+      indieState.atlasRequested.noteSkin = true;
+      fetch("assets/NOTE_assets.xml")
+        .then(resp => resp.ok ? resp.text() : Promise.reject(new Error(`assets/NOTE_assets.xml ${resp.status}`)))
+        .then(text => {
+          indieState.noteSkin = buildNoteSkin(text);
+        })
+        .catch(err => {
+          console.warn("Failed to load Indie Cross note skin atlas", err);
+        });
+    }
+
+    function indieSkinReady(config) {
+      const images = assetsFor(config.id);
+      return !!indieState.noteSkin && imageReady(images.noteSkin);
     }
 
     function buildAltSprite(xmlText, baseSprite, mapping) {
@@ -235,23 +283,25 @@
             boyfriend: data.sprites.boyfriend.image,
             dodgeMechs: data.sprites.dodgeMechs.image,
             warning: data.sprites.warning.image,
-            alert: data.sprites.alert
+            alert: data.sprites.alert,
+            noteSkin: "assets/NOTE_assets.png"
           }
         : {
-            backdrop: "assets/indie-cross/last-reel-background.png",
-            back: data.stage.back.image,
+            roomMain: "assets/indie-cross/last-reel-room-main.png",
+            roomBack: "assets/indie-cross/last-reel-room-back.png",
+            roomMid: "assets/indie-cross/last-reel-room-mid.png",
+            roomFront: "assets/indie-cross/last-reel-room-front.png",
+            roomTop: "assets/indie-cross/last-reel-room-top.png",
+            roomChain: "assets/indie-cross/last-reel-room-chain.png",
             rain: data.stage.rain.image,
-            inkyDepths: "assets/indie-cross/last-reel-inky-depths.png",
             inkOverlay: data.stage.inkOverlay,
             bendy: data.sprites.bendy.image,
-            bendyAlt: "assets/indie-cross/Bendy_remastered.png",
             boyfriend: data.sprites.boyfriend.image,
             piper: data.sprites.piper.image,
-            piperAlt: "assets/indie-cross/PiperDespair.png",
             striker: data.sprites.striker.image,
-            strikerAlt: "assets/indie-cross/StrikerDespair.png",
             warning: data.sprites.warning.image,
-            alert: data.sprites.alert
+            alert: data.sprites.alert,
+            noteSkin: "assets/NOTE_assets.png"
           };
       Object.entries(sources).forEach(([key, src]) => {
         if (!src) return;
@@ -259,6 +309,7 @@
         image.src = src;
         images[key] = image;
       });
+      requestNoteSkin();
       if (id === "sansational") {
         requestAltSprite("sansationalSans", "assets/indie-cross/Sans.xml", xmlText => {
           return buildAltSprite(xmlText, data.sprites.sans, {
@@ -267,35 +318,6 @@
             singDOWN: "Down",
             singUP: "Up",
             singRIGHT: "Right"
-          });
-        });
-      } else {
-        requestAltSprite("lastReelBendy", "assets/indie-cross/Bendy_remastered.xml", xmlText => {
-          return buildAltSprite(xmlText, data.sprites.bendy, {
-            idle: "Bendy Idle",
-            singLEFT: "Left",
-            singDOWN: "bendydown",
-            singUP: "Up",
-            singRIGHT: "B-Right",
-            transform: "Scream"
-          });
-        });
-        requestAltSprite("lastReelPiper", "assets/indie-cross/PiperDespair.xml", xmlText => {
-          return buildAltSprite(xmlText, data.sprites.piper, {
-            walk: "pip walk",
-            attack: "PipAttack",
-            hit: "Piper gets Hit",
-            death: "Piper ded",
-            peek: "Piperr"
-          });
-        });
-        requestAltSprite("lastReelStriker", "assets/indie-cross/StrikerDespair.xml", xmlText => {
-          return buildAltSprite(xmlText, data.sprites.striker, {
-            walk: "Str walk",
-            attack: "PunchAttack_container",
-            hit: "Sticker",
-            death: "I ded",
-            peek: "regeg"
           });
         });
       }
@@ -493,10 +515,10 @@
         if (role === "opponent") return indieState.altSprites.sansationalSans || sprites.sans;
         if (role === "boyfriend") return sprites.boyfriend;
       }
-      if (role === "opponent") return indieState.altSprites.lastReelBendy || sprites.bendy;
+      if (role === "opponent") return sprites.bendy;
       if (role === "boyfriend") return sprites.boyfriend;
-      if (role === "left") return indieState.altSprites.lastReelPiper || sprites.piper;
-      if (role === "right") return indieState.altSprites.lastReelStriker || sprites.striker;
+      if (role === "left") return sprites.piper;
+      if (role === "right") return sprites.striker;
       return null;
     }
 
@@ -506,10 +528,10 @@
         if (role === "opponent") return imageReady(images.sansAlt) ? images.sansAlt : images.sans;
         if (role === "boyfriend") return images.boyfriend;
       }
-      if (role === "opponent") return imageReady(images.bendyAlt) ? images.bendyAlt : images.bendy;
+      if (role === "opponent") return images.bendy;
       if (role === "boyfriend") return images.boyfriend;
-      if (role === "left") return imageReady(images.piperAlt) ? images.piperAlt : images.piper;
-      if (role === "right") return imageReady(images.strikerAlt) ? images.strikerAlt : images.striker;
+      if (role === "left") return images.piper;
+      if (role === "right") return images.striker;
       return null;
     }
 
@@ -1002,6 +1024,35 @@
       }
     }
 
+    function drawLayerImage(image, alpha = 1, scaleMul = 1.02, yOffset = 0) {
+      drawCoverImage(image, alpha, scaleMul, yOffset);
+    }
+
+    function lastReelLayout() {
+      const image = assetsFor("lastReel").roomMain;
+      if (!imageReady(image)) return null;
+      const scale = Math.max(canvas.width / image.naturalWidth, canvas.height / image.naturalHeight) * 1.03;
+      return {
+        scale,
+        x: (canvas.width - image.naturalWidth * scale) * 0.5,
+        y: (canvas.height - image.naturalHeight * scale) * 0.5 - 2
+      };
+    }
+
+    function drawLastReelPlaced(image, layout, alpha = 1, x = 0, y = 0, scaleMul = 1) {
+      if (!imageReady(image) || !layout) return;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(
+        image,
+        layout.x + x * layout.scale,
+        layout.y + y * layout.scale,
+        image.naturalWidth * layout.scale * scaleMul,
+        image.naturalHeight * layout.scale * scaleMul
+      );
+      ctx.restore();
+    }
+
     function activeButcherThreats(t) {
       const mode = currentModeState();
       const threats = { left: null, right: null };
@@ -1035,15 +1086,20 @@
 
     function drawLastReelStage(t) {
       const config = CONFIGS.lastReel;
-      const data = dataFor(config);
       const mode = currentModeState();
       const images = assetsFor(config.id);
-      drawCoverImage(images.backdrop, 1, 1.04, -10);
-      if (imageReady(images.back)) {
-        const backAnim = data.stage.back.animations.idle || Object.values(data.stage.back.animations || {})[0];
-        const frame = frameFromList(backAnim?.frames, t, Number(backAnim?.fps || 24), true);
-        drawAtlasBottomCentered(images.back, frame, config.stage.x, config.stage.y + 14, config.stage.scale, 0.76);
-      }
+      const layout = lastReelLayout();
+      ctx.save();
+      const bg = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      bg.addColorStop(0, "#080402");
+      bg.addColorStop(0.48, "#26170f");
+      bg.addColorStop(1, "#090604");
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+      drawLayerImage(images.roomBack, 0.88, 1.03, -4);
+      drawLastReelPlaced(images.roomMain, layout, 1);
+      drawLastReelPlaced(images.roomMid, layout, 0.98);
       const threats = activeButcherThreats(t);
       drawRole(config, "opponent", t);
       drawRole(config, "boyfriend", t);
@@ -1055,13 +1111,14 @@
         const anim = butcherAnim(threats.right, t);
         drawRole(config, "right", t, anim, anim.alpha);
       }
+      drawLastReelPlaced(images.roomFront, layout, 1, 0, 0);
+      drawLastReelPlaced(images.roomChain, layout, 0.9, 2572, -6);
+      drawLastReelPlaced(images.roomTop, layout, 1, 0, 0);
       if (imageReady(images.rain)) {
+        const data = dataFor(config);
         const rainAnim = data.stage.rain.animations.idle || Object.values(data.stage.rain.animations || {})[0];
         const frame = frameFromList(rainAnim?.frames, t, Number(rainAnim?.fps || 24), true);
-        drawAtlasBottomCentered(images.rain, frame, config.stage.x, config.stage.y + 10, config.stage.scale * 1.02, 0.62);
-      }
-      if (imageReady(images.inkyDepths)) {
-        drawCoverImage(images.inkyDepths, 0.14 + Math.min(0.16, (mode?.inkAlpha || 0) * 0.22), 1.03, 0);
+        drawAtlasBottomCentered(images.rain, frame, config.stage.x, config.stage.y + 18, config.stage.scale * 1.04, 0.18 + Math.min(0.28, (mode?.inkAlpha || 0) * 0.36));
       }
       if (imageReady(images.inkOverlay) && mode?.inkAlpha > 0.001) {
         ctx.save();
@@ -1069,6 +1126,13 @@
         ctx.drawImage(images.inkOverlay, 0, 0, canvas.width, canvas.height);
         ctx.restore();
       }
+      ctx.save();
+      const vignette = ctx.createRadialGradient(canvas.width * 0.5, canvas.height * 0.45, canvas.width * 0.18, canvas.width * 0.5, canvas.height * 0.45, canvas.width * 0.72);
+      vignette.addColorStop(0, "rgba(0,0,0,0)");
+      vignette.addColorStop(1, "rgba(0,0,0,0.48)");
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
       drawPrompt(config, t);
       if (mode?.flash > 0.001) {
         ctx.save();
@@ -1077,6 +1141,96 @@
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.restore();
       }
+    }
+
+    function noteLaneDir(lane) {
+      return sportingLaneKey(lane);
+    }
+
+    function indieNoteScale() {
+      return 0.58;
+    }
+
+    function indieConfirmAlpha(age) {
+      return clamp(1 - age / 0.18, 0, 1);
+    }
+
+    function indieReceptorFrame(lane, age) {
+      const dir = noteLaneDir(lane);
+      const frames = indieState.noteSkin?.[dir];
+      if (!frames) return null;
+      if (age != null && frames.confirm?.length) {
+        const confirm = frameFromList(frames.confirm, age, 24, false);
+        if (confirm) return { frame: confirm, alpha: indieConfirmAlpha(age) };
+      }
+      if (state.keysDown[lane] && frames.press?.length) {
+        return { frame: frameFromList(frames.press, performance.now() / 1000, 24, true), alpha: 1 };
+      }
+      return { frame: frames.static, alpha: 0.92 };
+    }
+
+    function drawIndieReceptor(lane, x, y) {
+      const config = activeConfig();
+      if (!config || !indieSkinReady(config)) return;
+      const image = assetsFor(config.id).noteSkin;
+      const fx = state.receptorFx[lane];
+      const age = fx ? performance.now() / 1000 - Number(fx.time || 0) : null;
+      const result = fx && age >= 0 && age < 0.18 ? indieReceptorFrame(lane, age) : indieReceptorFrame(lane, null);
+      if (!result?.frame) return;
+      const dir = noteLaneDir(lane);
+      const glowColor = { left: "#d86bff", down: "#56d8ff", up: "#8fff63", right: "#ff6158" }[dir] || "#fff";
+      ctx.save();
+      ctx.shadowBlur = state.keysDown[lane] || (age != null && age < 0.18) ? 20 : 10;
+      ctx.shadowColor = glowColor;
+      drawAtlasCentered(image, result.frame, x, y, indieNoteScale(), result.alpha);
+      ctx.restore();
+    }
+
+    function drawIndieSustain(note, x, topY, tailY, alpha = 1) {
+      const config = activeConfig();
+      if (!config || !indieSkinReady(config) || !isHoldNote(note) || tailY <= topY + 10) return;
+      const dir = noteLaneDir(note.lane);
+      const frames = indieState.noteSkin?.[dir];
+      if (!frames?.hold || !frames?.tail) return;
+      const image = assetsFor(config.id).noteSkin;
+      const scale = indieNoteScale() * 0.92;
+      const bodyFrame = frames.hold;
+      const tailFrame = frames.tail;
+      const bodyWidth = Math.max(18, Number(bodyFrame.fw || bodyFrame.w || 0) * scale);
+      const tailHeight = Math.max(20, Number(tailFrame.fh || tailFrame.h || 0) * scale);
+      const bodyTop = topY + 16;
+      const bodyBottom = tailY - tailHeight * 0.4;
+      if (bodyBottom > bodyTop) {
+        drawAtlasStretchVertical(image, bodyFrame, x, bodyTop, bodyWidth, bodyBottom - bodyTop, alpha * 0.92);
+      }
+      drawAtlasCentered(image, tailFrame, x, tailY, scale, alpha);
+    }
+
+    function drawIndieNote(note, t) {
+      const config = activeConfig();
+      if (!config || !indieSkinReady(config)) return false;
+      const image = assetsFor(config.id).noteSkin;
+      const lane = note.lane;
+      const scroll = state.currentSong.scroll;
+      const diff = Number(note.time || 0) - t;
+      const y = receptorY() + diff * scroll;
+      const tailY = receptorY() + (holdEndTime(note) - t) * scroll;
+      if (y < -120 && tailY < -120) return true;
+      if (y > canvas.height + 120 && tailY > canvas.height + 120) return true;
+      const dir = noteLaneDir(lane);
+      const frames = indieState.noteSkin?.[dir];
+      if (!frames?.tap) return false;
+      const alpha = note.side === "opp" ? 0.84 : 1;
+      if (isHoldNote(note)) {
+        drawIndieSustain(note, laneX(lane), note.hit ? receptorY() : y, tailY, alpha * (note.hit ? 0.92 : 1));
+      }
+      if (note.hit && isHoldNote(note) && t > Number(note.time || 0)) return true;
+      ctx.save();
+      ctx.shadowBlur = 14;
+      ctx.shadowColor = { left: "#d86bff", down: "#56d8ff", up: "#8fff63", right: "#ff6158" }[dir] || "#fff";
+      drawAtlasCentered(image, frames.tap, laneX(lane), y, indieNoteScale(), alpha);
+      ctx.restore();
+      return true;
     }
 
     window.ensureSansationalAudio = function() {
@@ -1401,10 +1555,40 @@
       else drawLastReelStage(t);
     };
 
+    receptors = function(t) {
+      const config = activeConfig();
+      if (!config || !indieSkinReady(config)) return baseReceptors(t);
+      const y = receptorY();
+      ctx.strokeStyle = "rgba(255,255,255,0.08)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(canvas.width * 0.5, 72);
+      ctx.lineTo(canvas.width * 0.5, 452);
+      ctx.stroke();
+      for (let lane = 0; lane < 8; lane++) {
+        const x = laneX(lane);
+        drawIndieReceptor(lane, x, y);
+        ctx.strokeStyle = "rgba(255,255,255,0.06)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x, y + 26);
+        ctx.lineTo(x, 448);
+        ctx.stroke();
+      }
+    };
+
     notes = function(t) {
       const config = activeConfig();
       if (!config) return baseNotes(t);
-      baseNotes(t);
+      if (!indieSkinReady(config)) {
+        baseNotes(t);
+      } else if (state.chart?.notes) {
+        for (const note of state.chart.notes) {
+          if (note.played && note.hit && (!isHoldNote(note) || note.holdDone)) continue;
+          if (note.judged && note.side !== "opp" && (!isHoldNote(note) || note.holdDone || !note.hit)) continue;
+          drawIndieNote(note, t);
+        }
+      }
       if (!state.chart?.notes) return;
       state.chart.notes.forEach(note => {
         if (note.judged && !note.holdActive) return;
