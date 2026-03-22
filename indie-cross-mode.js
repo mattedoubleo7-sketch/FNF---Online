@@ -5,6 +5,8 @@
     if ((!SANSATIONAL && !LAST_REEL) || typeof SONGS === "undefined") return;
 
     const nowSec = () => performance.now() / 1000;
+    const INDIE_CROSS_ASSET_VER = "20260322c";
+    const versionedAsset = (path) => path ? `${path}${String(path).includes("?") ? "&" : "?"}v=${INDIE_CROSS_ASSET_VER}` : path;
     const DIR_TO_ANIM = {
       left: "singLEFT",
       down: "singDOWN",
@@ -276,32 +278,32 @@
       const data = dataFor(config);
       const sources = id === "sansational"
         ? {
-            stageMain: "assets/indie-cross/hall.png",
-            stageShade: "assets/indie-cross/halldark.png",
-            sans: data.sprites.sans.image,
-            sansAlt: "assets/indie-cross/Sans.png",
-            boyfriend: data.sprites.boyfriend.image,
-            dodgeMechs: data.sprites.dodgeMechs.image,
-            warning: data.sprites.warning.image,
-            alert: data.sprites.alert,
-            noteSkin: "assets/NOTE_assets.png"
+            stageMain: versionedAsset("assets/indie-cross/hall.png"),
+            stageShade: versionedAsset("assets/indie-cross/halldark.png"),
+            sans: versionedAsset("assets/indie-cross/SansWF.png"),
+            sansAlt: versionedAsset("assets/indie-cross/Sans.png"),
+            boyfriend: versionedAsset("assets/indie-cross/BoyFriend_SansWT.png"),
+            dodgeMechs: versionedAsset("assets/indie-cross/DodgeMechs.png"),
+            warning: versionedAsset("assets/indie-cross/Warning.png"),
+            alert: versionedAsset(data.sprites.alert),
+            noteSkin: versionedAsset("assets/NOTE_assets.png")
           }
         : {
-            roomMain: "assets/indie-cross/last-reel-room-main.png",
-            roomBack: "assets/indie-cross/last-reel-room-back.png",
-            roomMid: "assets/indie-cross/last-reel-room-mid.png",
-            roomFront: "assets/indie-cross/last-reel-room-front.png",
-            roomTop: "assets/indie-cross/last-reel-room-top.png",
-            roomChain: "assets/indie-cross/last-reel-room-chain.png",
-            rain: data.stage.rain.image,
-            inkOverlay: data.stage.inkOverlay,
-            bendy: data.sprites.bendy.image,
-            boyfriend: data.sprites.boyfriend.image,
-            piper: data.sprites.piper.image,
-            striker: data.sprites.striker.image,
-            warning: data.sprites.warning.image,
-            alert: data.sprites.alert,
-            noteSkin: "assets/NOTE_assets.png"
+            roomBackBack: versionedAsset("assets/indie-cross/last-reel-backback.png"),
+            roomBackMain: versionedAsset("assets/indie-cross/last-reel-backmain.png"),
+            roomMidGround: versionedAsset("assets/indie-cross/last-reel-midground.png"),
+            roomForeground: versionedAsset("assets/indie-cross/last-reel-foreground.png"),
+            roomChainOrig: versionedAsset("assets/indie-cross/last-reel-chain-orig.png"),
+            roomCandles: versionedAsset("assets/indie-cross/last-reel-candles.png"),
+            rain: versionedAsset(data.stage.rain.image),
+            inkOverlay: versionedAsset(data.stage.inkOverlay),
+            bendy: versionedAsset("assets/indie-cross/Bendy_remastered.png"),
+            boyfriend: versionedAsset("assets/indie-cross/BoyFriend_NM_Bendy.png"),
+            piper: versionedAsset(data.sprites.piper.image),
+            striker: versionedAsset(data.sprites.striker.image),
+            warning: versionedAsset(data.sprites.warning.image),
+            alert: versionedAsset(data.sprites.alert),
+            noteSkin: versionedAsset("assets/NOTE_assets.png")
           };
       Object.entries(sources).forEach(([key, src]) => {
         if (!src) return;
@@ -319,6 +321,39 @@
             singUP: "Up",
             singRIGHT: "Right"
           });
+        });
+        requestAltSprite("sansationalBoyfriend", "assets/indie-cross/BoyFriend_SansWT.xml", xmlText => {
+          return buildAltSprite(xmlText, data.sprites.boyfriend, {
+            idle: "BF idle dance",
+            singLEFT: "BF NOTE LEFT",
+            singDOWN: "BF NOTE DOWN",
+            singUP: "BF NOTE UP",
+            singRIGHT: "BF NOTE RIGHT",
+            singLEFTmiss: "BF NOTE LEFT MISS",
+            singDOWNmiss: "BF NOTE DOWN MISS",
+            singUPmiss: "BF NOTE UP MISS",
+            singRIGHTmiss: "BF NOTE RIGHT MISS",
+            dodge: "boyfriend dodge",
+            attack: "0BF attack",
+            hurt: "BF hit"
+          });
+        });
+      } else {
+        requestAltSprite("lastReelBendy", "assets/indie-cross/Bendy_remastered.xml", xmlText => {
+          return buildAltSprite(xmlText, data.sprites.bendy, {
+            idle: "Bendy Idle",
+            singLEFT: "Left",
+            singDOWN: "bendydown",
+            singUP: "Up",
+            singRIGHT: "B-Right"
+          });
+        });
+        requestAltSprite("lastReelCandles", "assets/indie-cross/last-reel-candles.xml", xmlText => {
+          const frames = parseAtlasFrames(xmlText);
+          return {
+            candles: atlasFramesByLabel(frames, "Candless"),
+            lights: atlasFramesByLabel(frames, "Lights")
+          };
         });
       }
       indieState.ready[id] = true;
@@ -464,6 +499,19 @@
       ctx.restore();
     }
 
+    function drawCoverAtlasFrame(image, frame, alpha = 1, scaleMul = 1, yOffset = 0) {
+      if (!imageReady(image) || !frame) return;
+      const fw = Math.max(1, Number(frame.fw || frame.w || 1));
+      const fh = Math.max(1, Number(frame.fh || frame.h || 1));
+      const scale = Math.max(canvas.width / fw, canvas.height / fh) * scaleMul;
+      const dx = (canvas.width - fw * scale) * 0.5;
+      const dy = (canvas.height - fh * scale) * 0.5 + yOffset;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      drawAtlasSub(image, frame, dx - Number(frame.fx || 0) * scale, dy - Number(frame.fy || 0) * scale, scale);
+      ctx.restore();
+    }
+
     function frameGroundPoint(image, frame) {
       if (!imageReady(image) || !frame) return { x: 0, y: 0 };
       const key = image.src + "|" + (frame.name || [frame.x, frame.y, frame.w, frame.h].join(","));
@@ -513,9 +561,9 @@
       if (!sprites) return null;
       if (config.id === "sansational") {
         if (role === "opponent") return indieState.altSprites.sansationalSans || sprites.sans;
-        if (role === "boyfriend") return sprites.boyfriend;
+        if (role === "boyfriend") return indieState.altSprites.sansationalBoyfriend || sprites.boyfriend;
       }
-      if (role === "opponent") return sprites.bendy;
+      if (role === "opponent") return indieState.altSprites.lastReelBendy || sprites.bendy;
       if (role === "boyfriend") return sprites.boyfriend;
       if (role === "left") return sprites.piper;
       if (role === "right") return sprites.striker;
@@ -1028,31 +1076,6 @@
       drawCoverImage(image, alpha, scaleMul, yOffset);
     }
 
-    function lastReelLayout() {
-      const image = assetsFor("lastReel").roomMain;
-      if (!imageReady(image)) return null;
-      const scale = Math.max(canvas.width / image.naturalWidth, canvas.height / image.naturalHeight) * 1.03;
-      return {
-        scale,
-        x: (canvas.width - image.naturalWidth * scale) * 0.5,
-        y: (canvas.height - image.naturalHeight * scale) * 0.5 - 2
-      };
-    }
-
-    function drawLastReelPlaced(image, layout, alpha = 1, x = 0, y = 0, scaleMul = 1) {
-      if (!imageReady(image) || !layout) return;
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.drawImage(
-        image,
-        layout.x + x * layout.scale,
-        layout.y + y * layout.scale,
-        image.naturalWidth * layout.scale * scaleMul,
-        image.naturalHeight * layout.scale * scaleMul
-      );
-      ctx.restore();
-    }
-
     function activeButcherThreats(t) {
       const mode = currentModeState();
       const threats = { left: null, right: null };
@@ -1088,7 +1111,6 @@
       const config = CONFIGS.lastReel;
       const mode = currentModeState();
       const images = assetsFor(config.id);
-      const layout = lastReelLayout();
       ctx.save();
       const bg = ctx.createLinearGradient(0, 0, 0, canvas.height);
       bg.addColorStop(0, "#080402");
@@ -1097,9 +1119,12 @@
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.restore();
-      drawLayerImage(images.roomBack, 0.88, 1.03, -4);
-      drawLastReelPlaced(images.roomMain, layout, 1);
-      drawLastReelPlaced(images.roomMid, layout, 0.98);
+      drawLayerImage(images.roomBackBack, 1, 1.03, -8);
+      drawLayerImage(images.roomBackMain, 1, 1.03, -8);
+      drawLayerImage(images.roomMidGround, 1, 1.03, -6);
+      const candleAtlas = indieState.altSprites.lastReelCandles;
+      const candleFrame = frameFromList(candleAtlas?.candles, t, 14, true);
+      if (candleFrame) drawCoverAtlasFrame(images.roomCandles, candleFrame, 0.86, 1.03, -6);
       const threats = activeButcherThreats(t);
       drawRole(config, "opponent", t);
       drawRole(config, "boyfriend", t);
@@ -1111,14 +1136,15 @@
         const anim = butcherAnim(threats.right, t);
         drawRole(config, "right", t, anim, anim.alpha);
       }
-      drawLastReelPlaced(images.roomFront, layout, 1, 0, 0);
-      drawLastReelPlaced(images.roomChain, layout, 0.9, 2572, -6);
-      drawLastReelPlaced(images.roomTop, layout, 1, 0, 0);
+      drawLayerImage(images.roomForeground, 1, 1.03, -4);
+      drawLayerImage(images.roomChainOrig, 0.9, 1.03, -4);
+      const lightFrame = frameFromList(candleAtlas?.lights, t, 16, true);
+      if (lightFrame) drawCoverAtlasFrame(images.roomCandles, lightFrame, 0.28 + Math.min(0.16, (mode?.flash || 0) * 0.18), 1.03, -6);
       if (imageReady(images.rain)) {
         const data = dataFor(config);
         const rainAnim = data.stage.rain.animations.idle || Object.values(data.stage.rain.animations || {})[0];
         const frame = frameFromList(rainAnim?.frames, t, Number(rainAnim?.fps || 24), true);
-        drawAtlasBottomCentered(images.rain, frame, config.stage.x, config.stage.y + 18, config.stage.scale * 1.04, 0.18 + Math.min(0.28, (mode?.inkAlpha || 0) * 0.36));
+        drawCoverAtlasFrame(images.rain, frame, 0.12 + Math.min(0.24, (mode?.inkAlpha || 0) * 0.28), 1.03, -6);
       }
       if (imageReady(images.inkOverlay) && mode?.inkAlpha > 0.001) {
         ctx.save();
@@ -1151,6 +1177,19 @@
       return 0.58;
     }
 
+    function indieNoteFilter(config) {
+      return config?.id === "lastReel"
+        ? "brightness(0.42) sepia(0.95) saturate(1.1) hue-rotate(-12deg) contrast(1.12)"
+        : "";
+    }
+
+    function indieNoteGlow(config, dir) {
+      if (config?.id === "lastReel") {
+        return { left: "#7a4b18", down: "#9a5e18", up: "#c1892e", right: "#69240f" }[dir] || "#9a6b2b";
+      }
+      return { left: "#d86bff", down: "#56d8ff", up: "#8fff63", right: "#ff6158" }[dir] || "#fff";
+    }
+
     function indieConfirmAlpha(age) {
       return clamp(1 - age / 0.18, 0, 1);
     }
@@ -1178,10 +1217,11 @@
       const result = fx && age >= 0 && age < 0.18 ? indieReceptorFrame(lane, age) : indieReceptorFrame(lane, null);
       if (!result?.frame) return;
       const dir = noteLaneDir(lane);
-      const glowColor = { left: "#d86bff", down: "#56d8ff", up: "#8fff63", right: "#ff6158" }[dir] || "#fff";
+      const glowColor = indieNoteGlow(config, dir);
       ctx.save();
       ctx.shadowBlur = state.keysDown[lane] || (age != null && age < 0.18) ? 20 : 10;
       ctx.shadowColor = glowColor;
+      if (indieNoteFilter(config)) ctx.filter = indieNoteFilter(config);
       drawAtlasCentered(image, result.frame, x, y, indieNoteScale(), result.alpha);
       ctx.restore();
     }
@@ -1200,10 +1240,15 @@
       const tailHeight = Math.max(20, Number(tailFrame.fh || tailFrame.h || 0) * scale);
       const bodyTop = topY + 16;
       const bodyBottom = tailY - tailHeight * 0.4;
+      if (indieNoteFilter(config)) {
+        ctx.save();
+        ctx.filter = indieNoteFilter(config);
+      }
       if (bodyBottom > bodyTop) {
         drawAtlasStretchVertical(image, bodyFrame, x, bodyTop, bodyWidth, bodyBottom - bodyTop, alpha * 0.92);
       }
       drawAtlasCentered(image, tailFrame, x, tailY, scale, alpha);
+      if (indieNoteFilter(config)) ctx.restore();
     }
 
     function drawIndieNote(note, t) {
@@ -1227,7 +1272,8 @@
       if (note.hit && isHoldNote(note) && t > Number(note.time || 0)) return true;
       ctx.save();
       ctx.shadowBlur = 14;
-      ctx.shadowColor = { left: "#d86bff", down: "#56d8ff", up: "#8fff63", right: "#ff6158" }[dir] || "#fff";
+      ctx.shadowColor = indieNoteGlow(config, dir);
+      if (indieNoteFilter(config)) ctx.filter = indieNoteFilter(config);
       drawAtlasCentered(image, frames.tap, laneX(lane), y, indieNoteScale(), alpha);
       ctx.restore();
       return true;
