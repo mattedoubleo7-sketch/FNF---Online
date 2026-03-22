@@ -14,6 +14,7 @@
   const BOXING_BLOCK_MISS_BOOST = 0.09;
   const BOXING_MAX_BLOCK_BOOST = 0.78;
   const BOXING_STAGE_ASSETS = {
+    ring: 'assets/boxing-fight/stage.png',
     back: 'assets/boxing-fight/stageback.png',
     front: 'assets/boxing-fight/stagefront.png',
     curtains: 'assets/boxing-fight/stagecurtains.png',
@@ -22,6 +23,10 @@
     gfAtlas: 'assets/boxing-fight/GFMIIBOXING_ass_sets.xml'
   };
   const boxingSpriteState = { initialized: false, images: {}, gfAnimations: null, gfAtlasRequested: false };
+
+  function imageReady(image) {
+    return !!(image && image.complete && image.naturalWidth);
+  }
 
   function songIdFor(song) {
     if (!song) return '';
@@ -131,6 +136,7 @@
       matt: window.BOXING_FIGHT_DATA.sprites.matt.image,
       texts: window.BOXING_FIGHT_DATA.sprites.texts.image,
       warning: window.BOXING_FIGHT_DATA.sprites.warning,
+      stageRing: BOXING_STAGE_ASSETS.ring,
       stageBack: BOXING_STAGE_ASSETS.back,
       stageFront: BOXING_STAGE_ASSETS.front,
       stageCurtains: BOXING_STAGE_ASSETS.curtains,
@@ -154,10 +160,30 @@
     }
   }
 
-  function boxingSpritesReady() {
+  function boxingStageReady() {
+    const images = boxingSpriteState.images;
     return boxingSpriteState.initialized &&
-      boxingSpriteState.gfAnimations &&
-      Object.values(boxingSpriteState.images).every(img => img && img.complete && img.naturalWidth);
+      imageReady(images.stageRing);
+  }
+
+  function boxingGfReady() {
+    return imageReady(boxingSpriteState.images.gf) && !!boxingSpriteState.gfAnimations?.dance?.length;
+  }
+
+  function boxingMatchSpritesReady() {
+    const images = boxingSpriteState.images;
+    return boxingStageReady() &&
+      imageReady(images.boyfriend) &&
+      imageReady(images.matt) &&
+      imageReady(images.texts) &&
+      imageReady(images.warning);
+  }
+
+  function mattStageSportingReady() {
+    return spriteState.initialized &&
+      imageReady(spriteState.images.matt) &&
+      imageReady(spriteState.images.boyfriend) &&
+      imageReady(spriteState.images.notes);
   }
 
   function boxingActionAnim(kind, t) {
@@ -257,29 +283,15 @@
 
   function drawMattStage(t, renderCharacters) {
     const images = boxingSpriteState.images;
-    drawStageCover(images.stageBack, 1.02, -6, 1);
-    if (images.stageLight?.naturalWidth) {
-      const lightScale = 1.55;
-      const lightW = images.stageLight.naturalWidth * lightScale;
-      const lightH = images.stageLight.naturalHeight * lightScale;
-      ctx.save();
-      ctx.globalAlpha = 0.58;
-      ctx.drawImage(images.stageLight, 84, 26, lightW, lightH);
-      ctx.translate(canvas.width, 0);
-      ctx.scale(-1, 1);
-      ctx.drawImage(images.stageLight, 84, 26, lightW, lightH);
-      ctx.restore();
-    }
+    drawStageCover(images.stageRing, 1, 0, 1);
     const gfFrame = boxingGfFrame(t);
-    if (gfFrame && images.gf?.naturalWidth) {
-      const gfScale = 0.485;
+    if (boxingGfReady() && gfFrame && images.gf?.naturalWidth) {
+      const gfScale = 0.47;
       const gfWidth = (gfFrame.fw || gfFrame.w) * gfScale;
       const gfX = (canvas.width - gfWidth) / 2;
-      drawAtlasTopLeft(images.gf, gfFrame, gfX, 194, gfScale);
+      drawAtlasTopLeft(images.gf, gfFrame, gfX, 144, gfScale);
     }
     renderCharacters();
-    drawBottomCentered(images.stageFront, 0.63, 456, 1);
-    drawStageCover(images.stageCurtains, 1.02, -6, 0.96);
   }
 
   function freshBoxingState(songId) {
@@ -662,6 +674,12 @@
     drawEchoMarker(t);
   }
 
+  const originalSportingSpritesReady = sportingSpritesReady;
+  sportingSpritesReady = function() {
+    if (usesMattStage()) return mattStageSportingReady();
+    return originalSportingSpritesReady.apply(this, arguments);
+  };
+
   const originalEnsureSportingAudio = ensureSportingAudio;
   ensureSportingAudio = function() {
     originalEnsureSportingAudio.apply(this, arguments);
@@ -784,8 +802,10 @@
     if (usesMattStage() && window.BOXING_FIGHT_DATA) {
       initBoxingSprites();
       initSportingSprites();
-      if (boxingSpritesReady() && sportingSpritesReady()) {
-        const songId = songIdFor(state.currentSong);
+      const songId = songIdFor(state.currentSong);
+      const sportingReady = mattStageSportingReady();
+      const boxingReady = boxingMatchSpritesReady();
+      if (boxingStageReady() && ((songId === 'boxingMatch' && boxingReady) || (songId !== 'boxingMatch' && sportingReady))) {
         drawMattStage(t, () => {
           if (songId === 'boxingMatch') {
             const superWarn = state.boxing?.active && (state.boxing.prompt === 'superPunch' || state.boxing.superWarnUntil > t - 0.14);
@@ -805,8 +825,10 @@
             drawBoxingCharacter('boyfriend', 722, 370, 0.54, t);
             return;
           }
-          drawSportingSprite('matt', 242, 384, 0.64, t);
-          drawSportingSprite('boyfriend', 726, 398, 0.64, t);
+          if (sportingReady) {
+            drawSportingSprite('matt', 352, 482, 0.64, t);
+            drawSportingSprite('boyfriend', 944, 496, 0.64, t);
+          }
         });
         return;
       }
@@ -918,6 +940,9 @@
     SONGS.boxingMatch.diff = 'Hard (Paid Mod Chart)';
       SONGS.boxingMatch.blurb = 'Paid Boxing Fight hard chart and vocals at normal speed, with real boxer BF and Matt sprites, very light stamina drain on your note hits, stronger low-stamina Matt life drain that stops at 10% HP, Echo, a 5-second block cooldown, block speed-ups, and super punches on the boxing ring.';
   }
+
+  initSportingSprites();
+  initBoxingSprites();
 
   if (typeof renderSongs === 'function') renderSongs();
 })();
