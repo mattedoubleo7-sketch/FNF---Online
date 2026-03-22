@@ -5,7 +5,7 @@
 
     const SONG_ID = "genocide";
     const SONG_SOURCE = "genocide";
-    const genState = { ready: false, images: {}, groundCache: {}, referenceCache: {}, afterimages: { opponent: [], boyfriend: [] }, clockStart: 0, cacheKey: "genocide-v7" };
+    const genState = { ready: false, images: {}, groundCache: {}, referenceCache: {}, afterimages: { opponent: [], boyfriend: [] }, clockStart: 0, cacheKey: "genocide-v10" };
     const clamp01 = value => Math.max(0, Math.min(1, value));
     const DIR_TO_ANIM = {
       left: "singLEFT",
@@ -23,6 +23,8 @@
       fireScale: 0.86,
       fireAlpha: 0.56,
       fireGlowAlpha: 0.17,
+      stageGlowAlpha: 0.32,
+      stageGlowPulse: 0.22,
       speakerX: 650,
       speakerY: 594,
       speakerScale: 0.5,
@@ -33,15 +35,16 @@
         boyfriend: 0.76
       },
       roleAnchor: {
-        opponent: { x: 448, y: 646, mode: "ground" },
-        boyfriend: { x: 930, y: 648, mode: "ground" },
-        girlfriend: { x: 398, y: 252, mode: "ground" }
+        opponent: { x: 186, y: 667, mode: "fixed" },
+        boyfriend: { x: 879, y: 626, mode: "fixed" },
+        girlfriend: { x: 658, y: 446, mode: "fixed" }
       },
       camera: {
         opponent: { x: 405, y: 480 },
         boyfriend: { x: 820, y: 500 }
       }
     };
+    const COMMAND_EVENT_SCALE = [0.18, 0.4, 0.72, 1];
 
     state.poses.tabi = state.poses.tabi || { lane: 1, time: -10, kind: "hit" };
     state.poses.gf = state.poses.gf || { lane: 1, time: -10, kind: "hit" };
@@ -81,6 +84,36 @@
 
     function clone(value) {
       return JSON.parse(JSON.stringify(value));
+    }
+
+    function commandPulseAt(t) {
+      const commands = window.GENOCIDE_COMMANDS || [];
+      if (!commands.length) return 0;
+      let strength = 0;
+      for (let i = 0; i < commands.length; i++) {
+        const event = commands[i];
+        const age = t - Number(event[0] || 0);
+        if (age < -0.06) break;
+        if (age > 0.32) continue;
+        const kind = Math.max(0, Math.min(COMMAND_EVENT_SCALE.length - 1, Number(event[1] || 0)));
+        const weight = COMMAND_EVENT_SCALE[kind];
+        if (age < 0) {
+          strength += weight * Math.max(0, 1 - Math.abs(age) / 0.06) * 0.55;
+        } else {
+          strength += weight * Math.max(0, 1 - age / 0.32);
+        }
+      }
+      return Math.min(1.35, strength);
+    }
+
+    function genocideFxProfile(t) {
+      const beat = genocideBeatPulse(t, 0.2);
+      const command = commandPulseAt(t);
+      return {
+        beat,
+        command,
+        total: Math.min(1.5, beat * 0.55 + command)
+      };
     }
 
     function assetUrl(src) {
@@ -304,18 +337,15 @@
       const frame = frameFromList(anim.frames, animState.elapsed, Number(anim.fps || 24), animState.loop);
       if (!frame) return null;
       const scale = Number(LAYOUT.roleScale[role] || 1) * Number(sprite.scale || 1);
-      const currentOffset = animOffset(anim);
       const anchor = roleAnchor(role);
       let pos;
       if (anchor.mode === "fixed") {
-        const reference = spriteReference(role);
-        if (!reference?.frame) return null;
-        const refOffset = reference.offset;
         pos = {
-          x: anchor.x + (refOffset.x - currentOffset.x) * scale,
-          y: anchor.y + (refOffset.y - currentOffset.y) * scale
+          x: anchor.x,
+          y: anchor.y
         };
       } else {
+        const currentOffset = animOffset(anim);
         const ground = frameGroundPoint(image, frame);
         pos = {
           x: anchor.x + (Number(frame.fw || frame.w || 0) * 0.5 + Number(frame.fx || 0) - ground.x - currentOffset.x) * scale,
@@ -389,7 +419,7 @@
       while (list.length > 3) list.shift();
     }
 
-    function drawAfterimages(role) {
+    function drawAfterimages(role, t) {
       const list = genState.afterimages[role];
       if (!list?.length) return;
       const now = performance.now() / 1000;
@@ -398,22 +428,23 @@
       if (!imageReady(image)) return;
       const purpleTint = role === "opponent" ? "#c36fff" : "#9d83ff";
       const offsetDir = role === "opponent" ? -1 : 1;
+      const commandBoost = genocideFxProfile(t).command;
       for (const echo of list.slice(-3)) {
         const age = now - echo.time;
         const p = clamp01(age / 0.11);
-        const alpha = (role === "opponent" ? 0.85 : 0.62) * (1 - p);
+        const alpha = ((role === "opponent" ? 0.85 : 0.62) + commandBoost * 0.18) * (1 - p);
         if (alpha <= 0.02) continue;
         const lift = (echo.frameHeight / 14) * p;
-        const offsetX = offsetDir * (3.5 + p * 1.5);
-        const offsetY = -(1.5 + p * 1.2) - lift * 0.25;
+        const offsetX = offsetDir * (3.5 + p * 1.5 + commandBoost * 1.4);
+        const offsetY = -(1.5 + p * 1.2 + commandBoost * 0.8) - lift * 0.25;
         ctx.save();
         ctx.globalCompositeOperation = "screen";
-        ctx.filter = `blur(${(0.35 + p * 0.45).toFixed(1)}px) brightness(1.18)`;
-        drawAtlasFrameSilhouette(image, echo.frame, echo.pos.x + offsetX, echo.pos.y + offsetY, echo.scale, alpha * 0.34, echo.flipX, purpleTint);
+        ctx.filter = `blur(${(0.35 + p * 0.45 + commandBoost * 0.7).toFixed(1)}px) brightness(${(1.18 + commandBoost * 0.08).toFixed(2)})`;
+        drawAtlasFrameSilhouette(image, echo.frame, echo.pos.x + offsetX, echo.pos.y + offsetY, echo.scale, alpha * (0.34 + commandBoost * 0.08), echo.flipX, purpleTint);
         ctx.restore();
         ctx.save();
         ctx.globalCompositeOperation = "screen";
-        ctx.filter = `blur(${(0.5 + p * 0.9).toFixed(1)}px) brightness(${role === "opponent" ? 1.42 : 1.18})`;
+        ctx.filter = `blur(${(0.5 + p * 0.9 + commandBoost * 0.8).toFixed(1)}px) brightness(${(role === "opponent" ? 1.42 : 1.18) + commandBoost * 0.16})`;
         drawAtlasFrame(image, echo.frame, echo.pos.x, echo.pos.y - lift, echo.scale, alpha, echo.flipX);
         ctx.restore();
       }
@@ -470,22 +501,25 @@
     }
 
     function drawStageBackdrop(t) {
-      const pulse = genocideBeatPulse(t, 0.18);
+      const fx = genocideFxProfile(t);
+      const pulse = fx.beat;
       drawBackdropLayer(genState.images.back, LAYOUT.stageScale, 0, 1);
-      drawBackdropLayer(genState.images.destroyed, LAYOUT.stageScale, 0, LAYOUT.destroyedAlpha + pulse * 0.08, "screen");
+      drawBackdropLayer(genState.images.glow, LAYOUT.stageScale, 0, LAYOUT.stageGlowAlpha + pulse * LAYOUT.stageGlowPulse + fx.command * 0.28 + Math.sin(t * 2.4) * 0.03, "screen");
+      drawBackdropLayer(genState.images.destroyed, LAYOUT.stageScale, 0, LAYOUT.destroyedAlpha + pulse * 0.08 + fx.command * 0.1, "screen");
       drawBackdropLayer(genState.images.furniture, LAYOUT.stageScale, 0, 0.96);
     }
 
     function drawStageFire(t) {
       const frame = frameFromList(G.stage.fireFrames || [], t * 0.7, 24, true);
       if (!frame || !imageReady(genState.images.fire)) return;
-      const pulse = genocideBeatPulse(t, 0.22);
+      const fx = genocideFxProfile(t);
+      const pulse = fx.beat;
       const fireAlpha = LAYOUT.fireAlpha + pulse * 0.12;
       drawAtlasBottomCentered(genState.images.fire, frame, LAYOUT.fireX, LAYOUT.fireY, LAYOUT.fireScale, fireAlpha);
       ctx.save();
       ctx.globalCompositeOperation = "screen";
-      ctx.globalAlpha = LAYOUT.fireGlowAlpha + pulse * 0.16 + Math.sin(t * 3.6) * 0.025;
-      drawAtlasBottomCentered(genState.images.fire, frame, LAYOUT.fireX, LAYOUT.fireY, LAYOUT.fireScale * 1.03, 1);
+      ctx.globalAlpha = LAYOUT.fireGlowAlpha + pulse * 0.16 + fx.command * 0.18 + Math.sin(t * 3.6) * 0.025;
+      drawAtlasBottomCentered(genState.images.fire, frame, LAYOUT.fireX, LAYOUT.fireY, LAYOUT.fireScale * (1.03 + fx.command * 0.035), 1);
       ctx.restore();
     }
 
@@ -494,12 +528,21 @@
     }
 
     function drawStagePostFX(t) {
-      const pulse = genocideBeatPulse(t, 0.2);
-      drawBackdropLayer(genState.images.sticks, LAYOUT.stageScale, 0, 0.82 + pulse * 0.08, "screen");
+      const fx = genocideFxProfile(t);
+      const pulse = fx.beat;
+      drawBackdropLayer(genState.images.sticks, LAYOUT.stageScale, 0, 0.82 + pulse * 0.08 + fx.command * 0.12, "screen");
       if (imageReady(genState.images.vignette)) {
         ctx.save();
-        ctx.globalAlpha = LAYOUT.vignetteAlpha + pulse * 0.1;
+        ctx.globalAlpha = LAYOUT.vignetteAlpha + pulse * 0.1 + fx.command * 0.08;
         ctx.drawImage(genState.images.vignette, 0, 0, canvas.width, canvas.height);
+        ctx.restore();
+      }
+      if (fx.command > 0.04) {
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.globalAlpha = Math.min(0.18, fx.command * 0.16);
+        ctx.fillStyle = "#b55dff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.restore();
       }
     }
@@ -699,9 +742,9 @@
       recordAfterimage("opponent", oppRender);
       recordAfterimage("boyfriend", bfRender);
       drawRoleRender("girlfriend", gfRender);
-      drawAfterimages("opponent");
+      drawAfterimages("opponent", t);
       drawRoleRender("opponent", oppRender);
-      drawAfterimages("boyfriend");
+      drawAfterimages("boyfriend", t);
       drawRoleRender("boyfriend", bfRender);
       drawStagePostFX(t);
     };

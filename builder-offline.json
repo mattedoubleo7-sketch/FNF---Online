@@ -38,6 +38,7 @@
     "playback-stability-fix.js",
     "playback-start-fix.js",
     "genocide-data.js",
+    "genocide-commands.js",
     "genocide-mode.js"
   ],
   "directories": {

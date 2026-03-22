@@ -376,7 +376,8 @@ body.fullViewport #app { width: 100vw; height: 100vh; aspect-ratio: auto; border
 <script src="challenge-edd-data.js"></script>
 <script src="challenge-edd-bf-data.js"></script>
 <script src="fallen-stars-data.js"></script>
-<script src="genocide-data.js?v=genocide-v7"></script>
+<script src="genocide-data.js?v=genocide-v10"></script>
+<script src="genocide-commands.js?v=genocide-v10"></script>
 <script>
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
@@ -467,8 +468,8 @@ const COLORS = ["#ff5a91", "#ff9d42", "#b7ff65", "#4de3ff", "#ff5a91", "#ff9d42"
 const MOTIFS = [[0,1,2,3,2,1],[0,2,1,3,2,0],[3,2,1,0,1,2],[1,1,2,3,2,0],[0,3,1,2,3,1],[2,0,3,1,2,1]];
 const DEFAULTS = { solo:{left:"a",down:"s",up:"w",right:"d"}, p1:{left:"a",down:"s",up:"w",right:"d"}, p2:{left:"arrowleft",down:"arrowdown",up:"arrowup",right:"arrowright"} };
 const SONGS = {
-    sporting:{ title:"Sporting", subtitle:"Original beat + exact chart", diff:"Normal (Original Chart)", tempo:300, root:45, scale:[0,2,3,5,7,8,10], prog:[0,5,3,7], scroll:920, seed:29, introBeats:0, outroBeats:4, palette:["#0f1422","#1b2f46","#314f74","#0b0e16","#4de3ff","#ff9d42"], blurb:"Imported from the original VS Matt chart file and synced to the real Sporting instrumental and vocals for original-speed playback.", chartSource:"sporting"},
-    boxingMatch:{ title:"Boxing Match", subtitle:"Original VS Matt chart", diff:"Normal (Original Chart)", tempo:339, root:45, scale:[0,2,3,5,7,8,10], prog:[0,5,3,7], scroll:760, seed:31, introBeats:0, outroBeats:4, palette:["#0f1422","#1b2f46","#314f74","#0b0e16","#4de3ff","#ff9d42"], blurb:"Imported from the original VS Matt Boxing Match chart with the real instrumental and vocals, while reusing the Sporting stage and noteskins.", chartSource:"boxingMatch"},
+    sporting:{ title:"Sporting", subtitle:"Original hard chart with 1.5x scroll", diff:"Hard (Original Chart)", tempo:300, root:45, scale:[0,2,3,5,7,8,10], prog:[0,5,3,7], scroll:920, seed:29, introBeats:0, outroBeats:4, palette:["#0f1422","#1b2f46","#314f74","#0b0e16","#4de3ff","#ff9d42"], blurb:"Imported from the original VS Matt Sporting hard chart with the real instrumental and vocals at normal speed on the boxing ring stage.", chartSource:"sporting"},
+    boxingMatch:{ title:"Boxing Match", subtitle:"Original VS Matt chart", diff:"Normal (Original Chart)", tempo:339, root:45, scale:[0,2,3,5,7,8,10], prog:[0,5,3,7], scroll:760, seed:31, introBeats:0, outroBeats:4, palette:["#0f1422","#1b2f46","#314f74","#0b0e16","#4de3ff","#ff9d42"], blurb:"Imported from the original VS Matt Boxing Match chart with the real instrumental and vocals on the boxing ring, while keeping the Sporting noteskins.", chartSource:"boxingMatch"},
     perseverance:{ title:"Perseverance", subtitle:"Friday Night Dustin hard chart", diff:"Hard (Original Chart)", tempo:120, root:41, scale:[0,2,3,5,7,8,10], prog:[0,5,3,6], scroll:810, seed:33, introBeats:0, outroBeats:4, palette:["#06080d","#182332","#34455b","#0b0d12","#cfe7ff","#7fb7ff"], blurb:"Imported from Friday Night Dustin with the original hard chart, ruins exit stage art, Sans sprites, pixel section, and gaster blaster dodge mechanic.", chartSource:"perseverance"},
     brokenReality:{ title:"Broken Reality", subtitle:"Friday Night Dustin hard chart", diff:"Hard (Original Chart)", tempo:120, root:40, scale:[0,2,3,5,7,8,10], prog:[0,5,3,6], scroll:780, seed:37, introBeats:0, outroBeats:4, palette:["#04050a","#16162a","#2f3251","#08090f","#f2d6ff","#ff5a5a"], blurb:"Imported from Friday Night Dustin with the original hard chart, cutscene videos, hall stage, drain, attack prompt, scroll flips, and red-phase Papyrus swap.", chartSource:"brokenReality"},
 };
@@ -1797,7 +1798,7 @@ function startSong(id=state.selectedSong){
         state.nextStepTime = state.songStart;
         state.playing = true;
     }
-    state.feeds.player.time = -10; state.feeds.opp.time = -10; Object.values(state.poses).forEach(p => { p.time = -10; p.kind = "hit"; }); state.receptorFx.forEach(fx => fx.time = -10); state.perseverance = { canDodge:false, prompt:false, dodging:false, dodged:false, resolved:false, dodgeStart:-10, flashTime:-10, gfAlpha:0 }; state.camera = { zoom: 1, focusX: canvas.width / 2, focusY: canvas.height * 0.45, sideTime: 0, lastSide: "both", highwayX: 0, highwayY: 0 }; ui.p1Box.style.display = state.mode === "versus" ? "block" : "none"; ui.songTitle.textContent = state.currentSong.title; ui.songSub.textContent = state.currentSong.subtitle; ui.statusText.textContent = "Get ready"; ui.statusSub.textContent = state.currentSong.chartSource === "sporting" ? "Sporting is using the original beat and vocal track at full speed." : state.currentSong.chartSource === "boxingMatch" ? "Boxing Match is using the imported VS Matt chart with the real instrumental and vocals on the Sporting stage." : state.currentSong.chartSource === "perseverance" ? "Perseverance is using the original hard chart, split vocals, pixel section, and dodge mechanic." : "Song starts on the next phrase. Hit right-side notes in solo, or both lanes in versus."; ui.timer.textContent = `0:00 / ${formatTime(state.chart.totalTime)}`; ui.menu.classList.remove("show"); ui.settings.classList.remove("show"); ui.resultsWrap.classList.remove("show");
+    state.feeds.player.time = -10; state.feeds.opp.time = -10; Object.values(state.poses).forEach(p => { p.time = -10; p.kind = "hit"; }); state.receptorFx.forEach(fx => fx.time = -10); state.perseverance = { canDodge:false, prompt:false, dodging:false, dodged:false, resolved:false, dodgeStart:-10, flashTime:-10, gfAlpha:0 }; state.camera = { zoom: 1, focusX: canvas.width / 2, focusY: canvas.height * 0.45, sideTime: 0, lastSide: "both", highwayX: 0, highwayY: 0 }; ui.p1Box.style.display = state.mode === "versus" ? "block" : "none"; ui.songTitle.textContent = state.currentSong.title; ui.songSub.textContent = state.currentSong.subtitle; ui.statusText.textContent = "Get ready"; ui.statusSub.textContent = state.currentSong.chartSource === "sporting" ? "Sporting is using the original hard chart, real vocals, and 1.5x scroll on the boxing ring." : state.currentSong.chartSource === "boxingMatch" ? "Boxing Match is using the imported VS Matt chart with the real instrumental and vocals on the boxing ring." : state.currentSong.chartSource === "perseverance" ? "Perseverance is using the original hard chart, split vocals, pixel section, and dodge mechanic." : "Song starts on the next phrase. Hit right-side notes in solo, or both lanes in versus."; ui.timer.textContent = `0:00 / ${formatTime(state.chart.totalTime)}`; ui.menu.classList.remove("show"); ui.settings.classList.remove("show"); ui.resultsWrap.classList.remove("show");
 }
 function keydown(e){
     const key = e.key.toLowerCase();
@@ -1851,7 +1852,7 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 <script src="broken-reality-fix.js"></script>
 <script src="challenge-edd-mode.js"></script>
 <script src="fallen-stars-mode.js"></script>
-<script src="genocide-mode.js?v=genocide-v7"></script>
+<script src="genocide-mode.js?v=genocide-v10"></script>
 <script src="playback-stability-fix.js?v=20260321b"></script>
 <script src="playback-start-fix.js?v=20260321b"></script>
 <script src="desktop-mode.js"></script>

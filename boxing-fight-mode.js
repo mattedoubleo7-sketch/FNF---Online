@@ -798,15 +798,16 @@
   if (SONGS.sporting) {
     SONGS.sporting.tempo = 300;
     SONGS.sporting.scroll = 920 * SPORTING_SCROLL_MULT;
-    SONGS.sporting.subtitle = 'Original chart with 1.5x scroll';
-    SONGS.sporting.blurb = 'Original Sporting chart and vocals at normal speed, with 1.5x note scroll.';
+    SONGS.sporting.subtitle = 'Original hard chart with 1.5x scroll';
+    SONGS.sporting.diff = 'Hard (Original Chart)';
+    SONGS.sporting.blurb = 'Original Sporting hard chart and vocals at normal speed, with 1.5x note scroll on the boxing ring stage.';
   }
   if (SONGS.boxingMatch) {
     SONGS.boxingMatch.tempo = 339;
     SONGS.boxingMatch.scroll = 760 * BOXING_SCROLL_MULT;
     SONGS.boxingMatch.subtitle = 'Paid Boxing Fight hard chart with 2x scroll';
     SONGS.boxingMatch.diff = 'Hard (Paid Mod Chart)';
-    SONGS.boxingMatch.blurb = 'Paid Boxing Fight hard chart and vocals at normal speed, with real boxer BF and Matt sprites, very light stamina drain on your note hits, stronger low-stamina Matt life drain that stops at 10% HP, Echo, a 5-second block cooldown, block speed-ups, and super punches on the Sporting arena.';
+      SONGS.boxingMatch.blurb = 'Paid Boxing Fight hard chart and vocals at normal speed, with real boxer BF and Matt sprites, very light stamina drain on your note hits, stronger low-stamina Matt life drain that stops at 10% HP, Echo, a 5-second block cooldown, block speed-ups, and super punches on the boxing ring.';
   }
 
   if (typeof renderSongs === 'function') renderSongs();
