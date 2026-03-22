@@ -5,7 +5,7 @@
     if ((!SANSATIONAL && !LAST_REEL) || typeof SONGS === "undefined") return;
 
     const nowSec = () => performance.now() / 1000;
-    const INDIE_CROSS_ASSET_VER = "20260322c";
+    const INDIE_CROSS_ASSET_VER = "20260322d";
     const versionedAsset = (path) => path ? `${path}${String(path).includes("?") ? "&" : "?"}v=${INDIE_CROSS_ASSET_VER}` : path;
     const DIR_TO_ANIM = {
       left: "singLEFT",
@@ -34,10 +34,10 @@
         scroll: 1160,
         palette: ["#040711", "#0e1631", "#130a1f", "#090d17", "#75b9ff", "#f5f7ff"],
         blurb: "Imported from Indie Cross with the original Sansational hard chart, the hall stage, real Sans/BF placements, and the dodge and attack mechanics.",
-        roleScale: { opponent: 0.74, boyfriend: 0.64 },
+        roleScale: { opponent: 0.74, boyfriend: 0.56 },
         roleGround: {
           opponent: { x: 302, y: 678 },
-          boyfriend: { x: 1086, y: 688 }
+          boyfriend: { x: 948, y: 688 }
         },
         camera: {
           oppX: 334,
@@ -161,13 +161,20 @@
       return match ? Number(match[1] || match[2]) : 0;
     }
 
+    function normalizeAtlasLabel(name) {
+      return String(name || "")
+        .replace(/\s+instance.*$/i, "")
+        .replace(/\d+$/g, "")
+        .trim();
+    }
+
     function parseAtlasFrames(xmlText) {
       const doc = new DOMParser().parseFromString(xmlText, "application/xml");
       return Array.from(doc.getElementsByTagName("SubTexture")).map(node => {
         const name = node.getAttribute("name") || "";
         return {
           name,
-          label: name.replace(/\s+instance.*$/i, ""),
+          label: normalizeAtlasLabel(name),
           x: parseAtlasNumber(node, "x"),
           y: parseAtlasNumber(node, "y"),
           w: parseAtlasNumber(node, "width"),
@@ -230,8 +237,7 @@
     }
 
     function indieSkinReady(config) {
-      const images = assetsFor(config.id);
-      return !!indieState.noteSkin && imageReady(images.noteSkin);
+      return false;
     }
 
     function buildAltSprite(xmlText, baseSprite, mapping) {
@@ -282,11 +288,10 @@
             stageShade: versionedAsset("assets/indie-cross/halldark.png"),
             sans: versionedAsset("assets/indie-cross/SansWF.png"),
             sansAlt: versionedAsset("assets/indie-cross/Sans.png"),
-            boyfriend: versionedAsset("assets/indie-cross/BoyFriend_SansWT.png"),
+            boyfriend: versionedAsset("assets/indie-cross/BOYFRIEND.png"),
             dodgeMechs: versionedAsset("assets/indie-cross/DodgeMechs.png"),
             warning: versionedAsset("assets/indie-cross/Warning.png"),
-            alert: versionedAsset(data.sprites.alert),
-            noteSkin: versionedAsset("assets/NOTE_assets.png")
+            alert: versionedAsset(data.sprites.alert)
           }
         : {
             roomBackBack: versionedAsset("assets/indie-cross/last-reel-backback.png"),
@@ -297,13 +302,12 @@
             roomCandles: versionedAsset("assets/indie-cross/last-reel-candles.png"),
             rain: versionedAsset(data.stage.rain.image),
             inkOverlay: versionedAsset(data.stage.inkOverlay),
-            bendy: versionedAsset("assets/indie-cross/Bendy_remastered.png"),
+            bendy: versionedAsset("assets/indie-cross/BendyDAgames.png"),
             boyfriend: versionedAsset("assets/indie-cross/BoyFriend_NM_Bendy.png"),
             piper: versionedAsset(data.sprites.piper.image),
             striker: versionedAsset(data.sprites.striker.image),
             warning: versionedAsset(data.sprites.warning.image),
-            alert: versionedAsset(data.sprites.alert),
-            noteSkin: versionedAsset("assets/NOTE_assets.png")
+            alert: versionedAsset(data.sprites.alert)
           };
       Object.entries(sources).forEach(([key, src]) => {
         if (!src) return;
@@ -311,7 +315,6 @@
         image.src = src;
         images[key] = image;
       });
-      requestNoteSkin();
       if (id === "sansational") {
         requestAltSprite("sansationalSans", "assets/indie-cross/Sans.xml", xmlText => {
           return buildAltSprite(xmlText, data.sprites.sans, {
@@ -322,7 +325,7 @@
             singRIGHT: "Right"
           });
         });
-        requestAltSprite("sansationalBoyfriend", "assets/indie-cross/BoyFriend_SansWT.xml", xmlText => {
+        requestAltSprite("sansationalBoyfriend", "assets/indie-cross/BOYFRIEND.xml", xmlText => {
           return buildAltSprite(xmlText, data.sprites.boyfriend, {
             idle: "BF idle dance",
             singLEFT: "BF NOTE LEFT",
@@ -339,13 +342,13 @@
           });
         });
       } else {
-        requestAltSprite("lastReelBendy", "assets/indie-cross/Bendy_remastered.xml", xmlText => {
+        requestAltSprite("lastReelBendy", "assets/indie-cross/BendyDAgames.xml", xmlText => {
           return buildAltSprite(xmlText, data.sprites.bendy, {
-            idle: "Bendy Idle",
+            idle: "Idle Normal",
             singLEFT: "Left",
-            singDOWN: "bendydown",
-            singUP: "Up",
-            singRIGHT: "B-Right"
+            singDOWN: "Down Normal",
+            singUP: "Up Normal",
+            singRIGHT: "Right Normal"
           });
         });
         requestAltSprite("lastReelCandles", "assets/indie-cross/last-reel-candles.xml", xmlText => {
