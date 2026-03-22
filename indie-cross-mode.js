@@ -14,7 +14,9 @@
     const indieState = {
       ready: {},
       images: {},
-      groundCache: {}
+      groundCache: {},
+      atlasRequested: {},
+      altSprites: {}
     };
 
     const CONFIGS = {
@@ -28,23 +30,23 @@
         tempo: Number(SANSATIONAL.song.bpm || 130),
         scroll: 1160,
         palette: ["#040711", "#0e1631", "#130a1f", "#090d17", "#75b9ff", "#f5f7ff"],
-        blurb: "Imported from Indie Cross with the original Sansational hard chart, Nightmare Sans stage, Sans/BF sprites, and the dodge and attack mechanics.",
-        roleScale: { opponent: 0.72, boyfriend: 0.62 },
+        blurb: "Imported from Indie Cross with the original Sansational hard chart, the hall stage, real Sans/BF placements, and the dodge and attack mechanics.",
+        roleScale: { opponent: 0.74, boyfriend: 0.64 },
         roleGround: {
-          opponent: { x: 330, y: 670 },
-          boyfriend: { x: 1068, y: 682 }
+          opponent: { x: 302, y: 678 },
+          boyfriend: { x: 1086, y: 688 }
         },
         camera: {
-          oppX: 384,
-          playerX: 1036,
-          focusY: 430,
-          zoom: 1.04,
+          oppX: 334,
+          playerX: 1042,
+          focusY: 420,
+          zoom: 1.07,
           speed: 4
         },
         stage: {
           x: 640,
           y: 724,
-          scale: 0.64
+          scale: 1
         }
       } : null,
       lastReel: LAST_REEL ? {
@@ -57,20 +59,20 @@
         tempo: Number(LAST_REEL.song.bpm || 195),
         scroll: 1240,
         palette: ["#060403", "#1a120e", "#251915", "#0b0908", "#f6cc88", "#f7f3ea"],
-        blurb: "Imported from Indie Cross with the original Last Reel hard chart, Butcher Gang stage, rain layer, and the combat mechanics from the real mod.",
-        roleScale: { opponent: 1.04, boyfriend: 0.88, left: 1.18, right: 1.18 },
+        blurb: "Imported from Indie Cross with the original Last Reel hard chart, the real Bendy stage layering, darker threat sprites, and the combat mechanics from the real mod.",
+        roleScale: { opponent: 0.64, boyfriend: 0.9, left: 1.34, right: 1.36 },
         roleGround: {
-          opponent: { x: 598, y: 690 },
-          boyfriend: { x: 956, y: 698 },
-          left: { x: 148, y: 652 },
-          right: { x: 1136, y: 650 }
+          opponent: { x: 646, y: 642 },
+          boyfriend: { x: 1008, y: 714 },
+          left: { x: 166, y: 716 },
+          right: { x: 1114, y: 708 }
         },
         camera: {
-          oppX: 602,
-          playerX: 952,
-          focusY: 470,
-          zoom: 1.03,
-          speed: 3.8
+          oppX: 636,
+          playerX: 982,
+          focusY: 492,
+          zoom: 1.08,
+          speed: 3.7
         },
         stage: {
           x: 640,
@@ -145,6 +147,75 @@
       return !!(image && image.complete && image.naturalWidth);
     }
 
+    function parseAtlasNumber(node, name, fallback = 0) {
+      const value = Number(node.getAttribute(name));
+      return Number.isFinite(value) ? value : fallback;
+    }
+
+    function frameOrder(name) {
+      const match = String(name || "").match(/instance\s+(\d+)/i);
+      return match ? Number(match[1]) : 0;
+    }
+
+    function parseAtlasFrames(xmlText) {
+      const doc = new DOMParser().parseFromString(xmlText, "application/xml");
+      return Array.from(doc.getElementsByTagName("SubTexture")).map(node => {
+        const name = node.getAttribute("name") || "";
+        return {
+          name,
+          label: name.replace(/\s+instance.*$/i, ""),
+          x: parseAtlasNumber(node, "x"),
+          y: parseAtlasNumber(node, "y"),
+          w: parseAtlasNumber(node, "width"),
+          h: parseAtlasNumber(node, "height"),
+          fx: parseAtlasNumber(node, "frameX"),
+          fy: parseAtlasNumber(node, "frameY"),
+          fw: parseAtlasNumber(node, "frameWidth", parseAtlasNumber(node, "width")),
+          fh: parseAtlasNumber(node, "frameHeight", parseAtlasNumber(node, "height")),
+          rotated: /true/i.test(node.getAttribute("rotated") || "false")
+        };
+      });
+    }
+
+    function atlasFramesByLabel(frames, labels) {
+      const wanted = new Set((Array.isArray(labels) ? labels : [labels]).filter(Boolean));
+      return frames
+        .filter(frame => wanted.has(frame.label))
+        .sort((a, b) => frameOrder(a.name) - frameOrder(b.name));
+    }
+
+    function buildAltSprite(xmlText, baseSprite, mapping) {
+      const frames = parseAtlasFrames(xmlText);
+      const animations = {};
+      Object.entries(mapping).forEach(([animName, labels]) => {
+        const animFrames = atlasFramesByLabel(frames, labels);
+        if (!animFrames.length) return;
+        animations[animName] = {
+          frames: animFrames,
+          fps: 24,
+          loop: animName === "idle"
+        };
+      });
+      return {
+        scale: Number(baseSprite?.scale || 1),
+        flipX: !!baseSprite?.flipX,
+        animations
+      };
+    }
+
+    function requestAltSprite(key, xmlPath, builder) {
+      if (indieState.atlasRequested[key]) return;
+      indieState.atlasRequested[key] = true;
+      fetch(xmlPath)
+        .then(resp => resp.ok ? resp.text() : Promise.reject(new Error(`${xmlPath} ${resp.status}`)))
+        .then(text => {
+          indieState.altSprites[key] = builder(text);
+        })
+        .catch(err => {
+          console.warn(`Failed to load ${key} atlas`, err);
+        });
+    }
+
     function assetsFor(id) {
       indieState.images[id] = indieState.images[id] || {};
       return indieState.images[id];
@@ -157,21 +228,28 @@
       const data = dataFor(config);
       const sources = id === "sansational"
         ? {
-            stageMain: data.stage.main.image,
+            stageMain: "assets/indie-cross/hall.png",
+            stageShade: "assets/indie-cross/halldark.png",
             sans: data.sprites.sans.image,
+            sansAlt: "assets/indie-cross/Sans.png",
             boyfriend: data.sprites.boyfriend.image,
             dodgeMechs: data.sprites.dodgeMechs.image,
             warning: data.sprites.warning.image,
             alert: data.sprites.alert
           }
         : {
+            backdrop: "assets/indie-cross/last-reel-background.png",
             back: data.stage.back.image,
             rain: data.stage.rain.image,
+            inkyDepths: "assets/indie-cross/last-reel-inky-depths.png",
             inkOverlay: data.stage.inkOverlay,
             bendy: data.sprites.bendy.image,
+            bendyAlt: "assets/indie-cross/Bendy_remastered.png",
             boyfriend: data.sprites.boyfriend.image,
             piper: data.sprites.piper.image,
+            piperAlt: "assets/indie-cross/PiperDespair.png",
             striker: data.sprites.striker.image,
+            strikerAlt: "assets/indie-cross/StrikerDespair.png",
             warning: data.sprites.warning.image,
             alert: data.sprites.alert
           };
@@ -181,6 +259,46 @@
         image.src = src;
         images[key] = image;
       });
+      if (id === "sansational") {
+        requestAltSprite("sansationalSans", "assets/indie-cross/Sans.xml", xmlText => {
+          return buildAltSprite(xmlText, data.sprites.sans, {
+            idle: "Sans FNF",
+            singLEFT: "Left",
+            singDOWN: "Down",
+            singUP: "Up",
+            singRIGHT: "Right"
+          });
+        });
+      } else {
+        requestAltSprite("lastReelBendy", "assets/indie-cross/Bendy_remastered.xml", xmlText => {
+          return buildAltSprite(xmlText, data.sprites.bendy, {
+            idle: "Bendy Idle",
+            singLEFT: "Left",
+            singDOWN: "bendydown",
+            singUP: "Up",
+            singRIGHT: "B-Right",
+            transform: "Scream"
+          });
+        });
+        requestAltSprite("lastReelPiper", "assets/indie-cross/PiperDespair.xml", xmlText => {
+          return buildAltSprite(xmlText, data.sprites.piper, {
+            walk: "pip walk",
+            attack: "PipAttack",
+            hit: "Piper gets Hit",
+            death: "Piper ded",
+            peek: "Piperr"
+          });
+        });
+        requestAltSprite("lastReelStriker", "assets/indie-cross/StrikerDespair.xml", xmlText => {
+          return buildAltSprite(xmlText, data.sprites.striker, {
+            walk: "Str walk",
+            attack: "PunchAttack_container",
+            hit: "Sticker",
+            death: "I ded",
+            peek: "regeg"
+          });
+        });
+      }
       indieState.ready[id] = true;
     }
 
@@ -313,6 +431,17 @@
       ctx.restore();
     }
 
+    function drawCoverImage(image, alpha = 1, scaleMul = 1, yOffset = 0) {
+      if (!imageReady(image)) return;
+      const scale = Math.max(canvas.width / image.naturalWidth, canvas.height / image.naturalHeight) * scaleMul;
+      const width = image.naturalWidth * scale;
+      const height = image.naturalHeight * scale;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(image, (canvas.width - width) * 0.5, (canvas.height - height) * 0.5 + yOffset, width, height);
+      ctx.restore();
+    }
+
     function frameGroundPoint(image, frame) {
       if (!imageReady(image) || !frame) return { x: 0, y: 0 };
       const key = image.src + "|" + (frame.name || [frame.x, frame.y, frame.w, frame.h].join(","));
@@ -361,26 +490,26 @@
       const sprites = dataFor(config)?.sprites;
       if (!sprites) return null;
       if (config.id === "sansational") {
-        if (role === "opponent") return sprites.sans;
+        if (role === "opponent") return indieState.altSprites.sansationalSans || sprites.sans;
         if (role === "boyfriend") return sprites.boyfriend;
       }
-      if (role === "opponent") return sprites.bendy;
+      if (role === "opponent") return indieState.altSprites.lastReelBendy || sprites.bendy;
       if (role === "boyfriend") return sprites.boyfriend;
-      if (role === "left") return sprites.piper;
-      if (role === "right") return sprites.striker;
+      if (role === "left") return indieState.altSprites.lastReelPiper || sprites.piper;
+      if (role === "right") return indieState.altSprites.lastReelStriker || sprites.striker;
       return null;
     }
 
     function roleImage(config, role) {
       const images = assetsFor(config.id);
       if (config.id === "sansational") {
-        if (role === "opponent") return images.sans;
+        if (role === "opponent") return imageReady(images.sansAlt) ? images.sansAlt : images.sans;
         if (role === "boyfriend") return images.boyfriend;
       }
-      if (role === "opponent") return images.bendy;
+      if (role === "opponent") return imageReady(images.bendyAlt) ? images.bendyAlt : images.bendy;
       if (role === "boyfriend") return images.boyfriend;
-      if (role === "left") return images.piper;
-      if (role === "right") return images.striker;
+      if (role === "left") return imageReady(images.piperAlt) ? images.piperAlt : images.piper;
+      if (role === "right") return imageReady(images.strikerAlt) ? images.strikerAlt : images.striker;
       return null;
     }
 
@@ -841,35 +970,28 @@
 
     function drawSansationalStage(t) {
       const config = CONFIGS.sansational;
-      const data = dataFor(config);
       const mode = currentModeState();
       const images = assetsFor(config.id);
-      if (imageReady(images.stageMain)) {
-        const mainAnim = data.stage.main.animations.normal || Object.values(data.stage.main.animations || {})[0];
-        const floorAnim = data.stage.main.animations.floor || mainAnim;
-        const mainFrame = frameFromList(mainAnim?.frames, t, Number(mainAnim?.fps || 24), true);
-        const floorFrame = frameFromList(floorAnim?.frames, t, Number(floorAnim?.fps || 24), true);
-        drawAtlasBottomCentered(images.stageMain, mainFrame, config.stage.x, config.stage.y, config.stage.scale, 1);
-        if (imageReady(images.dodgeMechs)) {
-          const dodgeEvent = activeDodgeEvent(t);
-          const attackEvent = activeAttackEvent(t);
-          const fxAnimName = dodgeEvent ? "bones" : (attackEvent ? "alarm" : "");
-          const fxAnim = fxAnimName ? data.sprites.dodgeMechs.animations?.[fxAnimName] : null;
-          if (fxAnim) {
-            const elapsed = dodgeEvent
-              ? Math.max(0, t - Number(dodgeEvent.warnAt || t))
-              : Math.max(0, t - Number(attackEvent?.startAt || t));
-            const frame = frameFromList(fxAnim.frames, elapsed, Number(fxAnim.fps || 24), true);
-            drawAtlasBottomCentered(images.dodgeMechs, frame, config.roleGround.boyfriend.x + 18, config.roleGround.boyfriend.y - 78, 0.42, dodgeEvent ? 0.92 : 0.72);
-          }
-        }
-        drawRole(config, "opponent", t);
-        drawRole(config, "boyfriend", t);
-        drawAtlasBottomCentered(images.stageMain, floorFrame, config.stage.x, config.stage.y, config.stage.scale, 1);
-      } else {
-        drawRole(config, "opponent", t);
-        drawRole(config, "boyfriend", t);
+      drawCoverImage(images.stageMain, 1, 1.03, 8);
+      if (imageReady(images.stageShade)) {
+        drawCoverImage(images.stageShade, 0.14, 1.03, 8);
       }
+      if (imageReady(images.dodgeMechs)) {
+        const data = dataFor(config);
+        const dodgeEvent = activeDodgeEvent(t);
+        const attackEvent = activeAttackEvent(t);
+        const fxAnimName = dodgeEvent ? "bones" : (attackEvent ? "alarm" : "");
+        const fxAnim = fxAnimName ? data.sprites.dodgeMechs.animations?.[fxAnimName] : null;
+        if (fxAnim) {
+          const elapsed = dodgeEvent
+            ? Math.max(0, t - Number(dodgeEvent.warnAt || t))
+            : Math.max(0, t - Number(attackEvent?.startAt || t));
+          const frame = frameFromList(fxAnim.frames, elapsed, Number(fxAnim.fps || 24), true);
+          drawAtlasBottomCentered(images.dodgeMechs, frame, config.roleGround.boyfriend.x + 18, config.roleGround.boyfriend.y - 78, 0.42, dodgeEvent ? 0.92 : 0.72);
+        }
+      }
+      drawRole(config, "opponent", t);
+      drawRole(config, "boyfriend", t);
       drawPrompt(config, t);
       if (mode?.flash > 0.001) {
         ctx.save();
@@ -916,10 +1038,11 @@
       const data = dataFor(config);
       const mode = currentModeState();
       const images = assetsFor(config.id);
+      drawCoverImage(images.backdrop, 1, 1.04, -10);
       if (imageReady(images.back)) {
         const backAnim = data.stage.back.animations.idle || Object.values(data.stage.back.animations || {})[0];
         const frame = frameFromList(backAnim?.frames, t, Number(backAnim?.fps || 24), true);
-        drawAtlasBottomCentered(images.back, frame, config.stage.x, config.stage.y, config.stage.scale, 1);
+        drawAtlasBottomCentered(images.back, frame, config.stage.x, config.stage.y + 14, config.stage.scale, 0.76);
       }
       const threats = activeButcherThreats(t);
       drawRole(config, "opponent", t);
@@ -935,7 +1058,10 @@
       if (imageReady(images.rain)) {
         const rainAnim = data.stage.rain.animations.idle || Object.values(data.stage.rain.animations || {})[0];
         const frame = frameFromList(rainAnim?.frames, t, Number(rainAnim?.fps || 24), true);
-        drawAtlasBottomCentered(images.rain, frame, config.stage.x, config.stage.y, config.stage.scale, 0.86);
+        drawAtlasBottomCentered(images.rain, frame, config.stage.x, config.stage.y + 10, config.stage.scale * 1.02, 0.62);
+      }
+      if (imageReady(images.inkyDepths)) {
+        drawCoverImage(images.inkyDepths, 0.14 + Math.min(0.16, (mode?.inkAlpha || 0) * 0.22), 1.03, 0);
       }
       if (imageReady(images.inkOverlay) && mode?.inkAlpha > 0.001) {
         ctx.save();
