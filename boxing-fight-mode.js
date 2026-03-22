@@ -1,14 +1,12 @@
 (() => {
   if (typeof SONGS === 'undefined' || typeof state === 'undefined' || typeof spriteState === 'undefined') return;
 
-  if (window.SPORTING_SPRITES?.matt) window.SPORTING_SPRITES.matt.image = 'assets/boxing-fight/mattangry.png';
-  if (window.SPORTING_SPRITES?.boyfriend) window.SPORTING_SPRITES.boyfriend.image = 'assets/boxing-fight/BOYFRIENDMII.png';
-
   const BOXING_RATE = 1;
   const SPORTING_SCROLL_MULT = 1.5;
   const BOXING_SCROLL_MULT = 2;
   const BOXING_SONGS = new Set(['boxingMatch']);
-  const BOXING_STAGE_SONGS = new Set(['sporting', 'boxingMatch']);
+  const BOXING_STAGE_SONGS = new Set(['boxingMatch']);
+  const SPORTING_STAGE_SONGS = new Set(['sporting']);
   const BOXING_SPRITE_SONG = 'boxingMatch';
   const BOXING_NOTE_DRAIN = { perfect: 0.008, good: 0.012, bad: 0.02, miss: 0.03 };
   const BOXING_STAMINA_REGEN = 0;
@@ -25,19 +23,12 @@
     gfImage: 'assets/boxing-fight/GFMIIBOXING_ass_sets.png',
     gfAtlas: 'assets/boxing-fight/GFMIIBOXING_ass_sets.xml'
   };
+  const SPORTING_STAGE_ASSETS = {
+    back: 'assets/vsmatt-sporting/boxingnight1.png',
+    mid: 'assets/vsmatt-sporting/boxingnight2.png',
+    front: 'assets/vsmatt-sporting/boxingnight3.png'
+  };
   const BOXING_STAGE_LAYOUTS = {
-    sporting: {
-      stageScale: 1.62,
-      stageYOffset: -104,
-      gfScale: 0.5,
-      gfX: 454,
-      gfY: 74,
-      sportingMattX: 106,
-      sportingMattY: 358,
-      sportingBfX: 902,
-      sportingBfY: 374,
-      sportingCharScale: 0.66
-    },
     boxingMatch: {
       stageScale: 1,
       stageYOffset: 0,
@@ -49,7 +40,21 @@
       bfY: 370
     }
   };
+  const SPORTING_STAGE_LAYOUT = {
+    stageScale: 1,
+    stageYOffset: 0,
+    gfX: 490,
+    gfY: 206,
+    gfScale: 0.5,
+    mattX: 126,
+    mattY: 386,
+    mattScale: 0.66,
+    bfX: 840,
+    bfY: 400,
+    bfScale: 0.66
+  };
   const boxingSpriteState = { initialized: false, images: {}, gfAnimations: null, gfAtlasRequested: false };
+  const sportingStageState = { initialized: false, images: {} };
 
   function imageReady(image) {
     return !!(image && image.complete && image.naturalWidth);
@@ -75,6 +80,10 @@
 
   function usesMattStage(song) {
     return BOXING_STAGE_SONGS.has(songIdFor(song || state.currentSong));
+  }
+
+  function usesSportingStage(song) {
+    return SPORTING_STAGE_SONGS.has(songIdFor(song || state.currentSong));
   }
 
   function importedPlaybackRate(song) {
@@ -187,6 +196,16 @@
     }
   }
 
+  function initSportingStage() {
+    if (sportingStageState.initialized) return;
+    sportingStageState.initialized = true;
+    Object.entries(SPORTING_STAGE_ASSETS).forEach(([key, src]) => {
+      const img = new Image();
+      img.src = src;
+      sportingStageState.images[key] = img;
+    });
+  }
+
   function boxingStageReady() {
     const images = boxingSpriteState.images;
     return boxingSpriteState.initialized &&
@@ -206,11 +225,22 @@
       imageReady(images.warning);
   }
 
+  function sportingStageReady() {
+    return sportingStageState.initialized &&
+      imageReady(sportingStageState.images.back) &&
+      imageReady(sportingStageState.images.mid) &&
+      imageReady(sportingStageState.images.front) &&
+      spriteState.initialized &&
+      imageReady(spriteState.images.matt) &&
+      imageReady(spriteState.images.boyfriend) &&
+      imageReady(spriteState.images.gf) &&
+      imageReady(spriteState.images.notes);
+  }
+
   function mattStageSportingReady() {
     return spriteState.initialized &&
       imageReady(spriteState.images.matt) &&
       imageReady(spriteState.images.boyfriend) &&
-      imageReady(spriteState.images.gf) &&
       imageReady(spriteState.images.notes);
   }
 
@@ -328,14 +358,14 @@
   }
 
   function drawSportingRingStage(t) {
-    const layout = BOXING_STAGE_LAYOUTS.sporting;
-    const images = boxingSpriteState.images;
-    drawStageCover(images.stageRing, layout.stageScale, layout.stageYOffset, 1);
-    if (spriteState.images.gf?.naturalWidth) {
-      drawSportingSprite('gf', layout.gfX, layout.gfY, layout.gfScale, t);
-    }
-    drawSportingSprite('matt', layout.sportingMattX, layout.sportingMattY, layout.sportingCharScale, t);
-    drawSportingSprite('boyfriend', layout.sportingBfX, layout.sportingBfY, layout.sportingCharScale, t);
+    const images = sportingStageState.images;
+    const layout = SPORTING_STAGE_LAYOUT;
+    drawStageCover(images.back, layout.stageScale, layout.stageYOffset, 1);
+    drawStageCover(images.mid, layout.stageScale, layout.stageYOffset, 1);
+    drawStageCover(images.front, layout.stageScale, layout.stageYOffset, 1);
+    drawSportingSprite('gf', layout.gfX, layout.gfY, layout.gfScale, t);
+    drawSportingSprite('matt', layout.mattX, layout.mattY, layout.mattScale, t);
+    drawSportingSprite('boyfriend', layout.bfX, layout.bfY, layout.bfScale, t);
   }
 
   function freshBoxingState(songId) {
@@ -721,6 +751,11 @@
   const originalSportingSpritesReady = sportingSpritesReady;
   sportingSpritesReady = function() {
     if (usesMattStage()) return mattStageSportingReady();
+    if (usesSportingStage()) return spriteState.initialized &&
+      imageReady(spriteState.images.matt) &&
+      imageReady(spriteState.images.boyfriend) &&
+      imageReady(spriteState.images.gf) &&
+      imageReady(spriteState.images.notes);
     return originalSportingSpritesReady.apply(this, arguments);
   };
 
@@ -843,16 +878,19 @@
 
   const originalStage = stage;
   stage = function(t) {
+    if (usesSportingStage()) {
+      initSportingStage();
+      initSportingSprites();
+      if (sportingStageReady()) {
+        drawSportingRingStage(t);
+        return;
+      }
+    }
     if (usesMattStage() && window.BOXING_FIGHT_DATA) {
       initBoxingSprites();
       initSportingSprites();
       const songId = songIdFor(state.currentSong);
-      const sportingReady = mattStageSportingReady();
       const boxingReady = boxingMatchSpritesReady();
-      if (songId === 'sporting' && boxingStageReady() && sportingReady) {
-        drawSportingRingStage(t);
-        return;
-      }
       if (boxingStageReady() && songId === 'boxingMatch' && boxingReady) {
         drawMattStage(songId, t, () => {
           const superWarn = state.boxing?.active && (state.boxing.prompt === 'superPunch' || state.boxing.superWarnUntil > t - 0.14);
@@ -984,6 +1022,7 @@
 
   initSportingSprites();
   initBoxingSprites();
+  initSportingStage();
 
   if (typeof renderSongs === 'function') renderSongs();
 })();
