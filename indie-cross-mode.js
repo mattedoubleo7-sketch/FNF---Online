@@ -5,7 +5,7 @@
     if ((!SANSATIONAL && !LAST_REEL) || typeof SONGS === "undefined") return;
 
     const nowSec = () => performance.now() / 1000;
-    const INDIE_CROSS_ASSET_VER = "20260322f";
+    const INDIE_CROSS_ASSET_VER = "20260322g";
     const versionedAsset = (path) => path ? `${path}${String(path).includes("?") ? "&" : "?"}v=${INDIE_CROSS_ASSET_VER}` : path;
     const DIR_TO_ANIM = {
       left: "singLEFT",
@@ -280,6 +280,7 @@
     function initAssets(id) {
       const config = configById(id);
       if (!config || indieState.ready[id]) return;
+      if (typeof initSportingSprites === "function") initSportingSprites();
       const images = assetsFor(id);
       const data = dataFor(config);
       const sources = id === "sansational"
@@ -288,6 +289,7 @@
             stageShade: versionedAsset("assets/indie-cross/halldark.png"),
             sans: versionedAsset("assets/indie-cross/SansWF.png"),
             sansAlt: versionedAsset("assets/indie-cross/Sans.png"),
+            boyfriendBase: versionedAsset("assets/indie-cross/BOYFRIEND.png"),
             boyfriend: versionedAsset(data.sprites.boyfriend.image),
             dodgeMechs: versionedAsset("assets/indie-cross/DodgeMechs.png"),
             warning: versionedAsset("assets/indie-cross/Warning.png"),
@@ -323,6 +325,22 @@
             singDOWN: "Down",
             singUP: "Up",
             singRIGHT: "Right"
+          });
+        });
+        requestAltSprite("sansationalBoyfriend", "assets/indie-cross/BOYFRIEND.xml", xmlText => {
+          return buildAltSprite(xmlText, data.sprites.boyfriend, {
+            idle: "0Idle",
+            singLEFT: "BF NOTE LEFT",
+            singDOWN: "BF NOTE DOWN",
+            singUP: "BF NOTE UP",
+            singRIGHT: "BF NOTE RIGHT",
+            singLEFTmiss: "BF NOTE LEFT MISS",
+            singDOWNmiss: "BF NOTE DOWN MISS",
+            singUPmiss: "BF NOTE UP MISS",
+            singRIGHTmiss: "BF NOTE RIGHT MISS",
+            dodge: "0Dodge",
+            attack: "0BF attack",
+            hurt: "BF hit"
           });
         });
       } else {
@@ -548,7 +566,7 @@
       if (!sprites) return null;
       if (config.id === "sansational") {
         if (role === "opponent") return indieState.altSprites.sansationalSans || sprites.sans;
-        if (role === "boyfriend") return sprites.boyfriend;
+        if (role === "boyfriend") return indieState.altSprites.sansationalBoyfriend || sprites.boyfriend;
       }
       if (role === "opponent") return indieState.altSprites.lastReelBendy || sprites.bendy;
       if (role === "boyfriend") return sprites.boyfriend;
@@ -561,7 +579,7 @@
       const images = assetsFor(config.id);
       if (config.id === "sansational") {
         if (role === "opponent") return imageReady(images.sansAlt) ? images.sansAlt : images.sans;
-        if (role === "boyfriend") return images.boyfriend;
+        if (role === "boyfriend") return imageReady(images.boyfriendBase) ? images.boyfriendBase : images.boyfriend;
       }
       if (role === "opponent") return images.bendy;
       if (role === "boyfriend") return images.boyfriend;
@@ -635,13 +653,14 @@
       const y = anchor.y + (fh + fy - groundPoint.y - offset.y) * scale;
       drawShadow(anchor.x, anchor.y + 4, Math.max(56, fw * scale * 0.36), 0.2);
       if (config.id === "sansational" && role === "boyfriend") {
-        drawAtlasFrameSilhouette(image, frame, x, y, scale * 1.035, alpha * 0.36, false, "#ffd56f");
+        drawAtlasFrameSilhouette(image, frame, x, y, scale * 1.085, alpha * 0.14, false, "#fff1a5");
+        drawAtlasFrameSilhouette(image, frame, x, y, scale * 1.05, alpha * 0.34, false, "#ffd45d");
       }
       ctx.save();
       if (config.id === "sansational" && role === "boyfriend") {
-        ctx.shadowBlur = 26;
-        ctx.shadowColor = "rgba(255, 221, 118, 0.92)";
-        ctx.filter = "sepia(1) saturate(2.8) hue-rotate(-16deg) brightness(1.07)";
+        ctx.shadowBlur = 24;
+        ctx.shadowColor = "rgba(255, 229, 132, 0.96)";
+        ctx.filter = "brightness(1.08) saturate(1.1)";
       } else if (config.id === "sansational" && role === "opponent") {
         ctx.shadowBlur = 18;
         ctx.shadowColor = "rgba(255, 225, 124, 0.72)";
@@ -651,7 +670,12 @@
     }
 
     function useSportingNotes(config) {
-      return !!config && typeof sportingSpritesReady === "function" && typeof drawSportingReceptor === "function" && typeof drawSportingNote === "function" && sportingSpritesReady();
+      if (!config) return false;
+      if (typeof initSportingSprites === "function") initSportingSprites();
+      return typeof sportingSpritesReady === "function"
+        && typeof drawSportingReceptor === "function"
+        && typeof drawSportingNote === "function"
+        && sportingSpritesReady();
     }
 
     function cloneChart(config) {
