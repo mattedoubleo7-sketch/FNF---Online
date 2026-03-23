@@ -5,7 +5,7 @@
     if ((!SANSATIONAL && !LAST_REEL) || typeof SONGS === "undefined") return;
 
     const nowSec = () => performance.now() / 1000;
-    const INDIE_CROSS_ASSET_VER = "20260322d";
+    const INDIE_CROSS_ASSET_VER = "20260322e";
     const versionedAsset = (path) => path ? `${path}${String(path).includes("?") ? "&" : "?"}v=${INDIE_CROSS_ASSET_VER}` : path;
     const DIR_TO_ANIM = {
       left: "singLEFT",
@@ -327,18 +327,17 @@
         });
         requestAltSprite("sansationalBoyfriend", "assets/indie-cross/BOYFRIEND.xml", xmlText => {
           return buildAltSprite(xmlText, data.sprites.boyfriend, {
-            idle: "BF idle dance",
-            singLEFT: "BF NOTE LEFT",
-            singDOWN: "BF NOTE DOWN",
-            singUP: "BF NOTE UP",
-            singRIGHT: "BF NOTE RIGHT",
+            idle: "0Idle",
+            singLEFT: "0EEEE",
+            singDOWN: "0Ouu",
+            singUP: "0UPPP",
+            singRIGHT: "0EERR",
             singLEFTmiss: "BF NOTE LEFT MISS",
             singDOWNmiss: "BF NOTE DOWN MISS",
             singUPmiss: "BF NOTE UP MISS",
             singRIGHTmiss: "BF NOTE RIGHT MISS",
-            dodge: "boyfriend dodge",
-            attack: "0BF attack",
-            hurt: "BF hit"
+            dodge: "0Dodge",
+            attack: "0BF attack"
           });
         });
       } else {
