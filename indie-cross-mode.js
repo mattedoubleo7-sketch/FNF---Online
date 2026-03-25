@@ -34,10 +34,10 @@
         scroll: 1160,
         palette: ["#040711", "#0e1631", "#130a1f", "#090d17", "#75b9ff", "#f5f7ff"],
         blurb: "Imported from Indie Cross with the original Sansational hard chart, the hall stage, real Sans/BF placements, and the dodge and attack mechanics.",
-        roleScale: { opponent: 0.74, boyfriend: 0.56 },
+        roleScale: { opponent: 0.74, boyfriend: 0.5 },
         roleGround: {
           opponent: { x: 302, y: 678 },
-          boyfriend: { x: 948, y: 688 }
+          boyfriend: { x: 884, y: 646 }
         },
         camera: {
           oppX: 334,
@@ -290,6 +290,7 @@
             sans: versionedAsset("assets/indie-cross/SansWF.png"),
             sansAlt: versionedAsset("assets/indie-cross/Sans.png"),
             boyfriend: versionedAsset(data.sprites.boyfriend.image),
+            boyfriendAlt: versionedAsset("assets/indie-cross/UT BF.png"),
             dodgeMechs: versionedAsset("assets/indie-cross/DodgeMechs.png"),
             warning: versionedAsset("assets/indie-cross/Warning.png"),
             alert: versionedAsset(data.sprites.alert)
@@ -324,6 +325,18 @@
             singDOWN: "Down",
             singUP: "Up",
             singRIGHT: "Right"
+          });
+        });
+        requestAltSprite("sansationalBF", "assets/indie-cross/UT BF.xml", xmlText => {
+          return buildAltSprite(xmlText, data.sprites.boyfriend, {
+            idle: "0Idle",
+            singLEFT: "0EEEE",
+            singDOWN: "0Ouu",
+            singUP: "0UPPP",
+            singRIGHT: "0EERR",
+            hurt: "Ouch",
+            dodge: "Pee",
+            attack: "Pee"
           });
         });
       } else {
@@ -549,7 +562,7 @@
       if (!sprites) return null;
       if (config.id === "sansational") {
         if (role === "opponent") return indieState.altSprites.sansationalSans || sprites.sans;
-        if (role === "boyfriend") return sprites.boyfriend;
+        if (role === "boyfriend") return indieState.altSprites.sansationalBF || sprites.boyfriend;
       }
       if (role === "opponent") return indieState.altSprites.lastReelBendy || sprites.bendy;
       if (role === "boyfriend") return sprites.boyfriend;
@@ -562,7 +575,7 @@
       const images = assetsFor(config.id);
       if (config.id === "sansational") {
         if (role === "opponent") return imageReady(images.sansAlt) ? images.sansAlt : images.sans;
-        if (role === "boyfriend") return images.boyfriend;
+        if (role === "boyfriend") return imageReady(images.boyfriendAlt) ? images.boyfriendAlt : images.boyfriend;
       }
       if (role === "opponent") return images.bendy;
       if (role === "boyfriend") return images.boyfriend;
@@ -635,21 +648,12 @@
       const x = anchor.x + (fw * 0.5 + fx - groundPoint.x - offset.x) * scale;
       const y = anchor.y + (fh + fy - groundPoint.y - offset.y) * scale;
       drawShadow(anchor.x, anchor.y + 4, Math.max(56, fw * scale * 0.36), 0.2);
-      if (config.id === "sansational" && role === "boyfriend") {
-        drawAtlasFrameSilhouette(image, frame, x, y, scale * 1.12, alpha * 0.22, false, "#fff6ba");
-        drawAtlasFrameSilhouette(image, frame, x, y, scale * 1.07, alpha * 0.46, false, "#ffd866");
-        ctx.save();
-        ctx.globalAlpha = alpha * 0.34;
-        ctx.globalCompositeOperation = "screen";
-        ctx.filter = "sepia(1) saturate(6) hue-rotate(-12deg) brightness(1.38)";
-        drawAtlasFrame(image, frame, x, y, scale, 1, false);
-        ctx.restore();
-      }
+      if (config.id === "sansational" && role === "boyfriend") drawAtlasFrameSilhouette(image, frame, x, y, scale * 1.03, alpha * 0.16, false, "#f4dc76");
       ctx.save();
       if (config.id === "sansational" && role === "boyfriend") {
-        ctx.shadowBlur = 32;
-        ctx.shadowColor = "rgba(255, 225, 106, 0.98)";
-        ctx.filter = "sepia(0.68) saturate(1.85) hue-rotate(-22deg) brightness(1.08)";
+        ctx.shadowBlur = 14;
+        ctx.shadowColor = "rgba(247, 223, 112, 0.78)";
+        ctx.filter = "brightness(1.02)";
       } else if (config.id === "sansational" && role === "opponent") {
         ctx.shadowBlur = 18;
         ctx.shadowColor = "rgba(255, 225, 124, 0.72)";
@@ -658,20 +662,20 @@
       ctx.restore();
     }
 
-    function sportingNoteSkinReady() {
-      if (typeof initSportingSprites === "function") initSportingSprites();
-      return !!(
-        typeof drawSportingReceptor === "function"
-        && typeof drawSportingNote === "function"
-        && typeof spriteState !== "undefined"
-        && imageReady(spriteState?.images?.notes)
-        && window.SPORTING_SPRITES?.notes
-      );
+    function withSportingNoteImage(config, fn) {
+      if (!config || !useSportingNotes(config)) return false;
+      fn();
+      return true;
     }
 
     function useSportingNotes(config) {
-      if (!config) return false;
-      return sportingNoteSkinReady();
+      return !!(
+        config
+        && (config.id === "sansational" || config.id === "lastReel")
+        && typeof drawSportingReceptor === "function"
+        && typeof drawSportingNote === "function"
+        && imageReady(spriteState?.images?.notes)
+      );
     }
 
     function cloneChart(config) {
@@ -1629,24 +1633,26 @@
       const config = activeConfig();
       if (!config) return baseReceptors(t);
       if (useSportingNotes(config)) {
-        const y = receptorY();
-        ctx.strokeStyle = "rgba(255,255,255,0.08)";
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(canvas.width * 0.5, 72);
-        ctx.lineTo(canvas.width * 0.5, 452);
-        ctx.stroke();
-        for (let lane = 0; lane < 8; lane++) {
-          const x = laneX(lane);
-          drawSportingReceptor(lane, x, y);
-          ctx.strokeStyle = "rgba(255,255,255,0.06)";
-          ctx.lineWidth = 1.5;
+        const drew = withSportingNoteImage(config, () => {
+          const y = receptorY();
+          ctx.strokeStyle = "rgba(255,255,255,0.08)";
+          ctx.lineWidth = 3;
           ctx.beginPath();
-          ctx.moveTo(x, y + 26);
-          ctx.lineTo(x, 448);
+          ctx.moveTo(canvas.width * 0.5, 72);
+          ctx.lineTo(canvas.width * 0.5, 452);
           ctx.stroke();
-        }
-        return;
+          for (let lane = 0; lane < 8; lane++) {
+            const x = laneX(lane);
+            drawSportingReceptor(lane, x, y);
+            ctx.strokeStyle = "rgba(255,255,255,0.06)";
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(x, y + 26);
+            ctx.lineTo(x, 448);
+            ctx.stroke();
+          }
+        });
+        if (drew) return;
       }
       if (!indieSkinReady(config)) return baseReceptors(t);
       const y = receptorY();
@@ -1672,18 +1678,28 @@
       const config = activeConfig();
       if (!config) return baseNotes(t);
       if (useSportingNotes(config) && state.chart?.notes) {
-        for (const note of state.chart.notes) {
-          if (note.played && note.hit && (!isHoldNote(note) || note.holdDone)) continue;
-          if (note.judged && note.side !== "opp" && (!isHoldNote(note) || note.holdDone || !note.hit)) continue;
-          const diff = Number(note.time || 0) - t;
-          const y = receptorY() + diff * state.currentSong.scroll;
-          const tailY = receptorY() + (holdEndTime(note) - t) * state.currentSong.scroll;
-          if (y < -120 && tailY < -120) continue;
-          if (y > canvas.height + 120 && tailY > canvas.height + 120) continue;
-          if (note.hit && isHoldNote(note) && t > Number(note.time || 0)) continue;
-          const rawScale = clamp(1 - Math.pow(Math.abs(diff), 0.7) * 0.45, 0.75, 1.12);
-          const alpha = note.side === "opp" ? 0.84 : 1;
-          drawSportingNote(note.lane, laneX(note.lane), y, 0.76 * rawScale, alpha);
+        const drew = withSportingNoteImage(config, () => {
+          for (const note of state.chart.notes) {
+            if (note.played && note.hit && (!isHoldNote(note) || note.holdDone)) continue;
+            if (note.judged && note.side !== "opp" && (!isHoldNote(note) || note.holdDone || !note.hit)) continue;
+            const diff = Number(note.time || 0) - t;
+            const y = receptorY() + diff * state.currentSong.scroll;
+            const tailY = receptorY() + (holdEndTime(note) - t) * state.currentSong.scroll;
+            if (y < -120 && tailY < -120) continue;
+            if (y > canvas.height + 120 && tailY > canvas.height + 120) continue;
+            if (note.hit && isHoldNote(note) && t > Number(note.time || 0)) continue;
+            const rawScale = clamp(1 - Math.pow(Math.abs(diff), 0.7) * 0.45, 0.75, 1.12);
+            const alpha = note.side === "opp" ? 0.84 : 1;
+            drawSportingNote(note.lane, laneX(note.lane), y, 0.76 * rawScale, alpha);
+          }
+        });
+        if (drew) {
+          if (!state.chart?.notes) return;
+          state.chart.notes.forEach(note => {
+            if (note.judged && !note.holdActive) return;
+            drawSpecialNoteOverlay(note, t);
+          });
+          return;
         }
       } else if (!indieSkinReady(config)) {
         baseNotes(t);
