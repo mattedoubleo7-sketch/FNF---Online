@@ -41,6 +41,41 @@
       return 1;
     }
 
+    function nativeEngineSongTime() {
+      const ctxTime = Number(state.audio?.ctx?.currentTime || 0);
+      const songStart = Number(state.songStart || 0);
+      if (!Number.isFinite(ctxTime) || !Number.isFinite(songStart) || !state.playing || !ctxTime) return null;
+      return Math.max(0, ctxTime - songStart);
+    }
+
+    function syncTone(chartMs, trackMs = 0) {
+      if (chartMs <= 22 && trackMs <= 38) return "good";
+      if (chartMs <= 55 && trackMs <= 90) return "warn";
+      return "bad";
+    }
+
+    function syncPalette(tone) {
+      if (tone === "good") return {
+        border: "rgba(108, 255, 188, 0.42)",
+        glow: "rgba(82, 255, 176, 0.24)",
+        text: "#dffff3"
+      };
+      if (tone === "warn") return {
+        border: "rgba(255, 209, 92, 0.44)",
+        glow: "rgba(255, 209, 92, 0.22)",
+        text: "#fff4d0"
+      };
+      return {
+        border: "rgba(255, 116, 141, 0.46)",
+        glow: "rgba(255, 116, 141, 0.24)",
+        text: "#ffe1e7"
+      };
+    }
+
+    function roundMs(value) {
+      return Math.max(0, Math.round(Number(value || 0)));
+    }
+
     function clampTrackTime(track, time) {
       const duration = Number.isFinite(track?.duration) && track.duration > 0 ? track.duration : null;
       return Math.max(0, duration == null ? time : Math.min(time, Math.max(0, duration - 0.05)));
@@ -114,7 +149,96 @@
       return originalSongTime.apply(this, arguments);
     };
 
+    function collectSyncDiagnostics(song = state.currentSong) {
+      if (!song) {
+        return { label: "SYNC CHECKER", detail: "No song selected", tone: "warn" };
+      }
+      if (!state.playing) {
+        return { label: "SYNC CHECKER", detail: "Ready for the next song", tone: "good" };
+      }
+      const source = currentChartSource(song);
+      const chartTime = Number(songTime() || 0);
+      if (source) {
+        const tracks = importedTrackGroup(song).filter(Boolean);
+        const master = tracks[0];
+        const rate = importedPlaybackRate(song);
+        if (!master) {
+          return { label: "DESYNC", detail: "Missing master audio track", tone: "bad" };
+        }
+        const masterTime = Number(master.currentTime || 0) * rate;
+        const chartMs = Math.abs(chartTime - masterTime) * 1000;
+        const trackMs = tracks.slice(1).reduce((worst, track) => {
+          return Math.max(worst, Math.abs((Number(track.currentTime || 0) * rate) - masterTime) * 1000);
+        }, 0);
+        const tone = syncTone(chartMs, trackMs);
+        const label = tone === "good" ? "SYNC OK" : (tone === "warn" ? "SYNC DRIFT" : "DESYNC");
+        return {
+          label,
+          detail: `chart ${roundMs(chartMs)}ms | tracks ${roundMs(trackMs)}ms`,
+          tone
+        };
+      }
+      const engineTime = nativeEngineSongTime();
+      if (engineTime == null) {
+        return { label: "SYNC WAIT", detail: "Audio engine not locked yet", tone: "warn" };
+      }
+      const chartMs = Math.abs(chartTime - engineTime) * 1000;
+      const tone = syncTone(chartMs, 0);
+      const label = tone === "good" ? "SYNC OK" : (tone === "warn" ? "SYNC DRIFT" : "DESYNC");
+      return {
+        label,
+        detail: `engine ${roundMs(chartMs)}ms`,
+        tone
+      };
+    }
+
+    function ensureSyncChecker() {
+      if (typeof document === "undefined" || !document.body) return null;
+      let el = document.getElementById("syncChecker");
+      if (el) return el;
+      el = document.createElement("div");
+      el.id = "syncChecker";
+      Object.assign(el.style, {
+        position: "fixed",
+        right: "18px",
+        bottom: "58px",
+        zIndex: "70",
+        minWidth: "164px",
+        padding: "10px 12px",
+        borderRadius: "14px",
+        border: "1px solid rgba(108,255,188,0.35)",
+        background: "rgba(8, 13, 25, 0.82)",
+        boxShadow: "0 0 0 1px rgba(255,255,255,0.03), 0 10px 24px rgba(0,0,0,0.28)",
+        backdropFilter: "blur(10px)",
+        color: "#eef7ff",
+        fontFamily: "\"Trebuchet MS\", Arial, sans-serif",
+        fontSize: "12px",
+        letterSpacing: "0.03em",
+        pointerEvents: "none",
+        userSelect: "none",
+        textAlign: "right",
+        whiteSpace: "nowrap"
+      });
+      document.body.appendChild(el);
+      return el;
+    }
+
+    function updateSyncChecker() {
+      const el = ensureSyncChecker();
+      if (el) {
+        const diag = collectSyncDiagnostics();
+        const palette = syncPalette(diag.tone);
+        el.innerHTML = `<div style="font-weight:900; font-size:12px; margin-bottom:2px;">${diag.label}</div><div style="opacity:0.82; font-size:11px;">${diag.detail}</div>`;
+        el.style.borderColor = palette.border;
+        el.style.boxShadow = `0 0 0 1px rgba(255,255,255,0.03), 0 0 28px ${palette.glow}, 0 10px 24px rgba(0,0,0,0.28)`;
+        el.style.color = palette.text;
+      }
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(updateSyncChecker);
+    }
+
+    window.getSongSyncDiagnostics = collectSyncDiagnostics;
     window.getStableImportedTrackGroup = importedTrackGroup;
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(updateSyncChecker);
   } catch (error) {
     console.error("Playback stability fix failed to initialize", error);
   }
