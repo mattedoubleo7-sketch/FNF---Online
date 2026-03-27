@@ -250,13 +250,13 @@
   };
 
   const STAGE_LAYOUT = {
-    sans: { x: 0.838, y: 0.93, scale: 0.235 },
-    sansAlt: { x: 0.838, y: 0.93, scale: 0.235 },
-    papyrus: { x: 0.828, y: 0.898, scale: 0.242 },
-    papyrusBody: { x: 0.83, y: 0.936, scale: 0.242 },
-    papyrusHead: { x: 0.826, y: 0.902, scale: 0.228 },
-    boyfriend: { x: 0.288, y: 0.962, scale: 0.255 },
-    boyfriendRed: { x: 0.284, y: 0.965, scale: 0.272 },
+    sans: { x: 0.238, y: 0.79, scale: 0.235 },
+    sansAlt: { x: 0.238, y: 0.79, scale: 0.235 },
+    papyrus: { x: 0.286, y: 0.758, scale: 0.212 },
+    papyrusBody: { x: 0.292, y: 0.79, scale: 0.212 },
+    papyrusHead: { x: 0.278, y: 0.752, scale: 0.198 },
+    boyfriend: { x: 0.812, y: 0.814, scale: 0.255 },
+    boyfriendRed: { x: 0.802, y: 0.824, scale: 0.272 },
     bfSoul: { x: 0.288, y: 0.986, scale: 0.17 },
     gfSoul: { x: 0.816, y: 0.988, scale: 0.145 }
   };
@@ -703,13 +703,13 @@
     const oppDir = cameraDirectionOffsetFor("opp", t, moveOffset);
     const playerDir = cameraDirectionOffsetFor("player", t, moveOffset);
     const opp = {
-      x: canvas.width * 0.69 + oppDir.x,
+      x: canvas.width * 0.38 + oppDir.x,
       y: canvas.height * (papyrusDuetActiveAt(t) ? 0.43 : 0.45) + oppDir.y,
       side: "opp",
       angle: oppDir.angle
     };
     const player = {
-      x: canvas.width * 0.39 + playerDir.x,
+      x: canvas.width * 0.66 + playerDir.x,
       y: canvas.height * 0.49 + playerDir.y,
       side: "player",
       angle: playerDir.angle
@@ -737,6 +737,13 @@
     const body = { ...STAGE_LAYOUT.papyrusBody };
     const head = { ...STAGE_LAYOUT.papyrusHead };
     if (t < PAPYRUS_ORBIT_START || t >= PAPYRUS_ORBIT_END) {
+      return { body, head };
+    }
+    if (t >= PAPYRUS_ORBIT_END - 5) {
+      body.x = STAGE_LAYOUT.papyrusBody.x + 0.006;
+      body.y = STAGE_LAYOUT.papyrusBody.y;
+      head.x = STAGE_LAYOUT.papyrusHead.x + 0.018;
+      head.y = STAGE_LAYOUT.papyrusHead.y - 0.07;
       return { body, head };
     }
 
@@ -1447,10 +1454,11 @@
     }
 
     const fix = getFixState();
+    const targetFocus = cameraTargetPointAt(t);
     const focus = {
-      x: canvas.width * 0.5,
-      y: canvas.height * 0.45,
-      side: "both"
+      x: brLerp(canvas.width * 0.5, targetFocus.x, 0.18),
+      y: brLerp(canvas.height * 0.45, targetFocus.y, 0.18),
+      side: targetFocus.side
     };
     const follow = clamp(4 + currentCameraSpeedAt(t) * 34, 4, 14);
     const ease = 1 - Math.exp(-Math.max(1 / 240, dt || 1 / 60) * follow);
@@ -1547,21 +1555,176 @@
     if (state.selectedSong !== "brokenReality") {
       return originalStage(t);
     }
-    return originalStage(t);
+
+    updateLayoutState(t);
+    const pack = currentPack("opp", t);
+    const playerPack = currentPack("player", t);
+    const soulDuet = t >= soulPhaseStart && t < soulPhaseEnd && (pack.id === "gfSoul" || playerPack.id === "bfSoul");
+    if (soulDuet) {
+      drawCharacterReflection("opp", t, 0.28, packById("gfSoul", "gfSoul"), SOUL_DUET_LAYOUT.gfSoul);
+      drawCharacterReflection("player", t, 0.34, packById("bfSoul", "bfSoul"), SOUL_DUET_LAYOUT.bfSoul);
+      drawCharacter("opp", t, 0.22, true, packById("gfSoul", "gfSoul"), SOUL_DUET_LAYOUT.gfSoul);
+      drawCharacter("player", t, 0.24, true, packById("bfSoul", "bfSoul"), SOUL_DUET_LAYOUT.bfSoul);
+      drawCharacter("opp", t, 1, false, packById("gfSoul", "gfSoul"), SOUL_DUET_LAYOUT.gfSoul);
+      drawCharacter("player", t, 1, false, packById("bfSoul", "bfSoul"), SOUL_DUET_LAYOUT.bfSoul);
+      return;
+    }
+
+    const usePapyrusStage = pack.id === "papyrus" || pack.id === "papyrusHead";
+    const ground = usePapyrusStage ? stageImages.papsBg : stageImages.ground;
+    const fg = usePapyrusStage ? stageImages.papsFg : stageImages.fg;
+    const base = ready(ground) ? ground : stageImages.back;
+    if (!ready(base)) {
+      return;
+    }
+
+    const rect = stageRect(base);
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    if (ready(stageImages.back)) {
+      ctx.drawImage(stageImages.back, rect.x, rect.y, rect.w, rect.h);
+    }
+    if (ready(ground)) {
+      ctx.drawImage(ground, rect.x, rect.y, rect.w, rect.h);
+    }
+    if (ready(stageImages.light)) {
+      const bloom = Number(state.br?.bloom || 1);
+      ctx.globalCompositeOperation = "screen";
+      ctx.globalAlpha = usePapyrusStage ? 0.16 + bloom * 0.08 : 0.2 + bloom * 0.1;
+      ctx.drawImage(stageImages.light, rect.x, rect.y, rect.w, rect.h);
+      ctx.globalCompositeOperation = "source-over";
+    }
+    ctx.restore();
+
+    if (!usePapyrusStage) {
+      const bloom = Number(state.br?.bloom || 1);
+      drawHallWindowBloom(rect, t, bloom);
+      drawHallDust(rect, t, bloom);
+    }
+
+    const papyrusLayouts = papyrusDuetActiveAt(t) ? papyrusOrbitLayoutsAt(t) : null;
+    const trailAlpha = brokenRealityTrailAlphaAt(t);
+
+    if (trailAlpha > 0.01) {
+      drawCharacterTrails("opp", t, trailAlpha);
+      drawCharacterTrails("player", t, trailAlpha * 0.9);
+      if (papyrusLayouts) {
+        drawCharacterTrails("opp", t, trailAlpha * 0.82, packById("papyrusBody", "papyrus"), papyrusLayouts.body);
+      }
+    }
+
+    drawCharacterReflection("opp", t, usePapyrusStage ? 0.2 : 0.42);
+    if (papyrusLayouts) {
+      drawCharacterReflection("opp", t, 0.16, packById("papyrusBody", "papyrus"), papyrusLayouts.body);
+    }
+    drawCharacterReflection("player", t, usePapyrusStage ? 0.26 : 0.52);
+
+    drawCharacter("opp", t, 0.22, true);
+    if (papyrusLayouts) {
+      drawCharacter("opp", t, 0.16, true, packById("papyrusBody", "papyrus"), papyrusLayouts.body);
+    }
+    drawCharacter("player", t, 0.2, true);
+    drawCharacter("opp", t, brokenRealityOpponentAlphaAt(t), false);
+    if (papyrusLayouts) {
+      drawPapyrusGradient(t, papyrusLayouts.body);
+      drawCharacter("opp", t, 1, false, packById("papyrusBody", "papyrus"), papyrusLayouts.body);
+    }
+    drawCharacter("player", t, 1, false);
+
+    if (ready(fg)) {
+      ctx.save();
+      ctx.globalAlpha = 0.08;
+      drawCenterPillarReflection(fg, rect.y, rect.h, 0.08);
+      ctx.restore();
+      ctx.save();
+      ctx.globalAlpha = 0.98;
+      drawCenterPillar(fg, rect.y, rect.h);
+      ctx.restore();
+    }
+
+    drawAttackBar(t);
   };
 
   receptors = function(t) {
     if (state.selectedSong !== "brokenReality") {
       return originalReceptors(t);
     }
-    return originalReceptors(t);
+
+    const fix = updateLayoutState(t);
+    const verticalWeight = Math.abs(fix.currentYMult);
+    const horizontalWeight = Math.abs(fix.currentXMult);
+
+    if (verticalWeight >= horizontalWeight * 0.75) {
+      ctx.strokeStyle = "rgba(255,255,255,0.08)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(canvas.width * 0.5, 72);
+      ctx.lineTo(canvas.width * 0.5, 452);
+      ctx.stroke();
+    }
+
+    for (let lane = 0; lane < 8; lane++) {
+      const x = laneX(lane);
+      const y = fix.currentY;
+      drawReceptor(lane, x, y, t);
+      ctx.strokeStyle = "rgba(255,255,255,0.05)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      if (horizontalWeight > verticalWeight) {
+        ctx.moveTo(x + 26, y);
+        ctx.lineTo(canvas.width - 48, y);
+      } else if (fix.currentYMult < 0) {
+        ctx.moveTo(x, y - 26);
+        ctx.lineTo(x, 96);
+      } else {
+        ctx.moveTo(x, y + 26);
+        ctx.lineTo(x, 448);
+      }
+      ctx.stroke();
+    }
   };
 
   notes = function(t) {
     if (state.selectedSong !== "brokenReality") {
       return originalNotes(t);
     }
-    return originalNotes(t);
+    if (!state.chart) {
+      return;
+    }
+
+    for (const note of state.chart.notes) {
+      if (note.played && note.hit && (!isHoldNote(note) || note.holdDone)) {
+        continue;
+      }
+      if (note.judged && note.side !== "opp" && (!isHoldNote(note) || note.holdDone || !note.hit)) {
+        continue;
+      }
+
+      const place = notePlacement(note, t);
+      if (
+        (place.x < -180 && place.tailX < -180) ||
+        (place.x > canvas.width + 180 && place.tailX > canvas.width + 180) ||
+        (place.y < -180 && place.tailY < -180) ||
+        (place.y > canvas.height + 180 && place.tailY > canvas.height + 180)
+      ) {
+        continue;
+      }
+
+      const diff = note.time - t;
+      const scale = clamp(1 - Math.pow(Math.abs(diff), 0.7) * 0.45, 0.75, 1.1);
+      const alpha = note.side === "opp" ? 0.84 : 1;
+
+      if (isHoldNote(note)) {
+        const headX = note.hit ? laneX(note.lane) : place.x;
+        const headY = note.hit ? updateLayoutState(t).currentY : place.y;
+        drawSustain(note, headX, headY, place.tailX, place.tailY, t, alpha * (note.hit ? 0.94 : 1));
+      }
+      if (note.hit && isHoldNote(note) && t > note.time) {
+        continue;
+      }
+      drawGem(note.lane, place.x, place.y, scale, alpha, t);
+    }
   };
 
   window.brDrawOverlays = function() {
