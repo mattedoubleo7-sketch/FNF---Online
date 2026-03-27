@@ -23,6 +23,7 @@
   const originalReceptors = receptors;
   const originalRenderScene = renderScene;
   const originalRefreshHUD = refreshHUD;
+  const originalUpdateCamera = typeof updateCamera === "function" ? updateCamera : null;
   const originalFinish = typeof finish === "function" ? finish : null;
   const SOUL = window.BROKEN_REALITY_SOUL_DATA || {};
   const baseLaneShift = 36;
@@ -184,6 +185,58 @@
     }
   }
 
+  function buildEventTimeline(name, defaults, mapEvent) {
+    const timeline = [{ time: 0, ...defaults }];
+    for (const event of (BR.events || []).filter(e => e.name === name).sort((a, b) => a.time - b.time)) {
+      const mapped = mapEvent(event, timeline[timeline.length - 1]);
+      if (!mapped) {
+        continue;
+      }
+      timeline.push({ time: Number(event.time || 0), ...mapped });
+    }
+    return timeline;
+  }
+
+  function buildCharacterOffsetTimeline(targetIndex) {
+    return buildEventTimeline("Change Character Offset", { x: 0, y: 0 }, event => {
+      if (Number(event.params?.[1]) !== targetIndex) {
+        return null;
+      }
+      return {
+        x: Number(event.params?.[2] || 0),
+        y: Number(event.params?.[3] || 0)
+      };
+    });
+  }
+
+  const cameraTargetTimeline = buildEventTimeline("Camera Movement", { target: 1 }, event => ({
+    target: Number(event.params?.[0] ?? 1)
+  }));
+  const cameraSpeedTimeline = buildEventTimeline("Camera Speed", { speed: 0.04 }, event => ({
+    speed: Number(event.params?.[0] || 0.04)
+  }));
+  const stageZoomTimeline = buildEventTimeline("Change Stage Zoom", { zoom: 0.46 }, event => ({
+    zoom: Number(event.params?.[5] ?? 0.46)
+  }));
+  const oppOffsetTimeline = buildCharacterOffsetTimeline(0);
+  const playerOffsetTimeline = buildCharacterOffsetTimeline(1);
+
+  const RED_PHASE_START = 144;
+  const PAPYRUS_ORBIT_START = 227.75;
+  const PAPYRUS_ORBIT_END = 255.75;
+  const RED_PHASE_END = 282.083333;
+  const BLACKOUT_START = 344;
+  const OPPONENT_HIDE_START = 343;
+  const OPPONENT_FADE_BACK_START = 365.333333;
+  const OPPONENT_FADE_BACK_END = 370.333333;
+  const BLACKOUT_END = 394.666667;
+  const TRAIL_PULSES = [
+    { start: 86.666667, end: 97.333333, trail: 0.28, gradient: 0.27 },
+    { start: 115.333333, end: 118.666667, trail: 0.24, gradient: 0.24 },
+    { start: 408.166667, end: 416, trail: 0.34, gradient: 0.28 },
+    { start: 437.5, end: 451.166667, trail: 0.4, gradient: 0.32 }
+  ];
+
   const PACKS = {
     sans: { id: "sans", def: BR.sprites?.sans, image: charImages.sans, poseKey: "sans", idleSpeed: 0.55 },
     sansAlt: { id: "sansAlt", def: BR.sprites?.sansAlt, image: charImages.sansAlt, poseKey: "sans", idleSpeed: 0.55 },
@@ -233,7 +286,14 @@
         attackSnapshot: null,
         lastDrainPerf: performance.now() / 1000,
         endingActive: false,
-        endingDone: false
+        endingDone: false,
+        renderTime: 0,
+        camX: canvas.width * 0.5,
+        camY: canvas.height * 0.45,
+        camZoom: 1,
+        camHighwayX: 0,
+        camHighwayY: 0,
+        attackCueStamp: ""
       };
     }
     return state.brFix;
@@ -407,6 +467,347 @@
     return (t >= papyrusDuetStart && t < papyrusDuetEnd) || t >= finalPapyrusDuetStart;
   }
 
+  function currentCameraTargetAt(t) {
+    return timelinePropAt(cameraTargetTimeline, t, "target");
+  }
+
+  function currentCameraSpeedAt(t) {
+    return timelinePropAt(cameraSpeedTimeline, t, "speed");
+  }
+
+  function currentStageZoomAt(t) {
+    return timelinePropAt(stageZoomTimeline, t, "zoom");
+  }
+
+  function currentCharacterOffsetAt(kind, t) {
+    const timeline = kind === "opp" ? oppOffsetTimeline : playerOffsetTimeline;
+    return {
+      x: timelinePropAt(timeline, t, "x"),
+      y: timelinePropAt(timeline, t, "y")
+    };
+  }
+
+  function pulseInWindow(t, start, end) {
+    if (t < start || t > end) {
+      return 0;
+    }
+    const p = clamp((t - start) / Math.max(0.001, end - start), 0, 1);
+    return Math.sin(p * Math.PI);
+  }
+
+  function brokenRealityTrailAlphaAt(t) {
+    let alpha = t >= RED_PHASE_START && t < RED_PHASE_END ? 0.06 : 0;
+    if (t >= PAPYRUS_ORBIT_START && t < PAPYRUS_ORBIT_END) {
+      alpha = Math.max(alpha, 0.22 + Math.sin((t - PAPYRUS_ORBIT_START) * 2.4) * 0.04);
+    }
+    for (const pulse of TRAIL_PULSES) {
+      alpha = Math.max(alpha, pulseInWindow(t, pulse.start, pulse.end) * pulse.trail);
+    }
+    return clamp(alpha, 0, 0.48);
+  }
+
+  function brokenRealityGradientAlphaAt(t) {
+    let alpha = 0;
+    if (t >= RED_PHASE_START && t < RED_PHASE_END) {
+      alpha = 0.12;
+    }
+    if (t >= PAPYRUS_ORBIT_START && t < PAPYRUS_ORBIT_END) {
+      alpha = Math.max(alpha, 0.18);
+    }
+    for (const pulse of TRAIL_PULSES) {
+      alpha = Math.max(alpha, pulseInWindow(t, pulse.start, pulse.end) * pulse.gradient);
+    }
+    return clamp(alpha, 0, 0.38);
+  }
+
+  function brokenRealityBlackoutAlphaAt(t) {
+    if (t < BLACKOUT_START) {
+      return 0;
+    }
+    if (t < BLACKOUT_START + 0.8) {
+      return clamp((t - BLACKOUT_START) / 0.8, 0, 1);
+    }
+    if (t < BLACKOUT_END) {
+      return 1;
+    }
+    if (t < BLACKOUT_END + 0.85) {
+      return 1 - clamp((t - BLACKOUT_END) / 0.85, 0, 1);
+    }
+    return 0;
+  }
+
+  function brokenRealityOpponentAlphaAt(t) {
+    if (t < OPPONENT_HIDE_START) {
+      return 1;
+    }
+    if (t < OPPONENT_FADE_BACK_START) {
+      return 0;
+    }
+    if (t < OPPONENT_FADE_BACK_END) {
+      return clamp((t - OPPONENT_FADE_BACK_START) / (OPPONENT_FADE_BACK_END - OPPONENT_FADE_BACK_START), 0, 1);
+    }
+    return 1;
+  }
+
+  function currentCameraMoveOffsetAt(t) {
+    if (t >= BLACKOUT_START && t < BLACKOUT_END) {
+      return 0;
+    }
+    if (t >= BLACKOUT_END) {
+      return 5;
+    }
+    return 22;
+  }
+
+  function currentCameraAngleOffsetAt(t, target) {
+    if (t >= BLACKOUT_START && t < BLACKOUT_END) {
+      return 0;
+    }
+    if (target === 0 && t >= RED_PHASE_START && t < RED_PHASE_END) {
+      return 0.6;
+    }
+    return 0.3;
+  }
+
+  function brokenRealityZoomScaleAt(t) {
+    return clamp(0.88 + currentStageZoomAt(t) * 0.54, 0.96, 1.28);
+  }
+
+  function attackVisualState(t) {
+    const attack = state.br?.attack;
+    const out = {
+      active: false,
+      prep: false,
+      focusX: null,
+      focusY: null,
+      zoomBoost: 0,
+      barsBoost: 0,
+      vignetteBoost: 0,
+      flashAlpha: 0,
+      darkAlpha: 0,
+      noiseAlpha: 0,
+      chromaAlpha: 0,
+      shake: 0
+    };
+    if (!attack) {
+      return out;
+    }
+
+    out.active = true;
+    if (!attack.resolved && attack.anim !== "attack" && attack.anim !== "back") {
+      out.prep = true;
+      out.focusX = canvas.width * 0.64;
+      out.focusY = canvas.height * 0.57;
+      out.zoomBoost = 0.08;
+      out.barsBoost = 0.14;
+      out.vignetteBoost = 0.22;
+      out.darkAlpha = 0.18;
+      return out;
+    }
+
+    const age = Math.max(0, t - Number(attack.animStart || attack.triggerTime || t));
+    const frame = age * 24;
+
+    if (attack.anim === "attack") {
+      out.zoomBoost = 0.04;
+      out.focusX = canvas.width * 0.6;
+      out.focusY = canvas.height * 0.56;
+      out.barsBoost = 0.08;
+      if (frame >= 94 && frame < 96) {
+        out.darkAlpha = 0.42;
+        out.flashAlpha = frame >= 95 ? 0.34 : 0.18;
+        out.noiseAlpha = 0.22;
+      }
+      if (frame >= 97 && frame < 99) {
+        out.focusX = canvas.width * 0.74;
+        out.focusY = canvas.height * 0.53;
+        out.zoomBoost = 0.02;
+        out.darkAlpha = 0.14;
+      }
+      if (frame >= 99 && frame < 128) {
+        out.focusX = canvas.width * 0.79;
+        out.focusY = canvas.height * 0.56;
+        out.zoomBoost = 0.14;
+      }
+      if (frame >= 103 && frame < 128) {
+        out.vignetteBoost = 0.12;
+      }
+      if (frame >= 107 && frame < 110) {
+        out.flashAlpha = 0.9;
+        out.chromaAlpha = 0.52;
+        out.darkAlpha = 0.34;
+        out.shake = 12;
+        out.zoomBoost = 0.22;
+      } else if (frame >= 110 && frame < 125) {
+        out.chromaAlpha = 0.18;
+        out.darkAlpha = 0.12;
+      }
+      if (frame >= 125 && frame < 129) {
+        out.noiseAlpha = 0.28;
+        out.darkAlpha = 0.22;
+      }
+      if (frame >= 128 && frame < 141) {
+        out.focusX = canvas.width * 0.65;
+        out.focusY = canvas.height * 0.55;
+        out.zoomBoost = 0.06;
+      }
+      return out;
+    }
+
+    if (attack.anim === "back") {
+      out.focusX = canvas.width * 0.62;
+      out.focusY = canvas.height * 0.55;
+      out.zoomBoost = Math.max(0, 0.08 - age * 0.12);
+      out.darkAlpha = Math.max(0, 0.14 - age * 0.24);
+    }
+    return out;
+  }
+
+  function cameraDirectionOffsetFor(kind, t, moveOffset) {
+    const poseKey = kind === "opp" ? "sans" : "player";
+    const pose = state.poses?.[poseKey];
+    if (!pose) {
+      return { x: 0, y: 0, angle: 0 };
+    }
+    const age = performance.now() / 1000 - Number(pose.time || -10);
+    if (age < 0 || age > 0.3) {
+      return { x: 0, y: 0, angle: 0 };
+    }
+    const lane = Math.abs(Number(pose.lane || 0)) % 4;
+    const angleOffset = currentCameraAngleOffsetAt(t, kind === "opp" ? 0 : 1);
+    if (lane === 0) {
+      return { x: -moveOffset, y: 0, angle: -angleOffset };
+    }
+    if (lane === 1) {
+      return { x: 0, y: moveOffset, angle: 0 };
+    }
+    if (lane === 2) {
+      return { x: 0, y: -moveOffset, angle: 0 };
+    }
+    return { x: moveOffset, y: 0, angle: angleOffset };
+  }
+
+  function cameraTargetPointAt(t) {
+    const blackout = brokenRealityBlackoutAlphaAt(t);
+    if (t >= soulPhaseStart && t < soulPhaseEnd) {
+      return {
+        x: canvas.width * 0.5,
+        y: canvas.height * (blackout > 0.5 ? 0.54 : 0.5),
+        side: "both"
+      };
+    }
+
+    const target = currentCameraTargetAt(t);
+    const moveOffset = currentCameraMoveOffsetAt(t);
+    const attackFx = attackVisualState(t);
+    const oppDir = cameraDirectionOffsetFor("opp", t, moveOffset);
+    const playerDir = cameraDirectionOffsetFor("player", t, moveOffset);
+    const opp = {
+      x: canvas.width * 0.69 + oppDir.x,
+      y: canvas.height * (papyrusDuetActiveAt(t) ? 0.43 : 0.45) + oppDir.y,
+      side: "opp",
+      angle: oppDir.angle
+    };
+    const player = {
+      x: canvas.width * 0.39 + playerDir.x,
+      y: canvas.height * 0.49 + playerDir.y,
+      side: "player",
+      angle: playerDir.angle
+    };
+    const both = {
+      x: canvas.width * 0.54,
+      y: canvas.height * (papyrusDuetActiveAt(t) ? 0.45 : 0.47),
+      side: "both",
+      angle: 0
+    };
+
+    let focus = target === 0 ? opp : target === 1 ? player : both;
+    if (attackFx.focusX != null && attackFx.focusY != null) {
+      focus = {
+        x: attackFx.focusX,
+        y: attackFx.focusY,
+        side: "both",
+        angle: 0
+      };
+    }
+    return focus;
+  }
+
+  function papyrusOrbitLayoutsAt(t) {
+    const body = { ...STAGE_LAYOUT.papyrusBody };
+    const head = { ...STAGE_LAYOUT.papyrusHead };
+    if (t < PAPYRUS_ORBIT_START || t >= PAPYRUS_ORBIT_END) {
+      return { body, head };
+    }
+
+    const waveSpeed = (t - PAPYRUS_ORBIT_START) * 3;
+    const bobX = Math.sin(waveSpeed) * 50;
+    const bobY = Math.cos(waveSpeed * 0.8) * 40 + Math.sin(waveSpeed * 1.5) * 10;
+    body.x += bobX / 1920;
+    body.y += bobY / 1080;
+
+    const orbitSpeed = (t - PAPYRUS_ORBIT_START) * 1.5 * 1.7;
+    let trace = Math.sin(orbitSpeed * 0.8) * 0.5 + 0.5;
+    trace += Math.sin(orbitSpeed * 0.5) * 0.15;
+    trace += Math.cos(orbitSpeed * 1.7) * 0.1;
+    trace = clamp(trace, 0, 1);
+    const eased = Math.sin(trace * Math.PI * 0.5);
+    const mainArc = Math.sin(trace * Math.PI) * -150 * 1.6;
+    const tilt = Math.cos(orbitSpeed * 1.2) * 25;
+    const sway = Math.sin(orbitSpeed * 3.5) * 15;
+    const pulse = Math.sin(orbitSpeed * 0.5) * 10;
+    head.x = brLerp(head.x + 0.012, head.x - 0.095, eased) + (tilt + pulse) / 1920;
+    head.y = body.y + (mainArc + sway + pulse + tilt) / 1080 - 0.03;
+    return { body, head };
+  }
+
+  function drawPapyrusGradient(t, layout) {
+    const alpha = brokenRealityGradientAlphaAt(t);
+    if (alpha <= 0.01) {
+      return;
+    }
+    const centerX = canvas.width * layout.x;
+    const baseY = canvas.height * layout.y;
+    const grad = ctx.createLinearGradient(0, baseY - 360, 0, baseY + 24);
+    grad.addColorStop(0, "rgba(255,0,0,0)");
+    grad.addColorStop(0.18, "rgba(255,22,22," + (alpha * 0.16).toFixed(3) + ")");
+    grad.addColorStop(0.56, "rgba(176,14,14," + (alpha * 0.46).toFixed(3) + ")");
+    grad.addColorStop(1, "rgba(112,10,10,0)");
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    ctx.fillStyle = grad;
+    ctx.fillRect(centerX - 280, baseY - 360, 560, 420);
+    ctx.restore();
+  }
+
+  function drawCharacterTrails(kind, t, trailAlpha, forcedPack = null, forcedLayout = null) {
+    if (trailAlpha <= 0.01) {
+      return;
+    }
+    const draw = characterDrawState(kind, t, false, forcedPack, forcedLayout);
+    if (!draw) {
+      return;
+    }
+    const copies = 2 + Math.round(trailAlpha * 8);
+    for (let i = copies; i >= 1; i--) {
+      const ratio = i / copies;
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      ctx.globalAlpha = trailAlpha * 0.22 * ratio;
+      ctx.filter = "blur(" + (5 + i * 1.8).toFixed(2) + "px)";
+      drawVisibleFrame(
+        draw.info.pack.image,
+        draw.info.frame,
+        draw.x - i * 16,
+        draw.y + i * 7,
+        draw.scale * (1 + i * 0.014),
+        trailAlpha * 0.18 * ratio,
+        draw.flipX
+      );
+      ctx.restore();
+    }
+  }
+
   function updateLayoutState(t) {
     const fix = getFixState();
     const now = performance.now() / 1000;
@@ -542,8 +943,9 @@
     const baseOffset = Array.isArray(info.pack.def?.baseOffset) ? info.pack.def.baseOffset : [0, 0];
     const offsetX = stableFeet ? 0 : (Number(info.offset?.[0] || 0) + Number(baseOffset[0] || 0) * 0.02) * scale;
     const offsetY = stableFeet ? 0 : (Number(info.offset?.[1] || 0) + Number(baseOffset[1] || 0) * 0.01) * scale;
-    let x = canvas.width * layout.x - offsetX + (shadow ? 16 : 0);
-    let y = canvas.height * layout.y - offsetY + (shadow ? 24 : 0);
+    const charOffset = currentCharacterOffsetAt(kind, t);
+    let x = canvas.width * layout.x - offsetX + charOffset.x * 0.42 + (shadow ? 16 : 0);
+    let y = canvas.height * layout.y - offsetY + charOffset.y * 0.36 + (shadow ? 24 : 0);
     const flipX = kind === "player" ? !info.pack.def.flipX : !!info.pack.def.flipX;
     const attack = state.br?.attack;
     if (attack && kind === "player") {
@@ -1039,17 +1441,65 @@
     return originalSongTime();
   };
 
+  updateCamera = function(t, dt) {
+    if (state.selectedSong !== "brokenReality") {
+      return originalUpdateCamera ? originalUpdateCamera(t, dt) : undefined;
+    }
+
+    const fix = getFixState();
+    const focus = {
+      x: canvas.width * 0.5,
+      y: canvas.height * 0.45,
+      side: "both"
+    };
+    const follow = clamp(4 + currentCameraSpeedAt(t) * 34, 4, 14);
+    const ease = 1 - Math.exp(-Math.max(1 / 240, dt || 1 / 60) * follow);
+    const attackFx = attackVisualState(t);
+    const targetZoom = clamp(
+      brokenRealityZoomScaleAt(t)
+        + Math.max(0, Number(state.br?.bloom || 1) - 1) * 0.08
+        + attackFx.zoomBoost
+        - brokenRealityBlackoutAlphaAt(t) * 0.12,
+      0.96,
+      1.42
+    );
+
+    fix.camX += (focus.x - fix.camX) * ease;
+    fix.camY += (focus.y - fix.camY) * ease;
+    fix.camZoom += (targetZoom - fix.camZoom) * Math.min(1, ease * 1.4);
+    fix.camHighwayX += (0 - fix.camHighwayX) * ease;
+    fix.camHighwayY += (0 - fix.camHighwayY) * ease;
+
+    state.camera.zoom = fix.camZoom;
+    state.camera.focusX = fix.camX;
+    state.camera.focusY = fix.camY;
+    state.camera.highwayX = brokenRealityBlackoutAlphaAt(t) > 0.92 ? 0 : fix.camHighwayX;
+    state.camera.highwayY = brokenRealityBlackoutAlphaAt(t) > 0.92 ? 0 : fix.camHighwayY;
+    state.camera.lastSide = focus.side;
+
+    const cueId =
+      attackFx.shake > 0
+        ? "shake-" + Math.round((t - Number(state.br?.attack?.animStart || t)) * 24)
+        : "";
+    if (cueId && fix.attackCueStamp !== cueId) {
+      fix.attackCueStamp = cueId;
+      state.shake = {
+        time: performance.now() / 1000,
+        intensity: attackFx.shake
+      };
+    }
+  };
+
   laneX = function(i) {
     if (state.selectedSong === "brokenReality") {
-      const swapped = i < 4 ? i + 4 : i - 4;
-      return originalLaneX(swapped) - baseLaneShift;
+      return originalLaneX(i);
     }
     return originalLaneX(i);
   };
 
   receptorY = function() {
     if (state.selectedSong === "brokenReality") {
-      return updateLayoutState(songTime()).currentY;
+      return originalReceptorY();
     }
     return originalReceptorY();
   };
@@ -1071,6 +1521,13 @@
       fix.lastDrainPerf = performance.now() / 1000;
       fix.endingActive = false;
       fix.endingDone = false;
+      fix.renderTime = 0;
+      fix.camX = canvas.width * 0.5;
+      fix.camY = canvas.height * 0.45;
+      fix.camZoom = 1;
+      fix.camHighwayX = 0;
+      fix.camHighwayY = 0;
+      fix.attackCueStamp = "";
       ensureEndingVideos();
       hideEndingVideos();
     }
@@ -1090,178 +1547,146 @@
     if (state.selectedSong !== "brokenReality") {
       return originalStage(t);
     }
-
-    updateLayoutState(t);
-    const pack = currentPack("opp", t);
-    const playerPack = currentPack("player", t);
-    const soulDuet = t >= soulPhaseStart && t < soulPhaseEnd && (pack.id === "gfSoul" || playerPack.id === "bfSoul");
-    if (soulDuet) {
-      drawCharacterReflection("opp", t, 0.28, packById("gfSoul", "gfSoul"), SOUL_DUET_LAYOUT.gfSoul);
-      drawCharacterReflection("player", t, 0.34, packById("bfSoul", "bfSoul"), SOUL_DUET_LAYOUT.bfSoul);
-      drawCharacter("opp", t, 0.22, true, packById("gfSoul", "gfSoul"), SOUL_DUET_LAYOUT.gfSoul);
-      drawCharacter("player", t, 0.24, true, packById("bfSoul", "bfSoul"), SOUL_DUET_LAYOUT.bfSoul);
-      drawCharacter("opp", t, 1, false, packById("gfSoul", "gfSoul"), SOUL_DUET_LAYOUT.gfSoul);
-      drawCharacter("player", t, 1, false, packById("bfSoul", "bfSoul"), SOUL_DUET_LAYOUT.bfSoul);
-      return;
-    }
-
-    const usePapyrusStage = pack.id === "papyrus" || pack.id === "papyrusHead";
-    const ground = usePapyrusStage ? stageImages.papsBg : stageImages.ground;
-    const fg = usePapyrusStage ? stageImages.papsFg : stageImages.fg;
-    const base = ready(ground) ? ground : stageImages.back;
-    if (!ready(base)) {
-      return;
-    }
-
-    const rect = stageRect(base);
-    ctx.save();
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    if (ready(stageImages.back)) {
-      ctx.drawImage(stageImages.back, rect.x, rect.y, rect.w, rect.h);
-    }
-    if (ready(ground)) {
-      ctx.drawImage(ground, rect.x, rect.y, rect.w, rect.h);
-    }
-    if (ready(stageImages.light)) {
-      const bloom = Number(state.br?.bloom || 1);
-      ctx.globalCompositeOperation = "screen";
-      ctx.globalAlpha = usePapyrusStage ? 0.16 + bloom * 0.08 : 0.2 + bloom * 0.1;
-      ctx.drawImage(stageImages.light, rect.x, rect.y, rect.w, rect.h);
-      ctx.globalCompositeOperation = "source-over";
-    }
-    ctx.restore();
-
-    if (!usePapyrusStage) {
-      const bloom = Number(state.br?.bloom || 1);
-      drawHallWindowBloom(rect, t, bloom);
-      drawHallDust(rect, t, bloom);
-    }
-
-    drawCharacterReflection("opp", t, usePapyrusStage ? 0.26 : 0.42);
-    if (papyrusDuetActiveAt(t)) {
-      drawCharacterReflection("opp", t, 0.22, packById("papyrusBody", "papyrus"), STAGE_LAYOUT.papyrusBody);
-    }
-    drawCharacterReflection("player", t, usePapyrusStage ? 0.34 : 0.52);
-
-    drawCharacter("opp", t, 0.22, true);
-    if (papyrusDuetActiveAt(t)) {
-      drawCharacter("opp", t, 0.18, true, packById("papyrusBody", "papyrus"), STAGE_LAYOUT.papyrusBody);
-    }
-    drawCharacter("player", t, 0.2, true);
-    drawCharacter("opp", t, 1, false);
-    if (papyrusDuetActiveAt(t)) {
-      drawCharacter("opp", t, 1, false, packById("papyrusBody", "papyrus"), STAGE_LAYOUT.papyrusBody);
-    }
-    drawCharacter("player", t, 1, false);
-
-    if (ready(fg)) {
-      ctx.save();
-      ctx.globalAlpha = 0.98;
-      drawCenterPillar(fg, rect.y, rect.h);
-      ctx.restore();
-    }
-
-    drawAttackBar(t);
+    return originalStage(t);
   };
 
   receptors = function(t) {
     if (state.selectedSong !== "brokenReality") {
       return originalReceptors(t);
     }
-
-    const fix = updateLayoutState(t);
-    const verticalWeight = Math.abs(fix.currentYMult);
-    const horizontalWeight = Math.abs(fix.currentXMult);
-
-    if (verticalWeight >= horizontalWeight * 0.75) {
-      ctx.strokeStyle = "rgba(255,255,255,0.08)";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(canvas.width * 0.5, 72);
-      ctx.lineTo(canvas.width * 0.5, 452);
-      ctx.stroke();
-    }
-
-    for (let lane = 0; lane < 8; lane++) {
-      const x = laneX(lane);
-      const y = fix.currentY;
-      drawReceptor(lane, x, y, t);
-      ctx.strokeStyle = "rgba(255,255,255,0.05)";
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      if (horizontalWeight > verticalWeight) {
-        ctx.moveTo(x + 26, y);
-        ctx.lineTo(canvas.width - 48, y);
-      } else if (fix.currentYMult < 0) {
-        ctx.moveTo(x, y - 26);
-        ctx.lineTo(x, 96);
-      } else {
-        ctx.moveTo(x, y + 26);
-        ctx.lineTo(x, 448);
-      }
-      ctx.stroke();
-    }
+    return originalReceptors(t);
   };
 
   notes = function(t) {
     if (state.selectedSong !== "brokenReality") {
       return originalNotes(t);
     }
-    if (!state.chart) {
+    return originalNotes(t);
+  };
+
+  window.brDrawOverlays = function() {
+    if (state.selectedSong !== "brokenReality") {
       return;
     }
+    const t = state.playing ? songTime() : Number(getFixState().renderTime || 0);
+    const attackFx = attackVisualState(t);
+    const blackout = brokenRealityBlackoutAlphaAt(t);
+    const bars = clamp(Math.max(Number(state.br?.bars || 0), attackFx.barsBoost), 0, 1.2);
+    const vignette = clamp((Number(state.br?.vignette || 0.24) * 0.9) + attackFx.vignetteBoost + blackout * 0.26, 0, 1);
+    const saturation = Number(state.br?.saturation || 1);
+    const bloom = Number(state.br?.bloom || 1);
 
-    for (const note of state.chart.notes) {
-      if (note.played && note.hit && (!isHoldNote(note) || note.holdDone)) {
-        continue;
-      }
-      if (note.judged && note.side !== "opp" && (!isHoldNote(note) || note.holdDone || !note.hit)) {
-        continue;
-      }
+    if (bars > 0.001) {
+      const barH = canvas.height * 0.18 * Math.min(1.05, bars);
+      ctx.save();
+      ctx.fillStyle = "rgba(0,0,0,0.96)";
+      ctx.fillRect(0, 0, canvas.width, barH);
+      ctx.fillRect(0, canvas.height - barH, canvas.width, barH);
+      ctx.restore();
+    }
 
-      const place = notePlacement(note, t);
-      if (
-        (place.x < -180 && place.tailX < -180) ||
-        (place.x > canvas.width + 180 && place.tailX > canvas.width + 180) ||
-        (place.y < -180 && place.tailY < -180) ||
-        (place.y > canvas.height + 180 && place.tailY > canvas.height + 180)
-      ) {
-        continue;
-      }
+    if (vignette > 0.001) {
+      const center = ctx.createRadialGradient(
+        canvas.width * 0.5,
+        canvas.height * 0.52,
+        canvas.height * 0.08,
+        canvas.width * 0.5,
+        canvas.height * 0.52,
+        canvas.height * 0.92
+      );
+      center.addColorStop(0, "rgba(0,0,0,0)");
+      center.addColorStop(0.58, "rgba(8,4,20,0)");
+      center.addColorStop(1, "rgba(0,0,0," + (vignette * 0.92).toFixed(3) + ")");
+      ctx.save();
+      ctx.fillStyle = center;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+    }
 
-      const diff = note.time - t;
-      const scale = clamp(1 - Math.pow(Math.abs(diff), 0.7) * 0.45, 0.75, 1.1);
-      const alpha = note.side === "opp" ? 0.84 : 1;
+    if (saturation < 0.98) {
+      const desat = clamp(1 - saturation, 0, 1);
+      ctx.save();
+      ctx.globalCompositeOperation = "multiply";
+      ctx.fillStyle = "rgba(90,74,120," + (desat * 0.34).toFixed(3) + ")";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      ctx.fillStyle = "rgba(208,198,255," + (desat * 0.1).toFixed(3) + ")";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+    }
 
-      if (isHoldNote(note)) {
-        const headX = note.hit ? laneX(note.lane) : place.x;
-        const headY = note.hit ? updateLayoutState(t).currentY : place.y;
-        drawSustain(note, headX, headY, place.tailX, place.tailY, t, alpha * (note.hit ? 0.94 : 1));
+    if (bloom > 1.02) {
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      ctx.fillStyle = "rgba(255,245,255," + Math.min(0.18, (bloom - 1) * 0.26).toFixed(3) + ")";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+    }
+
+    if (attackFx.noiseAlpha > 0.001) {
+      ctx.save();
+      ctx.globalAlpha = attackFx.noiseAlpha;
+      for (let i = 0; i < 22; i++) {
+        const y = ((i * 41) + performance.now() * 0.18) % canvas.height;
+        const h = 6 + ((i * 13) % 14);
+        ctx.fillStyle = i % 2 ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.42)";
+        ctx.fillRect(0, y, canvas.width, h);
       }
-      if (note.hit && isHoldNote(note) && t > note.time) {
-        continue;
-      }
-      drawGem(note.lane, place.x, place.y, scale, alpha, t);
+      ctx.restore();
+    }
+
+    if (attackFx.chromaAlpha > 0.001) {
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      ctx.fillStyle = "rgba(255,48,72," + (attackFx.chromaAlpha * 0.22).toFixed(3) + ")";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "rgba(90,140,255," + (attackFx.chromaAlpha * 0.18).toFixed(3) + ")";
+      ctx.fillRect(2, 0, canvas.width, canvas.height);
+      ctx.restore();
+    }
+
+    if (attackFx.darkAlpha > 0.001 || blackout > 0.001) {
+      ctx.save();
+      ctx.fillStyle = "rgba(0,0,0," + clamp(attackFx.darkAlpha + blackout * 0.98, 0, 1).toFixed(3) + ")";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+    }
+
+    if (attackFx.flashAlpha > 0.001) {
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      ctx.fillStyle = "rgba(255,255,255," + attackFx.flashAlpha.toFixed(3) + ")";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
     }
   };
 
   renderScene = function(songT, previewT) {
     let liveT = previewT;
     if (state.selectedSong === "brokenReality") {
+      const fix = getFixState();
       state.br = state.br || {};
       liveT = state.playing ? songTime() : previewT;
+      fix.renderTime = liveT;
       state.br.drainEnabled = currentDrainEnabledAt(liveT);
       state.br.drainAmount = currentDrainAmountAt(liveT);
       state.br.drainTimer = 0;
     }
-    const out = originalRenderScene(songT, previewT);
+    let out;
+    if (state.selectedSong === "brokenReality") {
+      const fix = getFixState();
+      out = originalRenderScene(songT, previewT);
+      fix.renderTime = liveT;
+    } else {
+      out = originalRenderScene(songT, previewT);
+    }
     if (state.selectedSong === "brokenReality") {
       liveT = state.playing ? songTime() : previewT;
       state.br = state.br || {};
       state.br.drainEnabled = currentDrainEnabledAt(liveT);
       state.br.drainAmount = currentDrainAmountAt(liveT);
-      stepManualDrain(liveT);
     }
     if (state.selectedSong === "brokenReality" && state.playing && firstNoteTime && songTime() >= firstNoteTime - 0.05) {
       hideBrokenRealityOpeningVideo();
