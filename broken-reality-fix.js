@@ -197,6 +197,10 @@
     return timeline;
   }
 
+  function lerp01(a, b, t) {
+    return a + (b - a) * clamp(t, 0, 1);
+  }
+
   function buildCharacterOffsetTimeline(targetIndex) {
     return buildEventTimeline("Change Character Offset", { x: 0, y: 0 }, event => {
       if (Number(event.params?.[1]) !== targetIndex) {
@@ -763,7 +767,7 @@
     const tilt = Math.cos(orbitSpeed * 1.2) * 25;
     const sway = Math.sin(orbitSpeed * 3.5) * 15;
     const pulse = Math.sin(orbitSpeed * 0.5) * 10;
-    head.x = brLerp(head.x + 0.012, head.x - 0.095, eased) + (tilt + pulse) / 1920;
+    head.x = lerp01(head.x + 0.012, head.x - 0.095, eased) + (tilt + pulse) / 1920;
     head.y = body.y + (mainArc + sway + pulse + tilt) / 1080 - 0.03;
     return { body, head };
   }
@@ -1456,8 +1460,8 @@
     const fix = getFixState();
     const targetFocus = cameraTargetPointAt(t);
     const focus = {
-      x: brLerp(canvas.width * 0.5, targetFocus.x, 0.18),
-      y: brLerp(canvas.height * 0.45, targetFocus.y, 0.18),
+      x: lerp01(canvas.width * 0.5, targetFocus.x, 0.18),
+      y: lerp01(canvas.height * 0.45, targetFocus.y, 0.18),
       side: targetFocus.side
     };
     const follow = clamp(4 + currentCameraSpeedAt(t) * 34, 4, 14);
