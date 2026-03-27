@@ -407,7 +407,7 @@ function syncPostFxCanvas(){
 }
 function importedBloomStrength(t){
     if(typeof state === "undefined") return 0;
-    if(state.selectedSong === "brokenReality") return Math.max(0, (Number(state.br?.bloom || 1) - 1) * 1.55);
+    if(state.selectedSong === "brokenReality") return 0;
     if(state.selectedSong === "perseverance" && typeof perseveranceBloomStrength === "function") return Math.max(0, perseveranceBloomStrength(t));
     return 0;
 }
@@ -1851,7 +1851,7 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 <script src="boxing-fight-mode.js?v=20260322-stage6"></script>
 <script src="broken-reality-mode.js"></script>
 <script src="broken-reality-soul-data.js"></script>
-<script src="broken-reality-fix.js?v=20260326c"></script>
+<script src="broken-reality-fix.js?v=20260326d"></script>
 <script src="challenge-edd-mode.js"></script>
 <script src="fallen-stars-mode.js"></script>
 <script src="genocide-mode.js?v=genocide-v10"></script>
