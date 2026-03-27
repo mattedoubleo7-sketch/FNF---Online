@@ -254,13 +254,13 @@
   };
 
   const STAGE_LAYOUT = {
-    sans: { x: 0.238, y: 0.79, scale: 0.235 },
-    sansAlt: { x: 0.238, y: 0.79, scale: 0.235 },
+    sans: { x: 0.273, y: 0.79, scale: 0.235 },
+    sansAlt: { x: 0.273, y: 0.79, scale: 0.235 },
     papyrus: { x: 0.286, y: 0.758, scale: 0.212 },
     papyrusBody: { x: 0.292, y: 0.79, scale: 0.212 },
     papyrusHead: { x: 0.278, y: 0.752, scale: 0.198 },
-    boyfriend: { x: 0.812, y: 0.814, scale: 0.255 },
-    boyfriendRed: { x: 0.802, y: 0.824, scale: 0.272 },
+    boyfriend: { x: 0.803, y: 0.814, scale: 0.255 },
+    boyfriendRed: { x: 0.793, y: 0.824, scale: 0.272 },
     bfSoul: { x: 0.288, y: 0.986, scale: 0.17 },
     gfSoul: { x: 0.816, y: 0.988, scale: 0.145 }
   };
@@ -930,9 +930,10 @@
   }
 
   function drawVisibleFrame(image, frame, x, y, scale, alpha = 1, flipX = false) {
-    const fw = (frame.rotated ? frame.h : frame.w) * scale;
+    const fw = (frame.fw || (frame.rotated ? frame.h : frame.w)) * scale;
+    const fx = (frame.fx || 0) * scale;
     const fh = (frame.rotated ? frame.w : frame.h) * scale;
-    const dx = -fw / 2;
+    const dx = -fw / 2 - fx;
     const dy = -fh;
     ctx.save();
     ctx.globalAlpha = alpha;
