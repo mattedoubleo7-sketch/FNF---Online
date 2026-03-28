@@ -254,13 +254,13 @@
   };
 
   const STAGE_LAYOUT = {
-    sans: { x: 0.273, y: 0.79, scale: 0.235 },
-    sansAlt: { x: 0.273, y: 0.79, scale: 0.235 },
+    sans: { x: 0.332, y: 0.782, scale: 0.235 },
+    sansAlt: { x: 0.332, y: 0.782, scale: 0.235 },
     papyrus: { x: 0.286, y: 0.758, scale: 0.212 },
     papyrusBody: { x: 0.292, y: 0.79, scale: 0.212 },
     papyrusHead: { x: 0.278, y: 0.752, scale: 0.198 },
-    boyfriend: { x: 0.803, y: 0.814, scale: 0.255 },
-    boyfriendRed: { x: 0.793, y: 0.824, scale: 0.272 },
+    boyfriend: { x: 0.776, y: 0.804, scale: 0.255 },
+    boyfriendRed: { x: 0.768, y: 0.814, scale: 0.272 },
     bfSoul: { x: 0.288, y: 0.986, scale: 0.17 },
     gfSoul: { x: 0.816, y: 0.988, scale: 0.145 }
   };
@@ -706,20 +706,22 @@
     const attackFx = attackVisualState(t);
     const oppDir = cameraDirectionOffsetFor("opp", t, moveOffset);
     const playerDir = cameraDirectionOffsetFor("player", t, moveOffset);
+    const oppFocusX = characterFocusX("opp", t);
+    const playerFocusX = characterFocusX("player", t);
     const opp = {
-      x: canvas.width * 0.38 + oppDir.x,
+      x: oppFocusX + oppDir.x,
       y: canvas.height * (papyrusDuetActiveAt(t) ? 0.43 : 0.45) + oppDir.y,
       side: "opp",
       angle: oppDir.angle
     };
     const player = {
-      x: canvas.width * 0.66 + playerDir.x,
+      x: playerFocusX + playerDir.x,
       y: canvas.height * 0.49 + playerDir.y,
       side: "player",
       angle: playerDir.angle
     };
     const both = {
-      x: canvas.width * 0.54,
+      x: lerp01(oppFocusX, playerFocusX, 0.5),
       y: canvas.height * (papyrusDuetActiveAt(t) ? 0.45 : 0.47),
       side: "both",
       angle: 0
@@ -995,6 +997,14 @@
       flipX,
       stableFeet
     };
+  }
+
+  function characterFocusX(kind, t, forcedPack = null, forcedLayout = null) {
+    const draw = characterDrawState(kind, t, false, forcedPack, forcedLayout);
+    if (!draw) {
+      return kind === "opp" ? canvas.width * 0.38 : canvas.width * 0.66;
+    }
+    return draw.x;
   }
 
   function drawCharacter(kind, t, alpha = 1, shadow = false, forcedPack = null, forcedLayout = null) {
