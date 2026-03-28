@@ -260,8 +260,8 @@
     papyrus: { x: 0.854, y: 0.904, scale: 0.214 },
     papyrusBody: { x: 0.854, y: 0.906, scale: 0.214 },
     papyrusHead: { x: 0.868, y: 0.866, scale: 0.196 },
-    boyfriend: { x: 0.132, y: 0.84, scale: 0.378 },
-    boyfriendRed: { x: 0.126, y: 0.856, scale: 0.4 },
+    boyfriend: { x: 0.134, y: 0.902, scale: 0.418 },
+    boyfriendRed: { x: 0.134, y: 0.918, scale: 0.436 },
     bfSoul: { x: 0.18, y: 0.92, scale: 0.21 },
     gfSoul: { x: 0.816, y: 1.018, scale: 0.145 }
   };
@@ -466,7 +466,7 @@
       const damageScale = Number(state.br.didDamage) ? 0.65 : 1;
       state.health = clamp(
         state.health - 0.05 * (Number(state.br.drainAmount || 1.2) * damageScale) * drainDt,
-        0,
+        0.05,
         1
       );
       state.br.drainTimer = Math.max(0, Number(state.br.drainTimer || 0) - drainDt);
@@ -726,18 +726,17 @@
         y: canvas.height * 0.48
       };
     }
-    const frame = draw.info?.frame || {};
-    const fh = Number(frame.fh || (frame.rotated ? frame.w : frame.h) || 0) * draw.scale;
+    const bounds = visibleFrameBounds(draw);
     const focusLift = String(draw.info.pack.id).startsWith("papyrus")
-      ? 0.66
+      ? 0.34
       : String(draw.info.pack.id).includes("Soul")
-        ? 0.58
+        ? 0.36
         : kind === "opp"
-          ? 0.62
-          : 0.52;
+          ? 0.38
+          : 0.44;
     return {
-      x: draw.x,
-      y: draw.y - fh * focusLift
+      x: bounds?.centerX ?? draw.x,
+      y: bounds ? lerp01(bounds.top, bounds.bottom, focusLift) : draw.y
     };
   }
 
@@ -989,15 +988,70 @@
   function drawVisibleFrame(image, frame, x, y, scale, alpha = 1, flipX = false) {
     const fw = (frame.fw || (frame.rotated ? frame.h : frame.w)) * scale;
     const fx = (frame.fx || 0) * scale;
-    const fh = (frame.rotated ? frame.w : frame.h) * scale;
+    const fh = (frame.fh || (frame.rotated ? frame.w : frame.h)) * scale;
+    const fy = (frame.fy || 0) * scale;
     const dx = -fw / 2 - fx;
-    const dy = -fh;
+    const dy = -fh - fy;
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.translate(x, y);
     if (flipX) ctx.scale(-1, 1);
     drawAtlasSub(image, frame, dx, dy, scale);
     ctx.restore();
+  }
+
+  function visibleFrameBounds(draw) {
+    const frame = draw?.info?.frame;
+    if (!frame) {
+      return null;
+    }
+    const fullW = Number(frame.fw || (frame.rotated ? frame.h : frame.w) || 0) * draw.scale;
+    const fullH = Number(frame.fh || (frame.rotated ? frame.w : frame.h) || 0) * draw.scale;
+    const frameW = Number((frame.rotated ? frame.h : frame.w) || 0) * draw.scale;
+    const frameH = Number((frame.rotated ? frame.w : frame.h) || 0) * draw.scale;
+    const fx = Number(frame.fx || 0) * draw.scale;
+    const fy = Number(frame.fy || 0) * draw.scale;
+    const localLeft = -fullW / 2 - fx;
+    const localTop = -fullH - fy;
+    const top = draw.y + localTop;
+    let left;
+    let right;
+    if (draw.flipX) {
+      right = draw.x - localLeft;
+      left = right - frameW;
+    } else {
+      left = draw.x + localLeft;
+      right = left + frameW;
+    }
+    return {
+      left,
+      right,
+      top,
+      bottom: top + frameH,
+      width: frameW,
+      height: frameH,
+      centerX: (left + right) * 0.5,
+      centerY: top + frameH * 0.5
+    };
+  }
+
+  function visibleAnchorDeltas(info, scale, flipX) {
+    const frame = info?.frame;
+    if (!frame) {
+      return { x: 0, y: 0 };
+    }
+    const fullW = Number(frame.fw || (frame.rotated ? frame.h : frame.w) || 0) * scale;
+    const fullH = Number(frame.fh || (frame.rotated ? frame.w : frame.h) || 0) * scale;
+    const frameW = Number((frame.rotated ? frame.h : frame.w) || 0) * scale;
+    const frameH = Number((frame.rotated ? frame.w : frame.h) || 0) * scale;
+    const fx = Number(frame.fx || 0) * scale;
+    const fy = Number(frame.fy || 0) * scale;
+    const localLeft = -fullW / 2 - fx;
+    const localTop = -fullH - fy;
+    return {
+      x: flipX ? (-localLeft - frameW / 2) : (localLeft + frameW / 2),
+      y: localTop + frameH
+    };
   }
 
   function characterDrawState(kind, t, shadow = false, forcedPack = null, forcedLayout = null) {
@@ -1013,9 +1067,12 @@
     const offsetX = stableFeet ? 0 : (Number(info.offset?.[0] || 0) + Number(baseOffset[0] || 0) * 0.02) * scale;
     const offsetY = stableFeet ? 0 : (Number(info.offset?.[1] || 0) + Number(baseOffset[1] || 0) * 0.01) * scale;
     const charOffset = currentCharacterOffsetAt(kind, t);
-    let x = canvas.width * layout.x - offsetX + charOffset.x * 0.42 + (shadow ? 16 : 0);
-    let y = canvas.height * layout.y - offsetY + charOffset.y * 0.36 + (shadow ? 24 : 0);
     const flipX = kind === "player" ? !info.pack.def.flipX : !!info.pack.def.flipX;
+    const anchor = stableFeet ? visibleAnchorDeltas(info, scale, flipX) : { x: 0, y: 0 };
+    const targetX = canvas.width * layout.x - offsetX + charOffset.x * 0.42;
+    const targetY = canvas.height * layout.y - offsetY + charOffset.y * 0.36;
+    let x = targetX - anchor.x + (shadow ? 16 : 0);
+    let y = targetY - anchor.y + (shadow ? 24 : 0);
     const attack = state.br?.attack;
     if (attack && kind === "player") {
       const attackAge = Math.max(0, t - Number(attack.animStart || attack.triggerTime || t));
