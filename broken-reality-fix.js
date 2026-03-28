@@ -110,7 +110,6 @@
   const redSkinTime = findEventTime("Change Strum Skin", 0, "br_red", 144);
   const papyrusDuetStart = 227.666667;
   const papyrusDuetEnd = 255.666667;
-  const finalPapyrusDuetStart = Number((BR.chart?.notes || []).find(note => note.character === "phantom_paps_br" && Number(note.time || 0) >= 400)?.time || 408.166667);
   const soulPhaseStart = 342.666667;
   const soulPhaseEnd = 394.666667;
   const manualDrainFixStart = 0;
@@ -254,14 +253,14 @@
   };
 
   const STAGE_LAYOUT = {
-    sans: { x: 0.784, y: 0.938, scale: 0.235 },
-    sansAlt: { x: 0.784, y: 0.938, scale: 0.235 },
-    papyrus: { x: 0.772, y: 0.946, scale: 0.206 },
-    papyrusBody: { x: 0.772, y: 0.948, scale: 0.206 },
-    papyrusHead: { x: 0.786, y: 0.908, scale: 0.19 },
-    boyfriend: { x: 0.298, y: 0.94, scale: 0.296 },
-    boyfriendRed: { x: 0.292, y: 0.952, scale: 0.312 },
-    bfSoul: { x: 0.294, y: 1.018, scale: 0.17 },
+    sans: { x: 0.786, y: 0.952, scale: 0.239 },
+    sansAlt: { x: 0.786, y: 0.952, scale: 0.239 },
+    papyrus: { x: 0.774, y: 0.962, scale: 0.208 },
+    papyrusBody: { x: 0.774, y: 0.964, scale: 0.208 },
+    papyrusHead: { x: 0.788, y: 0.922, scale: 0.192 },
+    boyfriend: { x: 0.278, y: 0.978, scale: 0.35 },
+    boyfriendRed: { x: 0.274, y: 0.994, scale: 0.372 },
+    bfSoul: { x: 0.278, y: 1.048, scale: 0.196 },
     gfSoul: { x: 0.816, y: 1.018, scale: 0.145 }
   };
 
@@ -479,7 +478,7 @@
   }
 
   function papyrusDuetActiveAt(t) {
-    return (t >= papyrusDuetStart && t < papyrusDuetEnd) || t >= finalPapyrusDuetStart;
+    return t >= papyrusDuetStart && t < papyrusDuetEnd;
   }
 
   function currentCameraTargetAt(t) {
@@ -722,7 +721,7 @@
         ? 0.58
         : kind === "opp"
           ? 0.62
-          : 0.58;
+          : 0.52;
     return {
       x: draw.x,
       y: draw.y - fh * focusLift
@@ -757,7 +756,14 @@
     };
 
     let focus = target === 0 ? opp : target === 1 ? player : both;
-    if (attackFx.active && target !== 2) {
+    if (attackFx.prep) {
+      focus = {
+        x: both.x,
+        y: both.y,
+        side: "both",
+        angle: 0
+      };
+    } else if (attackFx.active && target !== 2) {
       focus = {
         x: player.x,
         y: player.y,
@@ -1514,7 +1520,9 @@
     const singerZoomBoost =
       focus.side === "both"
         ? 0
-        : (t >= soulPhaseStart && t < soulPhaseEnd ? 0.22 : 0.38) + (attackFx.active ? 0.14 : 0);
+        : focus.side === "player"
+          ? (t >= soulPhaseStart && t < soulPhaseEnd ? 0.34 : 0.62) + (attackFx.active ? 0.2 : 0)
+          : (t >= soulPhaseStart && t < soulPhaseEnd ? 0.22 : 0.38) + (attackFx.active ? 0.14 : 0);
     const targetZoom = clamp(
       brokenRealityZoomScaleAt(t)
         + singerZoomBoost
@@ -1522,7 +1530,7 @@
         + attackFx.zoomBoost
         - brokenRealityBlackoutAlphaAt(t) * 0.12,
       0.96,
-      1.92
+      2.18
     );
 
     fix.camX += (focus.x - fix.camX) * ease;
@@ -1553,7 +1561,7 @@
 
   laneX = function(i) {
     if (state.selectedSong === "brokenReality") {
-      return originalLaneX(i);
+      return originalLaneX((i + 4) % 8);
     }
     return originalLaneX(i);
   };
