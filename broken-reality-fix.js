@@ -23,6 +23,7 @@
   const originalReceptors = receptors;
   const originalRenderScene = renderScene;
   const originalRefreshHUD = refreshHUD;
+  const originalDrawHitGlows = typeof drawHitGlows === "function" ? drawHitGlows : null;
   const originalUpdateCamera = typeof updateCamera === "function" ? updateCamera : null;
   const originalFinish = typeof finish === "function" ? finish : null;
   const SOUL = window.BROKEN_REALITY_SOUL_DATA || {};
@@ -256,13 +257,13 @@
   };
 
   const STAGE_LAYOUT = {
-    sans: { stageX: 5170, stageY: 2772, scale: 0.242 },
-    sansAlt: { stageX: 5170, stageY: 2772, scale: 0.242 },
-    papyrus: { stageX: 5170, stageY: 2808, scale: 0.206 },
-    papyrusBody: { stageX: 5170, stageY: 2828, scale: 0.206 },
-    papyrusHead: { stageX: 5245, stageY: 2628, scale: 0.188 },
-    boyfriend: { stageX: 1941, stageY: 2788, scale: 0.332 },
-    boyfriendRed: { stageX: 1941, stageY: 2812, scale: 0.346 },
+    sans: { stageX: 5170, stageY: 2700, scale: 0.242 },
+    sansAlt: { stageX: 5170, stageY: 2700, scale: 0.242 },
+    papyrus: { stageX: 5170, stageY: 2734, scale: 0.206 },
+    papyrusBody: { stageX: 5078, stageY: 2754, scale: 0.206 },
+    papyrusHead: { stageX: 5245, stageY: 2554, scale: 0.188 },
+    boyfriend: { stageX: 1400, stageY: 2630, scale: 0.332 },
+    boyfriendRed: { stageX: 1400, stageY: 2654, scale: 0.346 },
     bfSoul: { x: 0.18, y: 0.92, scale: 0.21 },
     gfSoul: { x: 0.816, y: 1.018, scale: 0.145 }
   };
@@ -741,14 +742,51 @@
     };
   }
 
+  function characterCameraOffset(packId) {
+    if (packId === "boyfriend" || packId === "boyfriendRed" || packId === "bfSoul") {
+      return { x: 50, y: -35 };
+    }
+    if (packId === "gfSoul") {
+      return { x: -220, y: -10 };
+    }
+    return { x: -590, y: 0 };
+  }
+
+  function characterCameraPoint(kind, t, forcedPack = null, forcedLayout = null) {
+    const duetLayout = forcedLayout || soulDuetLayoutFor(kind, t);
+    const duetPack = forcedPack || (duetLayout ? soulDuetPackFor(kind, t) : null);
+    const draw = characterDrawState(kind, t, false, duetPack, duetLayout);
+    if (!draw) {
+      return characterFocusPoint(kind, t, forcedPack, forcedLayout);
+    }
+    const bounds = visibleFrameBounds(draw);
+    const focusLift = String(draw.info.pack.id).startsWith("papyrus")
+      ? 0.34
+      : String(draw.info.pack.id).includes("Soul")
+        ? 0.36
+        : kind === "opp"
+          ? 0.38
+          : 0.44;
+    const focus = {
+      x: bounds?.centerX ?? draw.x,
+      y: bounds ? lerp01(bounds.top, bounds.bottom, focusLift) : draw.y
+    };
+    const packOffset = characterCameraOffset(draw.info.pack.id);
+    const screenOffset = hallOffsetToScreen(packOffset.x, packOffset.y);
+    return {
+      x: focus.x + screenOffset.x,
+      y: focus.y + screenOffset.y
+    };
+  }
+
   function cameraTargetPointAt(t) {
     const target = currentCameraTargetAt(t);
     const moveOffset = currentCameraMoveOffsetAt(t);
     const attackFx = attackVisualState(t);
     const oppDir = cameraDirectionOffsetFor("opp", t, moveOffset);
     const playerDir = cameraDirectionOffsetFor("player", t, moveOffset);
-    const oppFocus = characterFocusPoint("opp", t);
-    const playerFocus = characterFocusPoint("player", t);
+    const oppFocus = characterCameraPoint("opp", t);
+    const playerFocus = characterCameraPoint("player", t);
     const opp = {
       x: oppFocus.x + oppDir.x,
       y: oppFocus.y + oppDir.y,
@@ -871,6 +909,18 @@
     return {
       x: rect.x + (Number(layout.stageX) / HALL_SOURCE_SIZE.w) * rect.w,
       y: rect.y + (Number(layout.stageY) / HALL_SOURCE_SIZE.h) * rect.h
+    };
+  }
+
+  function hallOffsetToScreen(dx, dy) {
+    const base = activeStageBaseImage();
+    if (!base) {
+      return { x: Number(dx || 0) * 0.18, y: Number(dy || 0) * 0.18 };
+    }
+    const rect = stageRect(base);
+    return {
+      x: (Number(dx || 0) / HALL_SOURCE_SIZE.w) * rect.w,
+      y: (Number(dy || 0) / HALL_SOURCE_SIZE.h) * rect.h
     };
   }
 
@@ -1624,8 +1674,8 @@
       focus.side === "both"
         ? 0
         : focus.side === "player"
-          ? (t >= soulPhaseStart && t < soulPhaseEnd ? 0.42 : 1.02) + (attackFx.active ? 0.28 : 0)
-          : (t >= soulPhaseStart && t < soulPhaseEnd ? 0.28 : 0.74) + (attackFx.active ? 0.22 : 0);
+          ? (t >= soulPhaseStart && t < soulPhaseEnd ? 0.14 : 0.36) + (attackFx.active ? 0.14 : 0)
+          : (t >= soulPhaseStart && t < soulPhaseEnd ? 0.1 : 0.28) + (attackFx.active ? 0.12 : 0);
     const targetZoom = clamp(
       brokenRealityZoomScaleAt(t)
         + singerZoomBoost
@@ -1635,8 +1685,8 @@
       0.96,
       2.58
     );
-    const targetHighwayX = targetZoom * (screenTarget.x - focus.x);
-    const targetHighwayY = targetZoom * (screenTarget.y - focus.y);
+    const targetHighwayX = screenTarget.x - focus.x;
+    const targetHighwayY = screenTarget.y - focus.y;
 
     fix.camX += (screenTarget.x - fix.camX) * ease;
     fix.camY += (screenTarget.y - fix.camY) * ease;
@@ -2006,25 +2056,65 @@
       fix.renderTime = liveT;
       state.br.drainEnabled = currentDrainEnabledAt(liveT);
       state.br.drainAmount = currentDrainAmountAt(liveT);
-    }
-    let out;
-    if (state.selectedSong === "brokenReality") {
-      const fix = getFixState();
-      out = originalRenderScene(songT, previewT);
-      fix.renderTime = liveT;
+      const noteT = state.playing ? liveT : 0;
+      ctx.save();
+      ctx.translate(state.camera.highwayX || 0, state.camera.highwayY || 0);
+      bg(state.currentSong, liveT);
+      const camZ = state.camera.zoom || 1;
+      if (camZ > 1.001) {
+        const fx = state.camera.focusX || canvas.width * 0.5;
+        const fy = state.camera.focusY || canvas.height * 0.45;
+        ctx.translate(fx * (1 - camZ), fy * (1 - camZ));
+        ctx.scale(camZ, camZ);
+      }
+      stage(liveT);
+      receptors(liveT);
+      notes(noteT);
+      ctx.restore();
+      drawFeed(ui.playerFeed, state.feeds.player, true);
+      drawFeed(ui.oppFeed, state.feeds.opp, false);
     } else {
-      out = originalRenderScene(songT, previewT);
-    }
-    if (state.selectedSong === "brokenReality") {
-      liveT = state.playing ? songTime() : previewT;
-      state.br = state.br || {};
-      state.br.drainEnabled = currentDrainEnabledAt(liveT);
-      state.br.drainAmount = currentDrainAmountAt(liveT);
+      originalRenderScene(songT, previewT);
     }
     if (state.selectedSong === "brokenReality" && state.playing && firstNoteTime && songTime() >= firstNoteTime - 0.05) {
       hideBrokenRealityOpeningVideo();
     }
-    return out;
+  };
+
+  drawHitGlows = function() {
+    if (state.selectedSong !== "brokenReality") {
+      return originalDrawHitGlows ? originalDrawHitGlows() : undefined;
+    }
+    const now = performance.now() / 1000;
+    const camZ = state.camera.zoom || 1;
+    const fx = state.camera.focusX || canvas.width * 0.5;
+    const fy = state.camera.focusY || canvas.height * 0.45;
+    for (let i = state.hitGlow.length - 1; i >= 0; i--) {
+      const glow = state.hitGlow[i];
+      const age = now - glow.time;
+      if (age > 0.3) {
+        state.hitGlow.splice(i, 1);
+        continue;
+      }
+      const p = age / 0.3;
+      const ease = 1 - Math.pow(1 - p, 2);
+      ctx.save();
+      ctx.translate(state.camera.highwayX || 0, state.camera.highwayY || 0);
+      if (camZ > 1.001) {
+        ctx.translate(fx * (1 - camZ), fy * (1 - camZ));
+        ctx.scale(camZ, camZ);
+      }
+      ctx.globalAlpha = (1 - ease) * 0.6;
+      const x = laneX(glow.lane);
+      const y = receptorY();
+      const r = 20 + ease * 40;
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+      grad.addColorStop(0, glow.color);
+      grad.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = grad;
+      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+      ctx.restore();
+    }
   };
 
   refreshHUD = function(t) {
