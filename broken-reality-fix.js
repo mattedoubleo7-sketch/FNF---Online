@@ -46,6 +46,7 @@
     { x: 0.5, width: 0.132, intensity: 1.22 },
     { x: 0.81, width: 0.118, intensity: 1.05 }
   ];
+  const HALL_SOURCE_SIZE = { w: 7111, h: 4000 };
 
   function seededUnit(seed) {
     return (Math.sin(seed * 127.1 + 311.7) + 1) * 0.5;
@@ -255,13 +256,13 @@
   };
 
   const STAGE_LAYOUT = {
-    sans: { x: 0.866, y: 0.892, scale: 0.247 },
-    sansAlt: { x: 0.866, y: 0.892, scale: 0.247 },
-    papyrus: { x: 0.854, y: 0.904, scale: 0.214 },
-    papyrusBody: { x: 0.854, y: 0.906, scale: 0.214 },
-    papyrusHead: { x: 0.868, y: 0.866, scale: 0.196 },
-    boyfriend: { x: 0.134, y: 0.902, scale: 0.418 },
-    boyfriendRed: { x: 0.134, y: 0.918, scale: 0.436 },
+    sans: { stageX: 5170, stageY: 2772, scale: 0.242 },
+    sansAlt: { stageX: 5170, stageY: 2772, scale: 0.242 },
+    papyrus: { stageX: 5170, stageY: 2808, scale: 0.206 },
+    papyrusBody: { stageX: 5170, stageY: 2828, scale: 0.206 },
+    papyrusHead: { stageX: 5245, stageY: 2628, scale: 0.188 },
+    boyfriend: { stageX: 1941, stageY: 2788, scale: 0.332 },
+    boyfriendRed: { stageX: 1941, stageY: 2812, scale: 0.346 },
     bfSoul: { x: 0.18, y: 0.92, scale: 0.21 },
     gfSoul: { x: 0.816, y: 1.018, scale: 0.145 }
   };
@@ -789,29 +790,29 @@
   function papyrusOrbitLayoutsAt(t) {
     const body = {
       ...STAGE_LAYOUT.papyrusBody,
-      x: STAGE_LAYOUT.sans.x - 0.014,
-      y: STAGE_LAYOUT.sans.y + 0.01
+      stageX: Number(STAGE_LAYOUT.sans.stageX || 5170) - 95,
+      stageY: Number(STAGE_LAYOUT.sans.stageY || 2735) + 48
     };
     const head = {
       ...STAGE_LAYOUT.papyrusHead,
-      x: STAGE_LAYOUT.sans.x + 0.002,
-      y: STAGE_LAYOUT.sans.y - 0.03
+      stageX: Number(STAGE_LAYOUT.sans.stageX || 5170) + 14,
+      stageY: Number(STAGE_LAYOUT.sans.stageY || 2735) - 138
     };
     if (t < PAPYRUS_ORBIT_START || t >= PAPYRUS_ORBIT_END) {
       return { body, head };
     }
     if (t >= PAPYRUS_ORBIT_END - 5) {
-      body.x += 0.01;
-      head.x += 0.026;
-      head.y -= 0.055;
+      body.stageX += 68;
+      head.stageX += 185;
+      head.stageY -= 220;
       return { body, head };
     }
 
     const waveSpeed = (t - PAPYRUS_ORBIT_START) * 3;
     const bobX = Math.sin(waveSpeed) * 50;
     const bobY = Math.cos(waveSpeed * 0.8) * 40 + Math.sin(waveSpeed * 1.5) * 10;
-    body.x += bobX / 1920;
-    body.y += bobY / 1080;
+    body.stageX += bobX;
+    body.stageY += bobY;
 
     const orbitSpeed = (t - PAPYRUS_ORBIT_START) * 1.5 * 1.7;
     let trace = Math.sin(orbitSpeed * 0.8) * 0.5 + 0.5;
@@ -823,8 +824,8 @@
     const tilt = Math.cos(orbitSpeed * 1.2) * 25;
     const sway = Math.sin(orbitSpeed * 3.5) * 15;
     const pulse = Math.sin(orbitSpeed * 0.5) * 10;
-    head.x = lerp01(head.x + 0.012, head.x - 0.095, eased) + (tilt + pulse) / 1920;
-    head.y = body.y + (mainArc + sway + pulse + tilt) / 1080 - 0.03;
+    head.stageX = lerp01(head.stageX + 85, head.stageX - 675, eased) + tilt + pulse;
+    head.stageY = body.stageY + mainArc + sway + pulse + tilt - 138;
     return { body, head };
   }
 
@@ -833,8 +834,9 @@
     if (alpha <= 0.01) {
       return;
     }
-    const centerX = canvas.width * layout.x;
-    const baseY = canvas.height * layout.y;
+    const stagePoint = hallStagePoint(layout);
+    const centerX = stagePoint ? stagePoint.x : canvas.width * (layout.x || 0.5);
+    const baseY = stagePoint ? stagePoint.y : canvas.height * (layout.y || 0.8);
     const grad = ctx.createLinearGradient(0, baseY - 360, 0, baseY + 24);
     grad.addColorStop(0, "rgba(255,0,0,0)");
     grad.addColorStop(0.18, "rgba(255,22,22," + (alpha * 0.16).toFixed(3) + ")");
@@ -845,6 +847,31 @@
     ctx.fillStyle = grad;
     ctx.fillRect(centerX - 280, baseY - 360, 560, 420);
     ctx.restore();
+  }
+
+  function activeStageBaseImage() {
+    if (ready(stageImages.ground)) {
+      return stageImages.ground;
+    }
+    if (ready(stageImages.back)) {
+      return stageImages.back;
+    }
+    if (ready(stageImages.papsBg)) {
+      return stageImages.papsBg;
+    }
+    return null;
+  }
+
+  function hallStagePoint(layout) {
+    const base = activeStageBaseImage();
+    if (!base || layout?.stageX == null || layout?.stageY == null) {
+      return null;
+    }
+    const rect = stageRect(base);
+    return {
+      x: rect.x + (Number(layout.stageX) / HALL_SOURCE_SIZE.w) * rect.w,
+      y: rect.y + (Number(layout.stageY) / HALL_SOURCE_SIZE.h) * rect.h
+    };
   }
 
   function drawCharacterTrails(kind, t, trailAlpha, forcedPack = null, forcedLayout = null) {
@@ -1069,8 +1096,9 @@
     const charOffset = currentCharacterOffsetAt(kind, t);
     const flipX = kind === "player" ? !info.pack.def.flipX : !!info.pack.def.flipX;
     const anchor = stableFeet ? visibleAnchorDeltas(info, scale, flipX) : { x: 0, y: 0 };
-    const targetX = canvas.width * layout.x - offsetX + charOffset.x * 0.42;
-    const targetY = canvas.height * layout.y - offsetY + charOffset.y * 0.36;
+    const stagePoint = hallStagePoint(layout);
+    const targetX = (stagePoint ? stagePoint.x : canvas.width * layout.x) - offsetX + charOffset.x * 0.42;
+    const targetY = (stagePoint ? stagePoint.y : canvas.height * layout.y) - offsetY + charOffset.y * 0.36;
     let x = targetX - anchor.x + (shadow ? 16 : 0);
     let y = targetY - anchor.y + (shadow ? 24 : 0);
     const attack = state.br?.attack;
@@ -1587,12 +1615,17 @@
     const follow = clamp(7.5 + currentCameraSpeedAt(t) * 70, 7.5, 20);
     const ease = 1 - Math.exp(-Math.max(1 / 240, dt || 1 / 60) * follow);
     const attackFx = attackVisualState(t);
+    const screenTarget = focus.side === "both"
+      ? { x: canvas.width * 0.5, y: canvas.height * 0.56 }
+      : focus.side === "player"
+        ? { x: canvas.width * 0.5, y: canvas.height * 0.68 }
+        : { x: canvas.width * 0.5, y: canvas.height * 0.64 };
     const singerZoomBoost =
       focus.side === "both"
         ? 0
         : focus.side === "player"
-          ? (t >= soulPhaseStart && t < soulPhaseEnd ? 0.34 : 0.62) + (attackFx.active ? 0.2 : 0)
-          : (t >= soulPhaseStart && t < soulPhaseEnd ? 0.22 : 0.38) + (attackFx.active ? 0.14 : 0);
+          ? (t >= soulPhaseStart && t < soulPhaseEnd ? 0.42 : 1.02) + (attackFx.active ? 0.28 : 0)
+          : (t >= soulPhaseStart && t < soulPhaseEnd ? 0.28 : 0.74) + (attackFx.active ? 0.22 : 0);
     const targetZoom = clamp(
       brokenRealityZoomScaleAt(t)
         + singerZoomBoost
@@ -1600,20 +1633,22 @@
         + attackFx.zoomBoost
         - brokenRealityBlackoutAlphaAt(t) * 0.12,
       0.96,
-      2.18
+      2.58
     );
+    const targetHighwayX = targetZoom * (screenTarget.x - focus.x);
+    const targetHighwayY = targetZoom * (screenTarget.y - focus.y);
 
-    fix.camX += (focus.x - fix.camX) * ease;
-    fix.camY += (focus.y - fix.camY) * ease;
+    fix.camX += (screenTarget.x - fix.camX) * ease;
+    fix.camY += (screenTarget.y - fix.camY) * ease;
     fix.camZoom += (targetZoom - fix.camZoom) * Math.min(1, ease * 1.4);
-    fix.camHighwayX += (0 - fix.camHighwayX) * ease;
-    fix.camHighwayY += (0 - fix.camHighwayY) * ease;
+    fix.camHighwayX += (targetHighwayX - fix.camHighwayX) * ease;
+    fix.camHighwayY += (targetHighwayY - fix.camHighwayY) * ease;
 
     state.camera.zoom = fix.camZoom;
     state.camera.focusX = fix.camX;
     state.camera.focusY = fix.camY;
-    state.camera.highwayX = brokenRealityBlackoutAlphaAt(t) > 0.92 ? 0 : fix.camHighwayX;
-    state.camera.highwayY = brokenRealityBlackoutAlphaAt(t) > 0.92 ? 0 : fix.camHighwayY;
+    state.camera.highwayX = fix.camHighwayX;
+    state.camera.highwayY = fix.camHighwayY;
     state.camera.lastSide = focus.side;
 
     const cueId =
