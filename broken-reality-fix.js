@@ -254,20 +254,20 @@
   };
 
   const STAGE_LAYOUT = {
-    sans: { x: 0.79, y: 0.862, scale: 0.235 },
-    sansAlt: { x: 0.79, y: 0.862, scale: 0.235 },
-    papyrus: { x: 0.286, y: 0.834, scale: 0.212 },
-    papyrusBody: { x: 0.292, y: 0.866, scale: 0.212 },
-    papyrusHead: { x: 0.278, y: 0.826, scale: 0.198 },
-    boyfriend: { x: 0.318, y: 0.858, scale: 0.255 },
-    boyfriendRed: { x: 0.31, y: 0.868, scale: 0.272 },
-    bfSoul: { x: 0.288, y: 0.996, scale: 0.17 },
-    gfSoul: { x: 0.816, y: 1.0, scale: 0.145 }
+    sans: { x: 0.79, y: 0.892, scale: 0.235 },
+    sansAlt: { x: 0.79, y: 0.892, scale: 0.235 },
+    papyrus: { x: 0.286, y: 0.86, scale: 0.212 },
+    papyrusBody: { x: 0.292, y: 0.892, scale: 0.212 },
+    papyrusHead: { x: 0.278, y: 0.852, scale: 0.198 },
+    boyfriend: { x: 0.322, y: 0.886, scale: 0.27 },
+    boyfriendRed: { x: 0.314, y: 0.896, scale: 0.286 },
+    bfSoul: { x: 0.294, y: 1.018, scale: 0.17 },
+    gfSoul: { x: 0.816, y: 1.018, scale: 0.145 }
   };
 
   const SOUL_DUET_LAYOUT = {
-    bfSoul: { x: 0.474, y: 0.958, scale: 0.226 },
-    gfSoul: { x: 0.515, y: 0.726, scale: 0.184 }
+    bfSoul: { x: 0.474, y: 0.972, scale: 0.226 },
+    gfSoul: { x: 0.515, y: 0.74, scale: 0.184 }
   };
 
   const LAYOUTS = {
@@ -1497,11 +1497,11 @@
     const fix = getFixState();
     const targetFocus = cameraTargetPointAt(t);
     const focus = {
-      x: lerp01(canvas.width * 0.5, targetFocus.x, 0.18),
-      y: lerp01(canvas.height * 0.45, targetFocus.y, 0.18),
+      x: targetFocus.x,
+      y: targetFocus.y,
       side: targetFocus.side
     };
-    const follow = clamp(4 + currentCameraSpeedAt(t) * 34, 4, 14);
+    const follow = clamp(5.2 + currentCameraSpeedAt(t) * 46, 5.2, 16.5);
     const ease = 1 - Math.exp(-Math.max(1 / 240, dt || 1 / 60) * follow);
     const attackFx = attackVisualState(t);
     const targetZoom = clamp(
