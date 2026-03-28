@@ -295,9 +295,6 @@
         camX: canvas.width * 0.5,
         camY: canvas.height * 0.45,
         camZoom: 1,
-        sceneShiftX: 0,
-        sceneShiftY: 0,
-        sceneZoom: 1,
         camHighwayX: 0,
         camHighwayY: 0,
         attackCueStamp: ""
@@ -719,9 +716,7 @@
       };
     }
     const frame = draw.info?.frame || {};
-    const fix = getFixState();
-    const sceneZoom = Math.max(0.001, Number(fix.sceneZoom || 1));
-    const fh = Number(frame.fh || (frame.rotated ? frame.w : frame.h) || 0) * (draw.scale / sceneZoom);
+    const fh = Number(frame.fh || (frame.rotated ? frame.w : frame.h) || 0) * draw.scale;
     const focusLift = String(draw.info.pack.id).startsWith("papyrus")
       ? 0.66
       : String(draw.info.pack.id).includes("Soul")
@@ -730,8 +725,8 @@
           ? 0.62
           : 0.58;
     return {
-      x: draw.x - Number(fix.sceneShiftX || 0),
-      y: draw.y - Number(fix.sceneShiftY || 0) - fh * focusLift
+      x: draw.x,
+      y: draw.y - fh * focusLift
     };
   }
 
@@ -987,16 +982,14 @@
     }
 
     const layout = forcedLayout || STAGE_LAYOUT[info.pack.id] || STAGE_LAYOUT[kind === "opp" ? "sans" : "boyfriend"];
-    const fix = getFixState();
-    const sceneZoom = Number(fix.sceneZoom || 1);
-    const scale = Number(layout.scale || 0.35) * sceneZoom;
+    const scale = Number(layout.scale || 0.35);
     const stableFeet = !String(info.pack.id).startsWith("papyrus");
     const baseOffset = Array.isArray(info.pack.def?.baseOffset) ? info.pack.def.baseOffset : [0, 0];
     const offsetX = stableFeet ? 0 : (Number(info.offset?.[0] || 0) + Number(baseOffset[0] || 0) * 0.02) * scale;
     const offsetY = stableFeet ? 0 : (Number(info.offset?.[1] || 0) + Number(baseOffset[1] || 0) * 0.01) * scale;
     const charOffset = currentCharacterOffsetAt(kind, t);
-    let x = canvas.width * layout.x + Number(fix.sceneShiftX || 0) - offsetX + charOffset.x * 0.42 + (shadow ? 16 : 0);
-    let y = canvas.height * layout.y + Number(fix.sceneShiftY || 0) - offsetY + charOffset.y * 0.36 + (shadow ? 24 : 0);
+    let x = canvas.width * layout.x - offsetX + charOffset.x * 0.42 + (shadow ? 16 : 0);
+    let y = canvas.height * layout.y - offsetY + charOffset.y * 0.36 + (shadow ? 24 : 0);
     const flipX = kind === "player" ? !info.pack.def.flipX : !!info.pack.def.flipX;
     const attack = state.br?.attack;
     if (attack && kind === "player") {
@@ -1523,18 +1516,12 @@
     fix.camX += (focus.x - fix.camX) * ease;
     fix.camY += (focus.y - fix.camY) * ease;
     fix.camZoom += (targetZoom - fix.camZoom) * Math.min(1, ease * 1.4);
-    const sceneTargetX = clamp((canvas.width * 0.5 - fix.camX) * 0.46, -132, 132);
-    const sceneTargetY = clamp((canvas.height * 0.47 - fix.camY) * 0.34, -78, 78);
-    const sceneTargetZoom = clamp(1 + (fix.camZoom - 1) * 0.84, 1, 1.26);
-    fix.sceneShiftX += (sceneTargetX - Number(fix.sceneShiftX || 0)) * Math.min(1, ease * 1.08);
-    fix.sceneShiftY += (sceneTargetY - Number(fix.sceneShiftY || 0)) * Math.min(1, ease * 1.08);
-    fix.sceneZoom += (sceneTargetZoom - Number(fix.sceneZoom || 1)) * Math.min(1, ease * 1.18);
     fix.camHighwayX += (0 - fix.camHighwayX) * ease;
     fix.camHighwayY += (0 - fix.camHighwayY) * ease;
 
-    state.camera.zoom = 1;
-    state.camera.focusX = canvas.width * 0.5;
-    state.camera.focusY = canvas.height * 0.45;
+    state.camera.zoom = fix.camZoom;
+    state.camera.focusX = fix.camX;
+    state.camera.focusY = fix.camY;
     state.camera.highwayX = brokenRealityBlackoutAlphaAt(t) > 0.92 ? 0 : fix.camHighwayX;
     state.camera.highwayY = brokenRealityBlackoutAlphaAt(t) > 0.92 ? 0 : fix.camHighwayY;
     state.camera.lastSide = focus.side;
@@ -1587,9 +1574,6 @@
       fix.camX = canvas.width * 0.5;
       fix.camY = canvas.height * 0.45;
       fix.camZoom = 1;
-      fix.sceneShiftX = 0;
-      fix.sceneShiftY = 0;
-      fix.sceneZoom = 1;
       fix.camHighwayX = 0;
       fix.camHighwayY = 0;
       fix.attackCueStamp = "";
@@ -1903,7 +1887,16 @@
     let out;
     if (state.selectedSong === "brokenReality") {
       const fix = getFixState();
+      const savedZoom = state.camera.zoom;
+      const savedFocusX = state.camera.focusX;
+      const savedFocusY = state.camera.focusY;
+      state.camera.zoom = 1;
+      state.camera.focusX = canvas.width * 0.5;
+      state.camera.focusY = canvas.height * 0.45;
       out = originalRenderScene(songT, previewT);
+      state.camera.zoom = savedZoom;
+      state.camera.focusX = savedFocusX;
+      state.camera.focusY = savedFocusY;
       fix.renderTime = liveT;
     } else {
       out = originalRenderScene(songT, previewT);
