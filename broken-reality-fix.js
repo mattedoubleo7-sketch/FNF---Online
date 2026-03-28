@@ -254,13 +254,13 @@
   };
 
   const STAGE_LAYOUT = {
-    sans: { x: 0.332, y: 0.782, scale: 0.235 },
-    sansAlt: { x: 0.332, y: 0.782, scale: 0.235 },
+    sans: { x: 0.776, y: 0.782, scale: 0.235 },
+    sansAlt: { x: 0.776, y: 0.782, scale: 0.235 },
     papyrus: { x: 0.286, y: 0.758, scale: 0.212 },
     papyrusBody: { x: 0.292, y: 0.79, scale: 0.212 },
     papyrusHead: { x: 0.278, y: 0.752, scale: 0.198 },
-    boyfriend: { x: 0.776, y: 0.804, scale: 0.255 },
-    boyfriendRed: { x: 0.768, y: 0.814, scale: 0.272 },
+    boyfriend: { x: 0.332, y: 0.804, scale: 0.255 },
+    boyfriendRed: { x: 0.324, y: 0.814, scale: 0.272 },
     bfSoul: { x: 0.288, y: 0.986, scale: 0.17 },
     gfSoul: { x: 0.816, y: 0.988, scale: 0.145 }
   };
