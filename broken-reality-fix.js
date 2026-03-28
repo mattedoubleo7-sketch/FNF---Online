@@ -254,20 +254,20 @@
   };
 
   const STAGE_LAYOUT = {
-    sans: { x: 0.776, y: 0.822, scale: 0.235 },
-    sansAlt: { x: 0.776, y: 0.822, scale: 0.235 },
-    papyrus: { x: 0.286, y: 0.798, scale: 0.212 },
-    papyrusBody: { x: 0.292, y: 0.83, scale: 0.212 },
-    papyrusHead: { x: 0.278, y: 0.792, scale: 0.198 },
-    boyfriend: { x: 0.332, y: 0.82, scale: 0.255 },
-    boyfriendRed: { x: 0.324, y: 0.83, scale: 0.272 },
-    bfSoul: { x: 0.288, y: 0.986, scale: 0.17 },
-    gfSoul: { x: 0.816, y: 0.988, scale: 0.145 }
+    sans: { x: 0.79, y: 0.862, scale: 0.235 },
+    sansAlt: { x: 0.79, y: 0.862, scale: 0.235 },
+    papyrus: { x: 0.286, y: 0.834, scale: 0.212 },
+    papyrusBody: { x: 0.292, y: 0.866, scale: 0.212 },
+    papyrusHead: { x: 0.278, y: 0.826, scale: 0.198 },
+    boyfriend: { x: 0.318, y: 0.858, scale: 0.255 },
+    boyfriendRed: { x: 0.31, y: 0.868, scale: 0.272 },
+    bfSoul: { x: 0.288, y: 0.996, scale: 0.17 },
+    gfSoul: { x: 0.816, y: 1.0, scale: 0.145 }
   };
 
   const SOUL_DUET_LAYOUT = {
-    bfSoul: { x: 0.474, y: 0.942, scale: 0.226 },
-    gfSoul: { x: 0.515, y: 0.708, scale: 0.184 }
+    bfSoul: { x: 0.474, y: 0.958, scale: 0.226 },
+    gfSoul: { x: 0.515, y: 0.726, scale: 0.184 }
   };
 
   const LAYOUTS = {
@@ -446,8 +446,7 @@
     if (t < manualDrainFixStart || !state.br.drainEnabled || !state.br.sansDrainActive) {
       return;
     }
-    const drainStep = 0.05 * (state.br.drainAmount * (state.br.didDamage ? 0.65 : 1)) * dt;
-    state.health = clamp(state.health - drainStep, 0.25, 1);
+    state.br.drainTimer = Math.max(Number(state.br.drainTimer || 0), Math.max(0.12, dt * 3.4));
   }
 
   function currentPack(kind, t) {
@@ -1494,6 +1493,7 @@
       return originalUpdateCamera ? originalUpdateCamera(t, dt) : undefined;
     }
 
+    stepManualDrain(t);
     const fix = getFixState();
     const targetFocus = cameraTargetPointAt(t);
     const focus = {
@@ -1601,19 +1601,10 @@
     const pack = currentPack("opp", t);
     const playerPack = currentPack("player", t);
     const soulDuet = t >= soulPhaseStart && t < soulPhaseEnd && (pack.id === "gfSoul" || playerPack.id === "bfSoul");
-    if (soulDuet) {
-      ctx.save();
-      ctx.fillStyle = "#020208";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.restore();
-      drawCharacterReflection("opp", t, 0.28, packById("gfSoul", "gfSoul"), SOUL_DUET_LAYOUT.gfSoul);
-      drawCharacterReflection("player", t, 0.34, packById("bfSoul", "bfSoul"), SOUL_DUET_LAYOUT.bfSoul);
-      drawCharacter("opp", t, 0.22, true, packById("gfSoul", "gfSoul"), SOUL_DUET_LAYOUT.gfSoul);
-      drawCharacter("player", t, 0.24, true, packById("bfSoul", "bfSoul"), SOUL_DUET_LAYOUT.bfSoul);
-      drawCharacter("opp", t, 1, false, packById("gfSoul", "gfSoul"), SOUL_DUET_LAYOUT.gfSoul);
-      drawCharacter("player", t, 1, false, packById("bfSoul", "bfSoul"), SOUL_DUET_LAYOUT.bfSoul);
-      return;
-    }
+    const oppPackOverride = soulDuet ? packById("gfSoul", "gfSoul") : null;
+    const playerPackOverride = soulDuet ? packById("bfSoul", "bfSoul") : null;
+    const oppLayoutOverride = soulDuet ? SOUL_DUET_LAYOUT.gfSoul : null;
+    const playerLayoutOverride = soulDuet ? SOUL_DUET_LAYOUT.bfSoul : null;
 
     const usePapyrusStage = pack.id === "papyrus" || pack.id === "papyrusHead";
     const ground = usePapyrusStage ? stageImages.papsBg : stageImages.ground;
@@ -1652,30 +1643,30 @@
     const trailAlpha = brokenRealityTrailAlphaAt(t);
 
     if (trailAlpha > 0.01) {
-      drawCharacterTrails("opp", t, trailAlpha);
-      drawCharacterTrails("player", t, trailAlpha * 0.9);
+      drawCharacterTrails("opp", t, trailAlpha, oppPackOverride, oppLayoutOverride);
+      drawCharacterTrails("player", t, trailAlpha * 0.9, playerPackOverride, playerLayoutOverride);
       if (papyrusLayouts) {
         drawCharacterTrails("opp", t, trailAlpha * 0.82, packById("papyrusBody", "papyrus"), papyrusLayouts.body);
       }
     }
 
-    drawCharacterReflection("opp", t, usePapyrusStage ? 0.2 : 0.42);
+    drawCharacterReflection("opp", t, soulDuet ? 0.28 : (usePapyrusStage ? 0.2 : 0.42), oppPackOverride, oppLayoutOverride);
     if (papyrusLayouts) {
       drawCharacterReflection("opp", t, 0.16, packById("papyrusBody", "papyrus"), papyrusLayouts.body);
     }
-    drawCharacterReflection("player", t, usePapyrusStage ? 0.26 : 0.52);
+    drawCharacterReflection("player", t, soulDuet ? 0.34 : (usePapyrusStage ? 0.26 : 0.52), playerPackOverride, playerLayoutOverride);
 
-    drawCharacter("opp", t, 0.22, true);
+    drawCharacter("opp", t, 0.22, true, oppPackOverride, oppLayoutOverride);
     if (papyrusLayouts) {
       drawCharacter("opp", t, 0.16, true, packById("papyrusBody", "papyrus"), papyrusLayouts.body);
     }
-    drawCharacter("player", t, 0.2, true);
-    drawCharacter("opp", t, brokenRealityOpponentAlphaAt(t), false);
+    drawCharacter("player", t, soulDuet ? 0.24 : 0.2, true, playerPackOverride, playerLayoutOverride);
+    drawCharacter("opp", t, soulDuet ? 1 : brokenRealityOpponentAlphaAt(t), false, oppPackOverride, oppLayoutOverride);
     if (papyrusLayouts) {
       drawPapyrusGradient(t, papyrusLayouts.body);
       drawCharacter("opp", t, 1, false, packById("papyrusBody", "papyrus"), papyrusLayouts.body);
     }
-    drawCharacter("player", t, 1, false);
+    drawCharacter("player", t, 1, false, playerPackOverride, playerLayoutOverride);
 
     if (ready(fg)) {
       ctx.save();
@@ -1782,7 +1773,8 @@
     const soulDuet = t >= soulPhaseStart && t < soulPhaseEnd;
     const bars = clamp(Math.max(Number(state.br?.bars || 0), attackFx.barsBoost), 0, 1.2);
     const vignette = clamp((Number(state.br?.vignette || 0.24) * 0.9) + attackFx.vignetteBoost + blackout * 0.26, 0, 1);
-    const saturation = Number(state.br?.saturation || 1);
+    const rawSaturation = clamp(Number(state.br?.saturation || 1), 0, 1);
+    const saturation = 0.72 + rawSaturation * 0.28;
     const bloom = Number(state.br?.bloom || 1);
 
     if (bars > 0.001) {
@@ -1882,21 +1874,11 @@
       fix.renderTime = liveT;
       state.br.drainEnabled = currentDrainEnabledAt(liveT);
       state.br.drainAmount = currentDrainAmountAt(liveT);
-      state.br.drainTimer = 0;
     }
     let out;
     if (state.selectedSong === "brokenReality") {
       const fix = getFixState();
-      const savedZoom = state.camera.zoom;
-      const savedFocusX = state.camera.focusX;
-      const savedFocusY = state.camera.focusY;
-      state.camera.zoom = 1;
-      state.camera.focusX = canvas.width * 0.5;
-      state.camera.focusY = canvas.height * 0.45;
       out = originalRenderScene(songT, previewT);
-      state.camera.zoom = savedZoom;
-      state.camera.focusX = savedFocusX;
-      state.camera.focusY = savedFocusY;
       fix.renderTime = liveT;
     } else {
       out = originalRenderScene(songT, previewT);
