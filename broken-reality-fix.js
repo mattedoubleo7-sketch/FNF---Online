@@ -254,13 +254,13 @@
   };
 
   const STAGE_LAYOUT = {
-    sans: { x: 0.776, y: 0.782, scale: 0.235 },
-    sansAlt: { x: 0.776, y: 0.782, scale: 0.235 },
-    papyrus: { x: 0.286, y: 0.758, scale: 0.212 },
-    papyrusBody: { x: 0.292, y: 0.79, scale: 0.212 },
-    papyrusHead: { x: 0.278, y: 0.752, scale: 0.198 },
-    boyfriend: { x: 0.332, y: 0.804, scale: 0.255 },
-    boyfriendRed: { x: 0.324, y: 0.814, scale: 0.272 },
+    sans: { x: 0.776, y: 0.822, scale: 0.235 },
+    sansAlt: { x: 0.776, y: 0.822, scale: 0.235 },
+    papyrus: { x: 0.286, y: 0.798, scale: 0.212 },
+    papyrusBody: { x: 0.292, y: 0.83, scale: 0.212 },
+    papyrusHead: { x: 0.278, y: 0.792, scale: 0.198 },
+    boyfriend: { x: 0.332, y: 0.82, scale: 0.255 },
+    boyfriendRed: { x: 0.324, y: 0.83, scale: 0.272 },
     bfSoul: { x: 0.288, y: 0.986, scale: 0.17 },
     gfSoul: { x: 0.816, y: 0.988, scale: 0.145 }
   };
@@ -295,6 +295,9 @@
         camX: canvas.width * 0.5,
         camY: canvas.height * 0.45,
         camZoom: 1,
+        sceneShiftX: 0,
+        sceneShiftY: 0,
+        sceneZoom: 1,
         camHighwayX: 0,
         camHighwayY: 0,
         attackCueStamp: ""
@@ -691,38 +694,70 @@
     return { x: moveOffset, y: 0, angle: angleOffset };
   }
 
-  function cameraTargetPointAt(t) {
-    const blackout = brokenRealityBlackoutAlphaAt(t);
-    if (t >= soulPhaseStart && t < soulPhaseEnd) {
+  function soulDuetLayoutFor(kind, t) {
+    if (!(t >= soulPhaseStart && t < soulPhaseEnd)) {
+      return null;
+    }
+    return kind === "opp" ? SOUL_DUET_LAYOUT.gfSoul : SOUL_DUET_LAYOUT.bfSoul;
+  }
+
+  function soulDuetPackFor(kind, t) {
+    if (!(t >= soulPhaseStart && t < soulPhaseEnd)) {
+      return null;
+    }
+    return packById(kind === "opp" ? "gfSoul" : "bfSoul", kind === "opp" ? "gfSoul" : "bfSoul");
+  }
+
+  function characterFocusPoint(kind, t, forcedPack = null, forcedLayout = null) {
+    const duetLayout = forcedLayout || soulDuetLayoutFor(kind, t);
+    const duetPack = forcedPack || (duetLayout ? soulDuetPackFor(kind, t) : null);
+    const draw = characterDrawState(kind, t, false, duetPack, duetLayout);
+    if (!draw) {
       return {
-        x: canvas.width * 0.5,
-        y: canvas.height * (blackout > 0.5 ? 0.54 : 0.5),
-        side: "both"
+        x: kind === "opp" ? canvas.width * 0.72 : canvas.width * 0.3,
+        y: canvas.height * 0.48
       };
     }
+    const frame = draw.info?.frame || {};
+    const fix = getFixState();
+    const sceneZoom = Math.max(0.001, Number(fix.sceneZoom || 1));
+    const fh = Number(frame.fh || (frame.rotated ? frame.w : frame.h) || 0) * (draw.scale / sceneZoom);
+    const focusLift = String(draw.info.pack.id).startsWith("papyrus")
+      ? 0.66
+      : String(draw.info.pack.id).includes("Soul")
+        ? 0.58
+        : kind === "opp"
+          ? 0.62
+          : 0.58;
+    return {
+      x: draw.x - Number(fix.sceneShiftX || 0),
+      y: draw.y - Number(fix.sceneShiftY || 0) - fh * focusLift
+    };
+  }
 
+  function cameraTargetPointAt(t) {
     const target = currentCameraTargetAt(t);
     const moveOffset = currentCameraMoveOffsetAt(t);
     const attackFx = attackVisualState(t);
     const oppDir = cameraDirectionOffsetFor("opp", t, moveOffset);
     const playerDir = cameraDirectionOffsetFor("player", t, moveOffset);
-    const oppFocusX = characterFocusX("opp", t);
-    const playerFocusX = characterFocusX("player", t);
+    const oppFocus = characterFocusPoint("opp", t);
+    const playerFocus = characterFocusPoint("player", t);
     const opp = {
-      x: oppFocusX + oppDir.x,
-      y: canvas.height * (papyrusDuetActiveAt(t) ? 0.43 : 0.45) + oppDir.y,
+      x: oppFocus.x + oppDir.x,
+      y: oppFocus.y + oppDir.y,
       side: "opp",
       angle: oppDir.angle
     };
     const player = {
-      x: playerFocusX + playerDir.x,
-      y: canvas.height * 0.49 + playerDir.y,
+      x: playerFocus.x + playerDir.x,
+      y: playerFocus.y + playerDir.y,
       side: "player",
       angle: playerDir.angle
     };
     const both = {
-      x: lerp01(oppFocusX, playerFocusX, 0.5),
-      y: canvas.height * (papyrusDuetActiveAt(t) ? 0.45 : 0.47),
+      x: lerp01(oppFocus.x, playerFocus.x, 0.5),
+      y: lerp01(oppFocus.y, playerFocus.y, 0.5),
       side: "both",
       angle: 0
     };
@@ -952,14 +987,16 @@
     }
 
     const layout = forcedLayout || STAGE_LAYOUT[info.pack.id] || STAGE_LAYOUT[kind === "opp" ? "sans" : "boyfriend"];
-    const scale = Number(layout.scale || 0.35);
+    const fix = getFixState();
+    const sceneZoom = Number(fix.sceneZoom || 1);
+    const scale = Number(layout.scale || 0.35) * sceneZoom;
     const stableFeet = !String(info.pack.id).startsWith("papyrus");
     const baseOffset = Array.isArray(info.pack.def?.baseOffset) ? info.pack.def.baseOffset : [0, 0];
     const offsetX = stableFeet ? 0 : (Number(info.offset?.[0] || 0) + Number(baseOffset[0] || 0) * 0.02) * scale;
     const offsetY = stableFeet ? 0 : (Number(info.offset?.[1] || 0) + Number(baseOffset[1] || 0) * 0.01) * scale;
     const charOffset = currentCharacterOffsetAt(kind, t);
-    let x = canvas.width * layout.x - offsetX + charOffset.x * 0.42 + (shadow ? 16 : 0);
-    let y = canvas.height * layout.y - offsetY + charOffset.y * 0.36 + (shadow ? 24 : 0);
+    let x = canvas.width * layout.x + Number(fix.sceneShiftX || 0) - offsetX + charOffset.x * 0.42 + (shadow ? 16 : 0);
+    let y = canvas.height * layout.y + Number(fix.sceneShiftY || 0) - offsetY + charOffset.y * 0.36 + (shadow ? 24 : 0);
     const flipX = kind === "player" ? !info.pack.def.flipX : !!info.pack.def.flipX;
     const attack = state.br?.attack;
     if (attack && kind === "player") {
@@ -1000,11 +1037,7 @@
   }
 
   function characterFocusX(kind, t, forcedPack = null, forcedLayout = null) {
-    const draw = characterDrawState(kind, t, false, forcedPack, forcedLayout);
-    if (!draw) {
-      return kind === "opp" ? canvas.width * 0.38 : canvas.width * 0.66;
-    }
-    return draw.x;
+    return characterFocusPoint(kind, t, forcedPack, forcedLayout).x;
   }
 
   function drawCharacter(kind, t, alpha = 1, shadow = false, forcedPack = null, forcedLayout = null) {
@@ -1490,12 +1523,18 @@
     fix.camX += (focus.x - fix.camX) * ease;
     fix.camY += (focus.y - fix.camY) * ease;
     fix.camZoom += (targetZoom - fix.camZoom) * Math.min(1, ease * 1.4);
+    const sceneTargetX = clamp((canvas.width * 0.5 - fix.camX) * 0.46, -132, 132);
+    const sceneTargetY = clamp((canvas.height * 0.47 - fix.camY) * 0.34, -78, 78);
+    const sceneTargetZoom = clamp(1 + (fix.camZoom - 1) * 0.84, 1, 1.26);
+    fix.sceneShiftX += (sceneTargetX - Number(fix.sceneShiftX || 0)) * Math.min(1, ease * 1.08);
+    fix.sceneShiftY += (sceneTargetY - Number(fix.sceneShiftY || 0)) * Math.min(1, ease * 1.08);
+    fix.sceneZoom += (sceneTargetZoom - Number(fix.sceneZoom || 1)) * Math.min(1, ease * 1.18);
     fix.camHighwayX += (0 - fix.camHighwayX) * ease;
     fix.camHighwayY += (0 - fix.camHighwayY) * ease;
 
-    state.camera.zoom = fix.camZoom;
-    state.camera.focusX = fix.camX;
-    state.camera.focusY = fix.camY;
+    state.camera.zoom = 1;
+    state.camera.focusX = canvas.width * 0.5;
+    state.camera.focusY = canvas.height * 0.45;
     state.camera.highwayX = brokenRealityBlackoutAlphaAt(t) > 0.92 ? 0 : fix.camHighwayX;
     state.camera.highwayY = brokenRealityBlackoutAlphaAt(t) > 0.92 ? 0 : fix.camHighwayY;
     state.camera.lastSide = focus.side;
@@ -1515,7 +1554,7 @@
 
   laneX = function(i) {
     if (state.selectedSong === "brokenReality") {
-      return originalLaneX(i);
+      return originalLaneX((i + 4) % 8);
     }
     return originalLaneX(i);
   };
@@ -1548,6 +1587,9 @@
       fix.camX = canvas.width * 0.5;
       fix.camY = canvas.height * 0.45;
       fix.camZoom = 1;
+      fix.sceneShiftX = 0;
+      fix.sceneShiftY = 0;
+      fix.sceneZoom = 1;
       fix.camHighwayX = 0;
       fix.camHighwayY = 0;
       fix.attackCueStamp = "";
@@ -1576,6 +1618,10 @@
     const playerPack = currentPack("player", t);
     const soulDuet = t >= soulPhaseStart && t < soulPhaseEnd && (pack.id === "gfSoul" || playerPack.id === "bfSoul");
     if (soulDuet) {
+      ctx.save();
+      ctx.fillStyle = "#020208";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
       drawCharacterReflection("opp", t, 0.28, packById("gfSoul", "gfSoul"), SOUL_DUET_LAYOUT.gfSoul);
       drawCharacterReflection("player", t, 0.34, packById("bfSoul", "bfSoul"), SOUL_DUET_LAYOUT.bfSoul);
       drawCharacter("opp", t, 0.22, true, packById("gfSoul", "gfSoul"), SOUL_DUET_LAYOUT.gfSoul);
@@ -1749,6 +1795,7 @@
     const t = state.playing ? songTime() : Number(getFixState().renderTime || 0);
     const attackFx = attackVisualState(t);
     const blackout = brokenRealityBlackoutAlphaAt(t);
+    const soulDuet = t >= soulPhaseStart && t < soulPhaseEnd;
     const bars = clamp(Math.max(Number(state.br?.bars || 0), attackFx.barsBoost), 0, 1.2);
     const vignette = clamp((Number(state.br?.vignette || 0.24) * 0.9) + attackFx.vignetteBoost + blackout * 0.26, 0, 1);
     const saturation = Number(state.br?.saturation || 1);
@@ -1825,9 +1872,10 @@
       ctx.restore();
     }
 
-    if (attackFx.darkAlpha > 0.001 || blackout > 0.001) {
+    const blackoutOverlayAlpha = soulDuet ? 0 : blackout * 0.98;
+    if (attackFx.darkAlpha > 0.001 || blackoutOverlayAlpha > 0.001) {
       ctx.save();
-      ctx.fillStyle = "rgba(0,0,0," + clamp(attackFx.darkAlpha + blackout * 0.98, 0, 1).toFixed(3) + ")";
+      ctx.fillStyle = "rgba(0,0,0," + clamp(attackFx.darkAlpha + blackoutOverlayAlpha, 0, 1).toFixed(3) + ")";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.restore();
     }
