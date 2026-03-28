@@ -112,7 +112,6 @@
   const papyrusDuetEnd = 255.666667;
   const soulPhaseStart = 342.666667;
   const soulPhaseEnd = 394.666667;
-  const manualDrainFixStart = 0;
   const skinTimeline = [{ time: 0, id: "default" }].concat(
     (BR.events || [])
       .filter(event => event.name === "Change Strum Skin")
@@ -139,6 +138,9 @@
       })
       .filter(Boolean)
       .sort((a, b) => a.time - b.time)
+  );
+  const manualDrainFixStart = Number(
+    drainToggleTimeline.find(event => event.enabled === false)?.time ?? Infinity
   );
 
   function buildCharacterTimeline(targetIndex, initialId, mapping) {
@@ -253,14 +255,14 @@
   };
 
   const STAGE_LAYOUT = {
-    sans: { x: 0.786, y: 0.952, scale: 0.239 },
-    sansAlt: { x: 0.786, y: 0.952, scale: 0.239 },
-    papyrus: { x: 0.774, y: 0.962, scale: 0.208 },
-    papyrusBody: { x: 0.774, y: 0.964, scale: 0.208 },
-    papyrusHead: { x: 0.788, y: 0.922, scale: 0.192 },
-    boyfriend: { x: 0.278, y: 0.978, scale: 0.35 },
-    boyfriendRed: { x: 0.274, y: 0.994, scale: 0.372 },
-    bfSoul: { x: 0.278, y: 1.048, scale: 0.196 },
+    sans: { x: 0.866, y: 0.892, scale: 0.247 },
+    sansAlt: { x: 0.866, y: 0.892, scale: 0.247 },
+    papyrus: { x: 0.854, y: 0.904, scale: 0.214 },
+    papyrusBody: { x: 0.854, y: 0.906, scale: 0.214 },
+    papyrusHead: { x: 0.868, y: 0.866, scale: 0.196 },
+    boyfriend: { x: 0.132, y: 0.84, scale: 0.378 },
+    boyfriendRed: { x: 0.126, y: 0.856, scale: 0.4 },
+    bfSoul: { x: 0.18, y: 0.92, scale: 0.21 },
     gfSoul: { x: 0.816, y: 1.018, scale: 0.145 }
   };
 
@@ -364,12 +366,6 @@
   }
 
   function currentDrainEnabledAt(t) {
-    if (t >= soulPhaseStart && t < soulPhaseEnd) {
-      return false;
-    }
-    if (t >= 41.333333 && t < 451.166667) {
-      return true;
-    }
     return timelinePropAt(drainToggleTimeline, t, "enabled");
   }
 
@@ -454,10 +450,27 @@
     state.br.drainEnabled = currentDrainEnabledAt(t);
     state.br.drainAmount = currentDrainAmountAt(t);
     state.br.sansDrainActive = currentSansDrainActive(t);
-    if (t < manualDrainFixStart || !state.br.drainEnabled || !state.br.sansDrainActive) {
+    if (t < manualDrainFixStart) {
+      return;
+    }
+    if (!state.br.drainEnabled) {
+      state.br.drainTimer = 0;
+      return;
+    }
+    if (!state.br.sansDrainActive) {
       return;
     }
     state.br.drainTimer = Math.max(Number(state.br.drainTimer || 0), Math.max(0.12, dt * 3.4));
+    if (Number(state.br.drainTimer || 0) > 0) {
+      const drainDt = Math.min(Number(state.br.drainTimer || 0), dt);
+      const damageScale = Number(state.br.didDamage) ? 0.65 : 1;
+      state.health = clamp(
+        state.health - 0.05 * (Number(state.br.drainAmount || 1.2) * damageScale) * drainDt,
+        0,
+        1
+      );
+      state.br.drainTimer = Math.max(0, Number(state.br.drainTimer || 0) - drainDt);
+    }
   }
 
   function currentPack(kind, t) {
@@ -610,7 +623,7 @@
     out.active = true;
     if (!attack.resolved && attack.anim !== "attack" && attack.anim !== "back") {
       out.prep = true;
-      out.zoomBoost = 0.08;
+      out.zoomBoost = -0.08;
       out.barsBoost = 0.14;
       out.vignetteBoost = 0.22;
       out.darkAlpha = 0.18;
@@ -1695,7 +1708,7 @@
     }
     drawCharacter("player", t, 1, false, playerPackOverride, playerLayoutOverride);
 
-    if (ready(fg)) {
+    if (ready(fg) && !soulDuet) {
       ctx.save();
       ctx.globalAlpha = 0.08;
       drawCenterPillarReflection(fg, rect.y, rect.h, 0.08);
