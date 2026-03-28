@@ -254,13 +254,13 @@
   };
 
   const STAGE_LAYOUT = {
-    sans: { x: 0.79, y: 0.892, scale: 0.235 },
-    sansAlt: { x: 0.79, y: 0.892, scale: 0.235 },
-    papyrus: { x: 0.286, y: 0.86, scale: 0.212 },
-    papyrusBody: { x: 0.292, y: 0.892, scale: 0.212 },
-    papyrusHead: { x: 0.278, y: 0.852, scale: 0.198 },
-    boyfriend: { x: 0.322, y: 0.886, scale: 0.27 },
-    boyfriendRed: { x: 0.314, y: 0.896, scale: 0.286 },
+    sans: { x: 0.784, y: 0.938, scale: 0.235 },
+    sansAlt: { x: 0.784, y: 0.938, scale: 0.235 },
+    papyrus: { x: 0.772, y: 0.946, scale: 0.206 },
+    papyrusBody: { x: 0.772, y: 0.948, scale: 0.206 },
+    papyrusHead: { x: 0.786, y: 0.908, scale: 0.19 },
+    boyfriend: { x: 0.298, y: 0.94, scale: 0.296 },
+    boyfriendRed: { x: 0.292, y: 0.952, scale: 0.312 },
     bfSoul: { x: 0.294, y: 1.018, scale: 0.17 },
     gfSoul: { x: 0.816, y: 1.018, scale: 0.145 }
   };
@@ -365,11 +365,22 @@
   }
 
   function currentDrainEnabledAt(t) {
+    if (t >= soulPhaseStart && t < soulPhaseEnd) {
+      return false;
+    }
+    if (t >= 41.333333 && t < 451.166667) {
+      return true;
+    }
     return timelinePropAt(drainToggleTimeline, t, "enabled");
   }
 
-  function isSansDrainPackId(id) {
-    return id === "sans" || id === "sansAlt";
+  function isBrokenRealityDrainPackId(id) {
+    return id === "sans" || id === "sansAlt" || id === "papyrus" || id === "papyrusBody" || id === "papyrusHead";
+  }
+
+  function isBrokenRealityDrainCharacter(character) {
+    const id = String(character || "");
+    return id === "sans_br" || id === "sans_br_alt" || id === "phantom_paps_br" || id === "phantom_paps_br_head";
   }
 
   function activeSansHoldDrain(t) {
@@ -380,11 +391,10 @@
       if (note.side !== "opp") {
         continue;
       }
-      const character = String(note.character || "");
-      if (character !== "sans_br" && character !== "sans_br_alt") {
+      if (!isBrokenRealityDrainCharacter(note.character)) {
         continue;
       }
-      if (!isHoldNote(note) || !note.hit || note.holdDone) {
+      if (!isHoldNote(note)) {
         continue;
       }
       if (t >= note.time - 0.02 && t <= holdEndTime(note) + 0.02) {
@@ -402,11 +412,10 @@
       if (note.side !== "opp") {
         continue;
       }
-      const character = String(note.character || "");
-      if (character !== "sans_br" && character !== "sans_br_alt") {
+      if (!isBrokenRealityDrainCharacter(note.character)) {
         continue;
       }
-      if (isHoldNote(note) || !note.hit) {
+      if (isHoldNote(note)) {
         continue;
       }
       if (t >= note.time - 0.035 && t <= note.time + 0.18) {
@@ -418,8 +427,11 @@
 
   function currentSansDrainActive(t) {
     const pack = currentPack("opp", t);
-    if (!pack?.def || !isSansDrainPackId(pack.id)) {
+    if (!pack?.def || !isBrokenRealityDrainPackId(pack.id)) {
       return false;
+    }
+    if (activeSansHoldDrain(t) || activeSansTapDrain(t)) {
+      return true;
     }
     const pose = state.poses?.sans;
     if (pose && pose.kind !== "miss") {
@@ -429,7 +441,7 @@
         return true;
       }
     }
-    return activeSansHoldDrain(t) || activeSansTapDrain(t);
+    return false;
   }
 
   function stepManualDrain(t) {
@@ -599,8 +611,6 @@
     out.active = true;
     if (!attack.resolved && attack.anim !== "attack" && attack.anim !== "back") {
       out.prep = true;
-      out.focusX = canvas.width * 0.64;
-      out.focusY = canvas.height * 0.57;
       out.zoomBoost = 0.08;
       out.barsBoost = 0.14;
       out.vignetteBoost = 0.22;
@@ -613,8 +623,6 @@
 
     if (attack.anim === "attack") {
       out.zoomBoost = 0.04;
-      out.focusX = canvas.width * 0.6;
-      out.focusY = canvas.height * 0.56;
       out.barsBoost = 0.08;
       if (frame >= 94 && frame < 96) {
         out.darkAlpha = 0.42;
@@ -622,14 +630,10 @@
         out.noiseAlpha = 0.22;
       }
       if (frame >= 97 && frame < 99) {
-        out.focusX = canvas.width * 0.74;
-        out.focusY = canvas.height * 0.53;
         out.zoomBoost = 0.02;
         out.darkAlpha = 0.14;
       }
       if (frame >= 99 && frame < 128) {
-        out.focusX = canvas.width * 0.79;
-        out.focusY = canvas.height * 0.56;
         out.zoomBoost = 0.14;
       }
       if (frame >= 103 && frame < 128) {
@@ -650,16 +654,12 @@
         out.darkAlpha = 0.22;
       }
       if (frame >= 128 && frame < 141) {
-        out.focusX = canvas.width * 0.65;
-        out.focusY = canvas.height * 0.55;
         out.zoomBoost = 0.06;
       }
       return out;
     }
 
     if (attack.anim === "back") {
-      out.focusX = canvas.width * 0.62;
-      out.focusY = canvas.height * 0.55;
       out.zoomBoost = Math.max(0, 0.08 - age * 0.12);
       out.darkAlpha = Math.max(0, 0.14 - age * 0.24);
     }
@@ -757,28 +757,35 @@
     };
 
     let focus = target === 0 ? opp : target === 1 ? player : both;
-    if (attackFx.focusX != null && attackFx.focusY != null) {
+    if (attackFx.active && target !== 2) {
       focus = {
-        x: attackFx.focusX,
-        y: attackFx.focusY,
-        side: "both",
-        angle: 0
+        x: player.x,
+        y: player.y,
+        side: "player",
+        angle: player.angle
       };
     }
     return focus;
   }
 
   function papyrusOrbitLayoutsAt(t) {
-    const body = { ...STAGE_LAYOUT.papyrusBody };
-    const head = { ...STAGE_LAYOUT.papyrusHead };
+    const body = {
+      ...STAGE_LAYOUT.papyrusBody,
+      x: STAGE_LAYOUT.sans.x - 0.014,
+      y: STAGE_LAYOUT.sans.y + 0.01
+    };
+    const head = {
+      ...STAGE_LAYOUT.papyrusHead,
+      x: STAGE_LAYOUT.sans.x + 0.002,
+      y: STAGE_LAYOUT.sans.y - 0.03
+    };
     if (t < PAPYRUS_ORBIT_START || t >= PAPYRUS_ORBIT_END) {
       return { body, head };
     }
     if (t >= PAPYRUS_ORBIT_END - 5) {
-      body.x = STAGE_LAYOUT.papyrusBody.x + 0.006;
-      body.y = STAGE_LAYOUT.papyrusBody.y;
-      head.x = STAGE_LAYOUT.papyrusHead.x + 0.018;
-      head.y = STAGE_LAYOUT.papyrusHead.y - 0.07;
+      body.x += 0.01;
+      head.x += 0.026;
+      head.y -= 0.055;
       return { body, head };
     }
 
@@ -1501,16 +1508,21 @@
       y: targetFocus.y,
       side: targetFocus.side
     };
-    const follow = clamp(5.2 + currentCameraSpeedAt(t) * 46, 5.2, 16.5);
+    const follow = clamp(7.5 + currentCameraSpeedAt(t) * 70, 7.5, 20);
     const ease = 1 - Math.exp(-Math.max(1 / 240, dt || 1 / 60) * follow);
     const attackFx = attackVisualState(t);
+    const singerZoomBoost =
+      focus.side === "both"
+        ? 0
+        : (t >= soulPhaseStart && t < soulPhaseEnd ? 0.22 : 0.38) + (attackFx.active ? 0.14 : 0);
     const targetZoom = clamp(
       brokenRealityZoomScaleAt(t)
+        + singerZoomBoost
         + Math.max(0, Number(state.br?.bloom || 1) - 1) * 0.08
         + attackFx.zoomBoost
         - brokenRealityBlackoutAlphaAt(t) * 0.12,
       0.96,
-      1.42
+      1.92
     );
 
     fix.camX += (focus.x - fix.camX) * ease;
@@ -1541,7 +1553,7 @@
 
   laneX = function(i) {
     if (state.selectedSong === "brokenReality") {
-      return originalLaneX((i + 4) % 8);
+      return originalLaneX(i);
     }
     return originalLaneX(i);
   };
@@ -1637,6 +1649,13 @@
       const bloom = Number(state.br?.bloom || 1);
       drawHallWindowBloom(rect, t, bloom);
       drawHallDust(rect, t, bloom);
+    }
+
+    if (soulDuet) {
+      ctx.save();
+      ctx.fillStyle = "rgba(0,0,0,0.82)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
     }
 
     const papyrusLayouts = papyrusDuetActiveAt(t) ? papyrusOrbitLayoutsAt(t) : null;
