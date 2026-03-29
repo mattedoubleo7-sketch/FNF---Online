@@ -34,6 +34,7 @@
   }
 
   const stageImages = {};
+  const cineImages = {};
   const charImages = {};
   const noteImages = {};
   const endingVideoSources = {
@@ -80,6 +81,14 @@
     [stageImages, "papsFg", BR.stage?.images?.papsFg],
     [stageImages, "target", BR.stage?.attack?.target],
     [stageImages, "targetChoice", BR.stage?.attack?.choice?.image],
+    [cineImages, "pico", "assets/broken-reality-cine/pico.png"],
+    [cineImages, "gf", "assets/broken-reality-cine/gf.png"],
+    [cineImages, "sans", "assets/broken-reality-cine/sans.png"],
+    [cineImages, "paps", "assets/broken-reality-cine/paps.png"],
+    [cineImages, "undyne", "assets/broken-reality-cine/undyne.png"],
+    [cineImages, "mettaton", "assets/broken-reality-cine/mettaton.png"],
+    [cineImages, "dtExtractor", "assets/broken-reality-cine/dt-extractor.png"],
+    [cineImages, "flowey", "assets/broken-reality-cine/flowey.png"],
     [charImages, "sans", BR.sprites?.sans?.image],
     [charImages, "sansAlt", BR.sprites?.sansAlt?.image],
     [charImages, "papyrus", BR.sprites?.papyrus?.image],
@@ -107,11 +116,33 @@
     return Number(match?.time ?? fallback ?? 0);
   }
 
+  function findCharacterTime(targetIndex, id, fallback, afterTime = -Infinity) {
+    const match = (BR.events || []).find(event => {
+      if (event.name !== "Change Character") {
+        return false;
+      }
+      if (Number(event.params?.[0]) !== targetIndex) {
+        return false;
+      }
+      if (String(event.params?.[1] || "") !== id) {
+        return false;
+      }
+      return Number(event.time || 0) > afterTime;
+    });
+    return Number(match?.time ?? fallback ?? 0);
+  }
+
   const redSkinTime = findEventTime("Change Strum Skin", 0, "br_red", 144);
-  const papyrusDuetStart = 227.666667;
-  const papyrusDuetEnd = 255.666667;
-  const soulPhaseStart = 342.666667;
-  const soulPhaseEnd = 394.666667;
+  const papyrusDuetStart = findCharacterTime(0, "phantom_paps_br_head", 227.666667);
+  const papyrusDuetEnd = findCharacterTime(0, "phantom_paps_br", 255.666667, papyrusDuetStart + 0.001);
+  const soulPhaseStart = Math.min(
+    findCharacterTime(0, "gf_soul", 342.666667),
+    findCharacterTime(1, "bf_soul", 342.666667)
+  );
+  const soulPhaseEnd = Math.min(
+    findCharacterTime(0, "sans_br_alt", 394.666667, soulPhaseStart + 0.001),
+    findCharacterTime(1, "bf_itsover", 394.666667, soulPhaseStart + 0.001)
+  );
   const skinTimeline = [{ time: 0, id: "default" }].concat(
     (BR.events || [])
       .filter(event => event.name === "Change Strum Skin")
@@ -260,16 +291,33 @@
     papyrus: { x: 0.854, y: 0.904, scale: 0.214 },
     papyrusBody: { x: 0.854, y: 0.906, scale: 0.214 },
     papyrusHead: { x: 0.868, y: 0.866, scale: 0.196 },
-    boyfriend: { x: 0.134, y: 0.902, scale: 0.388 },
-    boyfriendRed: { x: 0.134, y: 0.918, scale: 0.404 },
-    bfSoul: { x: 0.18, y: 0.92, scale: 0.21 },
+    boyfriend: { x: 0.134, y: 0.902, scale: 0.291 },
+    boyfriendRed: { x: 0.134, y: 0.918, scale: 0.303 },
+    bfSoul: { x: 0.18, y: 0.92, scale: 0.158 },
     gfSoul: { x: 0.816, y: 1.018, scale: 0.145 }
   };
 
   const SOUL_DUET_LAYOUT = {
-    bfSoul: { x: 0.474, y: 0.972, scale: 0.226 },
+    bfSoul: { x: 0.474, y: 0.972, scale: 0.17 },
     gfSoul: { x: 0.515, y: 0.74, scale: 0.184 }
   };
+
+  const CINE_FLASH_LAYOUTS = [
+    { key: "pico", x: -200, y: -200, scale: 0.66667 },
+    { key: "gf", x: -240, y: -220, scale: 0.66667 },
+    { key: "sans", x: -340, y: -320, scale: 0.66667 },
+    { key: "paps", x: -340, y: -120, scale: 0.66667 },
+    { key: "undyne", x: -340, y: -260, scale: 0.66667 },
+    { key: "mettaton", x: -340, y: -260, scale: 0.66667 },
+    { key: "dtExtractor", x: -340, y: -230, scale: 0.66667 },
+    { key: "flowey", x: -340, y: -260, scale: 0.66667 }
+  ];
+  const CINE_FLASH_TIMES = (BR.events || [])
+    .filter(event => event.name === "HScript Call" && String(event.params?.[0] || "") === "cineHit")
+    .map(event => Number(event.time || 0))
+    .slice(0, CINE_FLASH_LAYOUTS.length);
+  const CINE_FLASH_DURATION = Math.max(0.2, Number(BR.chart?.spb || 0.5) * 2.5);
+  const CINE_REFERENCE_HEIGHT = 720;
 
   const LAYOUTS = {
     up: { xMult: 0, yMult: 1, y: layoutBaseY },
@@ -1376,6 +1424,34 @@
     ctx.restore();
   }
 
+  function drawCineFlashOverlays(t) {
+    if (!CINE_FLASH_TIMES.length) {
+      return;
+    }
+    const screenScale = canvas.height / CINE_REFERENCE_HEIGHT;
+    for (let i = 0; i < CINE_FLASH_TIMES.length; i++) {
+      const hitTime = CINE_FLASH_TIMES[i];
+      const layout = CINE_FLASH_LAYOUTS[i];
+      const image = cineImages[layout?.key];
+      if (!layout || !ready(image) || t < hitTime || t > hitTime + CINE_FLASH_DURATION) {
+        continue;
+      }
+      const p = clamp((t - hitTime) / CINE_FLASH_DURATION, 0, 1);
+      const ease = 1 - Math.pow(1 - p, 2);
+      const alpha = Math.pow(1 - p, 2);
+      const scale = layout.scale * lerp01(0.8, 0.7, ease) * screenScale;
+      const x = layout.x * screenScale;
+      const y = (layout.y + lerp01(17, 0, ease)) * screenScale;
+      const w = image.naturalWidth * scale;
+      const h = image.naturalHeight * scale;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(image, x, y, w, h);
+      ctx.restore();
+    }
+  }
+
   function drawHallDust(rect, t, bloom) {
     const boost = Math.max(1, bloom);
     const topY = rect.y + rect.h * 0.16;
@@ -1873,6 +1949,8 @@
     const rawSaturation = clamp(Number(state.br?.saturation || 1), 0, 1);
     const saturation = 0.72 + rawSaturation * 0.28;
     const bloom = Number(state.br?.bloom || 1);
+
+    drawCineFlashOverlays(t);
 
     if (bars > 0.001) {
       const barH = canvas.height * 0.18 * Math.min(1.05, bars);
