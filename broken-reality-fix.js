@@ -63,6 +63,16 @@
     phase: seededUnit(i * 0.63 + 0.58) * Math.PI * 2,
     alpha: 0.18 + seededUnit(i * 1.07 + 0.29) * 0.42
   }));
+  const CINE_FRAMES = [
+    { key: "cine1", src: "assets/broken-reality-cine-pico.png", x: -200, y: -200 },
+    { key: "cine2", src: "assets/broken-reality-cine-gf.png", x: -240, y: -220 },
+    { key: "cine3", src: "assets/broken-reality-cine-sans.png", x: -340, y: -320 },
+    { key: "cine4", src: "assets/broken-reality-cine-paps.png", x: -340, y: -120 },
+    { key: "cine5", src: "assets/broken-reality-cine-undyne.png", x: -340, y: -260 },
+    { key: "cine6", src: "assets/broken-reality-cine-mettaton.png", x: -340, y: -260 },
+    { key: "cine7", src: "assets/broken-reality-cine-dt-extractor.png", x: -340, y: -230 },
+    { key: "cine8", src: "assets/broken-reality-cine-flowey.png", x: -340, y: -260 }
+  ];
 
   function loadImage(bucket, key, src) {
     if (!src) {
@@ -94,6 +104,9 @@
     [noteImages, "default", BR.sprites?.notes?.default?.image],
     [noteImages, "red", BR.sprites?.notes?.red?.image]
   ].forEach(args => loadImage(...args));
+  for (const cine of CINE_FRAMES) {
+    loadImage(stageImages, cine.key, cine.src);
+  }
 
   function ready(img) {
     return !!(img && img.complete && img.naturalWidth);
@@ -141,6 +154,23 @@
       .filter(Boolean)
       .sort((a, b) => a.time - b.time)
   );
+  const sansStrumFadeTimeline = [{ time: 0, alpha: 1 }].concat(
+    (BR.events || [])
+      .filter(event => event.name === "HScript Call" && String(event.params?.[0] || "") === "fadeSansStrums")
+      .map(event => ({
+        time: Number(event.time || 0),
+        alpha: clamp(Number(event.params?.[1] ?? 1), 0, 1)
+      }))
+      .sort((a, b) => a.time - b.time)
+  );
+  const cineTimeline = (BR.events || [])
+    .filter(event => event.name === "HScript Call" && String(event.params?.[0] || "") === "cineHit")
+    .sort((a, b) => a.time - b.time)
+    .map((event, index) => ({
+      time: Number(event.time || 0),
+      key: CINE_FRAMES[index % CINE_FRAMES.length]?.key || null
+    }))
+    .filter(event => !!event.key);
   const manualDrainFixStart = Number(
     drainToggleTimeline.find(event => event.enabled === false)?.time ?? Infinity
   );
@@ -257,13 +287,13 @@
   };
 
   const STAGE_LAYOUT = {
-    sans: { stageX: 5170, stageY: 2700, scale: 0.242 },
-    sansAlt: { stageX: 5170, stageY: 2700, scale: 0.242 },
-    papyrus: { stageX: 5170, stageY: 2734, scale: 0.206 },
-    papyrusBody: { stageX: 5078, stageY: 2754, scale: 0.206 },
-    papyrusHead: { stageX: 5245, stageY: 2554, scale: 0.188 },
-    boyfriend: { stageX: 1400, stageY: 2630, scale: 0.332 },
-    boyfriendRed: { stageX: 1400, stageY: 2654, scale: 0.346 },
+    sans: { screen: true, x: 0.73, y: 0.958, scale: 0.242 },
+    sansAlt: { screen: true, x: 0.73, y: 0.958, scale: 0.242 },
+    papyrus: { screen: true, x: 0.726, y: 0.972, scale: 0.198 },
+    papyrusBody: { screen: true, x: 0.714, y: 0.982, scale: 0.198 },
+    papyrusHead: { screen: true, x: 0.731, y: 0.892, scale: 0.18 },
+    boyfriend: { screen: true, x: 0.27, y: 0.976, scale: 0.286 },
+    boyfriendRed: { screen: true, x: 0.27, y: 0.988, scale: 0.298 },
     bfSoul: { x: 0.18, y: 0.92, scale: 0.21 },
     gfSoul: { x: 0.816, y: 1.018, scale: 0.145 }
   };
@@ -369,6 +399,10 @@
 
   function currentDrainEnabledAt(t) {
     return timelinePropAt(drainToggleTimeline, t, "enabled");
+  }
+
+  function currentSansStrumAlphaAt(t) {
+    return timelinePropAt(sansStrumFadeTimeline, t, "alpha");
   }
 
   function isBrokenRealityDrainPackId(id) {
@@ -691,7 +725,7 @@
       return { x: 0, y: 0, angle: 0 };
     }
     const lane = Math.abs(Number(pose.lane || 0)) % 4;
-    const angleOffset = currentCameraAngleOffsetAt(t, kind === "opp" ? 0 : 1);
+    const angleOffset = currentCameraAngleOffsetAt(t, kind === "opp" ? 1 : 0);
     if (lane === 0) {
       return { x: -moveOffset, y: 0, angle: -angleOffset };
     }
@@ -747,9 +781,9 @@
       return { x: 50, y: -35 };
     }
     if (packId === "gfSoul") {
-      return { x: -220, y: -10 };
+      return { x: -120, y: -10 };
     }
-    return { x: -590, y: 0 };
+    return { x: -60, y: 0 };
   }
 
   function characterCameraPoint(kind, t, forcedPack = null, forcedLayout = null) {
@@ -806,7 +840,7 @@
       angle: 0
     };
 
-    let focus = target === 0 ? opp : target === 1 ? player : both;
+    let focus = target === 1 ? opp : target === 0 ? player : both;
     if (attackFx.prep) {
       focus = {
         x: both.x,
@@ -826,31 +860,58 @@
   }
 
   function papyrusOrbitLayoutsAt(t) {
-    const body = {
-      ...STAGE_LAYOUT.papyrusBody,
-      stageX: Number(STAGE_LAYOUT.sans.stageX || 5170) - 95,
-      stageY: Number(STAGE_LAYOUT.sans.stageY || 2735) + 48
-    };
-    const head = {
-      ...STAGE_LAYOUT.papyrusHead,
-      stageX: Number(STAGE_LAYOUT.sans.stageX || 5170) + 14,
-      stageY: Number(STAGE_LAYOUT.sans.stageY || 2735) - 138
-    };
+    const sansLayout = STAGE_LAYOUT.sans || {};
+    const useScreen = !!sansLayout.screen;
+    const body = useScreen
+      ? {
+          ...STAGE_LAYOUT.papyrusBody,
+          screen: true,
+          x: Number(sansLayout.x || 0.73) - 0.012,
+          y: Number(sansLayout.y || 0.94) + 0.026
+        }
+      : {
+          ...STAGE_LAYOUT.papyrusBody,
+          stageX: Number(STAGE_LAYOUT.sans.stageX || 5170) - 95,
+          stageY: Number(STAGE_LAYOUT.sans.stageY || 2735) + 48
+        };
+    const head = useScreen
+      ? {
+          ...STAGE_LAYOUT.papyrusHead,
+          screen: true,
+          x: Number(sansLayout.x || 0.73) + 0.001,
+          y: Number(sansLayout.y || 0.94) - 0.064
+        }
+      : {
+          ...STAGE_LAYOUT.papyrusHead,
+          stageX: Number(STAGE_LAYOUT.sans.stageX || 5170) + 14,
+          stageY: Number(STAGE_LAYOUT.sans.stageY || 2735) - 138
+        };
     if (t < PAPYRUS_ORBIT_START || t >= PAPYRUS_ORBIT_END) {
       return { body, head };
     }
     if (t >= PAPYRUS_ORBIT_END - 5) {
-      body.stageX += 68;
-      head.stageX += 185;
-      head.stageY -= 220;
+      if (useScreen) {
+        body.x += 68 / 1280;
+        head.x += 185 / 1280;
+        head.y -= 220 / 720;
+      } else {
+        body.stageX += 68;
+        head.stageX += 185;
+        head.stageY -= 220;
+      }
       return { body, head };
     }
 
     const waveSpeed = (t - PAPYRUS_ORBIT_START) * 3;
     const bobX = Math.sin(waveSpeed) * 50;
     const bobY = Math.cos(waveSpeed * 0.8) * 40 + Math.sin(waveSpeed * 1.5) * 10;
-    body.stageX += bobX;
-    body.stageY += bobY;
+    if (useScreen) {
+      body.x += bobX / 1280;
+      body.y += bobY / 720;
+    } else {
+      body.stageX += bobX;
+      body.stageY += bobY;
+    }
 
     const orbitSpeed = (t - PAPYRUS_ORBIT_START) * 1.5 * 1.7;
     let trace = Math.sin(orbitSpeed * 0.8) * 0.5 + 0.5;
@@ -862,8 +923,13 @@
     const tilt = Math.cos(orbitSpeed * 1.2) * 25;
     const sway = Math.sin(orbitSpeed * 3.5) * 15;
     const pulse = Math.sin(orbitSpeed * 0.5) * 10;
-    head.stageX = lerp01(head.stageX + 85, head.stageX - 675, eased) + tilt + pulse;
-    head.stageY = body.stageY + mainArc + sway + pulse + tilt - 138;
+    if (useScreen) {
+      head.x = lerp01(head.x + 85 / 1280, head.x - 675 / 1280, eased) + (tilt + pulse) / 1280;
+      head.y = body.y + (mainArc + sway + pulse + tilt - 138) / 720;
+    } else {
+      head.stageX = lerp01(head.stageX + 85, head.stageX - 675, eased) + tilt + pulse;
+      head.stageY = body.stageY + mainArc + sway + pulse + tilt - 138;
+    }
     return { body, head };
   }
 
@@ -901,6 +967,9 @@
   }
 
   function hallStagePoint(layout) {
+    if (layout?.screen) {
+      return null;
+    }
     const base = activeStageBaseImage();
     if (!base || layout?.stageX == null || layout?.stageY == null) {
       return null;
@@ -948,6 +1017,35 @@
         trailAlpha * 0.18 * ratio,
         draw.flipX
       );
+      ctx.restore();
+    }
+  }
+
+  function activeCinePulsesAt(t) {
+    return cineTimeline
+      .map(event => ({ ...event, age: t - event.time }))
+      .filter(event => event.age >= 0 && event.age <= 0.85);
+  }
+
+  function drawCinePulses(t) {
+    const active = activeCinePulsesAt(t);
+    if (!active.length) {
+      return;
+    }
+    for (const pulse of active) {
+      const img = stageImages[pulse.key];
+      const meta = CINE_FRAMES.find(item => item.key === pulse.key);
+      if (!ready(img) || !meta) {
+        continue;
+      }
+      const p = clamp(pulse.age / 0.85, 0, 1);
+      const alpha = (1 - p) * (1 - p);
+      const scale = 0.66667 * lerp01(0.8, 0.7, p);
+      const y = meta.y + lerp01(17, 0, p);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.globalCompositeOperation = "screen";
+      ctx.drawImage(img, meta.x, y, img.naturalWidth * scale, img.naturalHeight * scale);
       ctx.restore();
     }
   }
@@ -1538,6 +1636,7 @@
       return;
     }
     const dir = DIRS[lane % 4];
+    const sideAlpha = lane < 4 ? currentSansStrumAlphaAt(t) : 1;
     const age = performance.now() / 1000 - (state.receptorFx[lane]?.time || -10);
     const pressed = !!state.keysDown[lane];
 
@@ -1548,7 +1647,7 @@
         ctx.save();
         ctx.shadowBlur = 18 + (Number(state.br?.bloom || 1) * 18);
         ctx.shadowColor = COLORS[lane];
-        drawAtlasCentered(img, frame, x, y, 0.78 + (0.16 - age) * 0.42, 1 - age / 0.16);
+        drawAtlasCentered(img, frame, x, y, 0.78 + (0.16 - age) * 0.42, (1 - age / 0.16) * sideAlpha);
         ctx.restore();
         return;
       }
@@ -1563,7 +1662,7 @@
     ctx.save();
     ctx.shadowBlur = pressed ? 18 + (Number(state.br?.bloom || 1) * 16) : 8 + (Number(state.br?.bloom || 1) * 10);
     ctx.shadowColor = COLORS[lane];
-    drawAtlasCentered(img, frame, x, y, pressed ? 0.72 : 0.7, lane < 4 ? 0.82 : 1);
+    drawAtlasCentered(img, frame, x, y, pressed ? 0.72 : 0.7, (lane < 4 ? 0.82 : 1) * sideAlpha);
     ctx.restore();
   }
 
@@ -1574,10 +1673,11 @@
     if (!frame || !img) {
       return;
     }
+    const sideAlpha = lane < 4 ? currentSansStrumAlphaAt(t) : 1;
     ctx.save();
     ctx.shadowBlur = 16 + (Number(state.br?.bloom || 1) * 18);
     ctx.shadowColor = COLORS[lane];
-    drawAtlasCentered(img, frame, x, y, 0.72 * scale, alpha);
+    drawAtlasCentered(img, frame, x, y, 0.72 * scale, alpha * sideAlpha);
     ctx.restore();
   }
 
@@ -1589,6 +1689,7 @@
       return;
     }
 
+    const sideAlpha = note.side === "opp" ? currentSansStrumAlphaAt(t) : 1;
     const horizontal = Math.abs(tailX - headX) > Math.abs(tailY - headY);
     const bodyScale = 0.84;
     if (horizontal) {
@@ -1599,9 +1700,9 @@
       const bodyLeft = left + capW * 0.45;
       const bodyRight = right - capW * 0.45;
       if (bodyRight > bodyLeft) {
-        drawAtlasStretchHorizontal(img, hold.piece, bodyLeft, headY, bodyRight - bodyLeft, bodyH, alpha * 0.86);
+        drawAtlasStretchHorizontal(img, hold.piece, bodyLeft, headY, bodyRight - bodyLeft, bodyH, alpha * 0.86 * sideAlpha);
       }
-      drawAtlasCentered(img, hold.end, tailX, tailY, bodyScale, alpha);
+      drawAtlasCentered(img, hold.end, tailX, tailY, bodyScale, alpha * sideAlpha);
       return;
     }
 
@@ -1612,9 +1713,9 @@
     const bodyTop = top + endH * 0.45;
     const bodyBottom = bottom - endH * 0.45;
     if (bodyBottom > bodyTop) {
-      drawAtlasStretchVertical(img, hold.piece, headX, bodyTop, bodyW, bodyBottom - bodyTop, alpha * 0.86);
+      drawAtlasStretchVertical(img, hold.piece, headX, bodyTop, bodyW, bodyBottom - bodyTop, alpha * 0.86 * sideAlpha);
     }
-    drawAtlasCentered(img, hold.end, tailX, tailY, bodyScale, alpha);
+    drawAtlasCentered(img, hold.end, tailX, tailY, bodyScale, alpha * sideAlpha);
   }
 
   function notePlacement(note, t) {
@@ -1662,14 +1763,36 @@
       y: targetFocus.y,
       side: targetFocus.side
     };
+    fix.debugTarget = currentCameraTargetAt(t);
+    fix.debugFocusSide = focus.side;
+    fix.debugFocusX = focus.x;
+    fix.debugFocusY = focus.y;
+    try {
+      const dbgOpp = characterCameraPoint("opp", t);
+      const dbgPlayer = characterCameraPoint("player", t);
+      const dbgOppDraw = characterDrawState("opp", t);
+      const dbgPlayerDraw = characterDrawState("player", t);
+      const dbgOppBounds = visibleFrameBounds(dbgOppDraw);
+      const dbgPlayerBounds = visibleFrameBounds(dbgPlayerDraw);
+      fix.debugOppX = dbgOpp?.x ?? null;
+      fix.debugOppY = dbgOpp?.y ?? null;
+      fix.debugPlayerX = dbgPlayer?.x ?? null;
+      fix.debugPlayerY = dbgPlayer?.y ?? null;
+      fix.debugOppDrawX = dbgOppDraw?.x ?? null;
+      fix.debugOppDrawY = dbgOppDraw?.y ?? null;
+      fix.debugPlayerDrawX = dbgPlayerDraw?.x ?? null;
+      fix.debugPlayerDrawY = dbgPlayerDraw?.y ?? null;
+      fix.debugOppBounds = dbgOppBounds || null;
+      fix.debugPlayerBounds = dbgPlayerBounds || null;
+    } catch {}
     const follow = clamp(7.5 + currentCameraSpeedAt(t) * 70, 7.5, 20);
     const ease = 1 - Math.exp(-Math.max(1 / 240, dt || 1 / 60) * follow);
     const attackFx = attackVisualState(t);
     const screenTarget = focus.side === "both"
-      ? { x: canvas.width * 0.5, y: canvas.height * 0.56 }
+      ? { x: canvas.width * 0.5, y: canvas.height * 0.76 }
       : focus.side === "player"
-        ? { x: canvas.width * 0.5, y: canvas.height * 0.68 }
-        : { x: canvas.width * 0.5, y: canvas.height * 0.64 };
+        ? { x: canvas.width * 0.24, y: canvas.height * 0.84 }
+        : { x: canvas.width * 0.76, y: canvas.height * 0.84 };
     const singerZoomBoost =
       focus.side === "both"
         ? 0
@@ -1767,7 +1890,7 @@
     return originalBg(song, t);
   };
 
-  stage = function(t) {
+  stage = function(t, part = "full") {
     if (state.selectedSong !== "brokenReality") {
       return originalStage(t);
     }
@@ -1790,67 +1913,71 @@
     }
 
     const rect = stageRect(base);
-    ctx.save();
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    if (ready(stageImages.back)) {
-      ctx.drawImage(stageImages.back, rect.x, rect.y, rect.w, rect.h);
-    }
-    if (ready(ground)) {
-      ctx.drawImage(ground, rect.x, rect.y, rect.w, rect.h);
-    }
-    if (ready(stageImages.light)) {
-      const bloom = Number(state.br?.bloom || 1);
-      ctx.globalCompositeOperation = "screen";
-      ctx.globalAlpha = usePapyrusStage ? 0.16 + bloom * 0.08 : 0.2 + bloom * 0.1;
-      ctx.drawImage(stageImages.light, rect.x, rect.y, rect.w, rect.h);
-      ctx.globalCompositeOperation = "source-over";
-    }
-    ctx.restore();
-
-    if (!usePapyrusStage) {
-      const bloom = Number(state.br?.bloom || 1);
-      drawHallWindowBloom(rect, t, bloom);
-      drawHallDust(rect, t, bloom);
-    }
-
-    if (soulDuet) {
+    if (part === "full" || part === "backdrop") {
       ctx.save();
-      ctx.fillStyle = "rgba(0,0,0,0.82)";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      if (ready(stageImages.back)) {
+        ctx.drawImage(stageImages.back, rect.x, rect.y, rect.w, rect.h);
+      }
+      if (ready(ground)) {
+        ctx.drawImage(ground, rect.x, rect.y, rect.w, rect.h);
+      }
+      if (ready(stageImages.light)) {
+        const bloom = Number(state.br?.bloom || 1);
+        ctx.globalCompositeOperation = "screen";
+        ctx.globalAlpha = usePapyrusStage ? 0.16 + bloom * 0.08 : 0.2 + bloom * 0.1;
+        ctx.drawImage(stageImages.light, rect.x, rect.y, rect.w, rect.h);
+        ctx.globalCompositeOperation = "source-over";
+      }
       ctx.restore();
+
+      if (!usePapyrusStage) {
+        const bloom = Number(state.br?.bloom || 1);
+        drawHallWindowBloom(rect, t, bloom);
+        drawHallDust(rect, t, bloom);
+      }
+
+      if (soulDuet) {
+        ctx.save();
+        ctx.fillStyle = "rgba(0,0,0,0.82)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+      }
     }
 
     const papyrusLayouts = papyrusDuetActiveAt(t) ? papyrusOrbitLayoutsAt(t) : null;
     const trailAlpha = brokenRealityTrailAlphaAt(t);
 
-    if (trailAlpha > 0.01) {
-      drawCharacterTrails("opp", t, trailAlpha, oppPackOverride, oppLayoutOverride);
-      drawCharacterTrails("player", t, trailAlpha * 0.9, playerPackOverride, playerLayoutOverride);
-      if (papyrusLayouts) {
-        drawCharacterTrails("opp", t, trailAlpha * 0.82, packById("papyrusBody", "papyrus"), papyrusLayouts.body);
+    if (part === "full" || part === "actors") {
+      if (trailAlpha > 0.01) {
+        drawCharacterTrails("opp", t, trailAlpha, oppPackOverride, oppLayoutOverride);
+        drawCharacterTrails("player", t, trailAlpha * 0.9, playerPackOverride, playerLayoutOverride);
+        if (papyrusLayouts) {
+          drawCharacterTrails("opp", t, trailAlpha * 0.82, packById("papyrusBody", "papyrus"), papyrusLayouts.body);
+        }
       }
+
+      drawCharacterReflection("opp", t, soulDuet ? 0.28 : (usePapyrusStage ? 0.2 : 0.42), oppPackOverride, oppLayoutOverride);
+      if (papyrusLayouts) {
+        drawCharacterReflection("opp", t, 0.16, packById("papyrusBody", "papyrus"), papyrusLayouts.body);
+      }
+      drawCharacterReflection("player", t, soulDuet ? 0.34 : (usePapyrusStage ? 0.26 : 0.52), playerPackOverride, playerLayoutOverride);
+
+      drawCharacter("opp", t, 0.22, true, oppPackOverride, oppLayoutOverride);
+      if (papyrusLayouts) {
+        drawCharacter("opp", t, 0.16, true, packById("papyrusBody", "papyrus"), papyrusLayouts.body);
+      }
+      drawCharacter("player", t, soulDuet ? 0.24 : 0.2, true, playerPackOverride, playerLayoutOverride);
+      drawCharacter("opp", t, soulDuet ? 1 : brokenRealityOpponentAlphaAt(t), false, oppPackOverride, oppLayoutOverride);
+      if (papyrusLayouts) {
+        drawPapyrusGradient(t, papyrusLayouts.body);
+        drawCharacter("opp", t, 1, false, packById("papyrusBody", "papyrus"), papyrusLayouts.body);
+      }
+      drawCharacter("player", t, 1, false, playerPackOverride, playerLayoutOverride);
     }
 
-    drawCharacterReflection("opp", t, soulDuet ? 0.28 : (usePapyrusStage ? 0.2 : 0.42), oppPackOverride, oppLayoutOverride);
-    if (papyrusLayouts) {
-      drawCharacterReflection("opp", t, 0.16, packById("papyrusBody", "papyrus"), papyrusLayouts.body);
-    }
-    drawCharacterReflection("player", t, soulDuet ? 0.34 : (usePapyrusStage ? 0.26 : 0.52), playerPackOverride, playerLayoutOverride);
-
-    drawCharacter("opp", t, 0.22, true, oppPackOverride, oppLayoutOverride);
-    if (papyrusLayouts) {
-      drawCharacter("opp", t, 0.16, true, packById("papyrusBody", "papyrus"), papyrusLayouts.body);
-    }
-    drawCharacter("player", t, soulDuet ? 0.24 : 0.2, true, playerPackOverride, playerLayoutOverride);
-    drawCharacter("opp", t, soulDuet ? 1 : brokenRealityOpponentAlphaAt(t), false, oppPackOverride, oppLayoutOverride);
-    if (papyrusLayouts) {
-      drawPapyrusGradient(t, papyrusLayouts.body);
-      drawCharacter("opp", t, 1, false, packById("papyrusBody", "papyrus"), papyrusLayouts.body);
-    }
-    drawCharacter("player", t, 1, false, playerPackOverride, playerLayoutOverride);
-
-    if (ready(fg) && !soulDuet) {
+    if ((part === "full" || part === "foreground") && ready(fg) && !soulDuet) {
       ctx.save();
       ctx.globalAlpha = 0.08;
       drawCenterPillarReflection(fg, rect.y, rect.h, 0.08);
@@ -1861,7 +1988,9 @@
       ctx.restore();
     }
 
-    drawAttackBar(t);
+    if (part === "full" || part === "hud") {
+      drawAttackBar(t);
+    }
   };
 
   receptors = function(t) {
@@ -2008,6 +2137,8 @@
       ctx.restore();
     }
 
+    drawCinePulses(t);
+
     if (attackFx.noiseAlpha > 0.001) {
       ctx.save();
       ctx.globalAlpha = attackFx.noiseAlpha;
@@ -2057,9 +2188,15 @@
       state.br.drainEnabled = currentDrainEnabledAt(liveT);
       state.br.drainAmount = currentDrainAmountAt(liveT);
       const noteT = state.playing ? liveT : 0;
+      if (typeof syncBrokenRealityCutscene === "function") {
+        try {
+          syncBrokenRealityCutscene(liveT);
+        } catch {}
+      }
+      bg(state.currentSong, liveT);
+      stage(liveT, "backdrop");
       ctx.save();
       ctx.translate(state.camera.highwayX || 0, state.camera.highwayY || 0);
-      bg(state.currentSong, liveT);
       const camZ = state.camera.zoom || 1;
       if (camZ > 1.001) {
         const fx = state.camera.focusX || canvas.width * 0.5;
@@ -2067,10 +2204,15 @@
         ctx.translate(fx * (1 - camZ), fy * (1 - camZ));
         ctx.scale(camZ, camZ);
       }
-      stage(liveT);
+      stage(liveT, "actors");
+      ctx.restore();
+      ctx.save();
+      ctx.translate(state.camera.highwayX || 0, state.camera.highwayY || 0);
       receptors(liveT);
       notes(noteT);
       ctx.restore();
+      stage(liveT, "foreground");
+      stage(liveT, "hud");
       drawFeed(ui.playerFeed, state.feeds.player, true);
       drawFeed(ui.oppFeed, state.feeds.opp, false);
     } else {
@@ -2086,9 +2228,6 @@
       return originalDrawHitGlows ? originalDrawHitGlows() : undefined;
     }
     const now = performance.now() / 1000;
-    const camZ = state.camera.zoom || 1;
-    const fx = state.camera.focusX || canvas.width * 0.5;
-    const fy = state.camera.focusY || canvas.height * 0.45;
     for (let i = state.hitGlow.length - 1; i >= 0; i--) {
       const glow = state.hitGlow[i];
       const age = now - glow.time;
@@ -2100,10 +2239,6 @@
       const ease = 1 - Math.pow(1 - p, 2);
       ctx.save();
       ctx.translate(state.camera.highwayX || 0, state.camera.highwayY || 0);
-      if (camZ > 1.001) {
-        ctx.translate(fx * (1 - camZ), fy * (1 - camZ));
-        ctx.scale(camZ, camZ);
-      }
       ctx.globalAlpha = (1 - ease) * 0.6;
       const x = laneX(glow.lane);
       const y = receptorY();
