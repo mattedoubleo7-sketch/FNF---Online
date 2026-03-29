@@ -260,8 +260,8 @@
     papyrus: { x: 0.854, y: 0.904, scale: 0.214 },
     papyrusBody: { x: 0.854, y: 0.906, scale: 0.214 },
     papyrusHead: { x: 0.868, y: 0.866, scale: 0.196 },
-    boyfriend: { x: 0.134, y: 0.902, scale: 0.418 },
-    boyfriendRed: { x: 0.134, y: 0.918, scale: 0.436 },
+    boyfriend: { x: 0.134, y: 0.902, scale: 0.388 },
+    boyfriendRed: { x: 0.134, y: 0.918, scale: 0.404 },
     bfSoul: { x: 0.18, y: 0.92, scale: 0.21 },
     gfSoul: { x: 0.816, y: 1.018, scale: 0.145 }
   };
@@ -1985,6 +1985,9 @@
       state.br = state.br || {};
       state.br.drainEnabled = currentDrainEnabledAt(liveT);
       state.br.drainAmount = currentDrainAmountAt(liveT);
+      if (state.playing && state.health < 0.05) {
+        state.health = 0.05;
+      }
     }
     if (state.selectedSong === "brokenReality" && state.playing && firstNoteTime && songTime() >= firstNoteTime - 0.05) {
       hideBrokenRealityOpeningVideo();
