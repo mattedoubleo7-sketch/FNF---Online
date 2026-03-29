@@ -217,6 +217,37 @@
     }
   }
 
+  function buildOpponentDuetWindows(primaryId, duetId, maxGap = Number(BR.chart?.spb || 0.5) * 2.25) {
+    const oppNotes = ((BR.chart && BR.chart.notes) || [])
+      .filter(note => note.side === "opp" && (note.character === primaryId || note.character === duetId))
+      .sort((a, b) => Number(a.time || 0) - Number(b.time || 0));
+    const windows = [];
+    let active = null;
+    for (const note of oppNotes) {
+      const time = Number(note.time || 0);
+      const character = String(note.character || "");
+      if (!active || time - active.end > maxGap) {
+        if (active && active.hasPrimary && active.hasDuet) {
+          windows.push({ start: active.start, end: active.end });
+        }
+        active = {
+          start: time,
+          end: time,
+          hasPrimary: character === primaryId,
+          hasDuet: character === duetId
+        };
+      } else {
+        active.end = time;
+        active.hasPrimary = active.hasPrimary || character === primaryId;
+        active.hasDuet = active.hasDuet || character === duetId;
+      }
+    }
+    if (active && active.hasPrimary && active.hasDuet) {
+      windows.push({ start: active.start, end: active.end });
+    }
+    return windows;
+  }
+
   function buildEventTimeline(name, defaults, mapEvent) {
     const timeline = [{ time: 0, ...defaults }];
     for (const event of (BR.events || []).filter(e => e.name === name).sort((a, b) => a.time - b.time)) {
@@ -256,6 +287,7 @@
   }));
   const oppOffsetTimeline = buildCharacterOffsetTimeline(0);
   const playerOffsetTimeline = buildCharacterOffsetTimeline(1);
+  const sansPapyrusDuetWindows = buildOpponentDuetWindows("sans_br", "phantom_paps_br");
 
   const RED_PHASE_START = 144;
   const PAPYRUS_ORBIT_START = 227.75;
@@ -302,15 +334,21 @@
     gfSoul: { x: 0.515, y: 0.74, scale: 0.184 }
   };
 
+  const SANS_PAPYRUS_DUET_LAYOUT = {
+    x: STAGE_LAYOUT.sans.x - 0.082,
+    y: STAGE_LAYOUT.sans.y + 0.028,
+    scale: 0.194
+  };
+
   const CINE_FLASH_LAYOUTS = [
-    { key: "pico", x: -200, y: -200, scale: 0.66667 },
-    { key: "gf", x: -240, y: -220, scale: 0.66667 },
-    { key: "sans", x: -340, y: -320, scale: 0.66667 },
-    { key: "paps", x: -340, y: -120, scale: 0.66667 },
-    { key: "undyne", x: -340, y: -260, scale: 0.66667 },
-    { key: "mettaton", x: -340, y: -260, scale: 0.66667 },
-    { key: "dtExtractor", x: -340, y: -230, scale: 0.66667 },
-    { key: "flowey", x: -340, y: -260, scale: 0.66667 }
+    { key: "pico", anchorX: 0.14, anchorY: 0.2, scale: 0.62, driftX: -22, driftY: -18 },
+    { key: "gf", anchorX: 0.82, anchorY: 0.17, scale: 0.62, driftX: 22, driftY: -14 },
+    { key: "sans", anchorX: 0.18, anchorY: 0.53, scale: 0.64, driftX: -28, driftY: -10 },
+    { key: "paps", anchorX: 0.82, anchorY: 0.5, scale: 0.64, driftX: 26, driftY: -8 },
+    { key: "undyne", anchorX: 0.18, anchorY: 0.82, scale: 0.62, driftX: -18, driftY: 14 },
+    { key: "mettaton", anchorX: 0.83, anchorY: 0.8, scale: 0.62, driftX: 18, driftY: 12 },
+    { key: "dtExtractor", anchorX: 0.5, anchorY: 0.14, scale: 0.58, driftX: 0, driftY: -18 },
+    { key: "flowey", anchorX: 0.5, anchorY: 0.86, scale: 0.58, driftX: 0, driftY: 18 }
   ];
   const CINE_FLASH_TIMES = (BR.events || [])
     .filter(event => event.name === "HScript Call" && String(event.params?.[0] || "") === "cineHit")
@@ -540,6 +578,10 @@
 
   function papyrusDuetActiveAt(t) {
     return t >= papyrusDuetStart && t < papyrusDuetEnd;
+  }
+
+  function sansPapyrusDuetWindowAt(t) {
+    return sansPapyrusDuetWindows.find(window => t >= window.start && t < window.end) || null;
   }
 
   function currentCameraTargetAt(t) {
@@ -1439,11 +1481,13 @@
       const p = clamp((t - hitTime) / CINE_FLASH_DURATION, 0, 1);
       const ease = 1 - Math.pow(1 - p, 2);
       const alpha = Math.pow(1 - p, 2);
-      const scale = layout.scale * lerp01(0.8, 0.7, ease) * screenScale;
-      const x = layout.x * screenScale;
-      const y = (layout.y + lerp01(17, 0, ease)) * screenScale;
+      const scale = layout.scale * lerp01(0.84, 0.72, ease) * screenScale;
       const w = image.naturalWidth * scale;
       const h = image.naturalHeight * scale;
+      const driftX = Number(layout.driftX || 0) * screenScale;
+      const driftY = Number(layout.driftY || 0) * screenScale;
+      const x = canvas.width * Number(layout.anchorX || 0.5) - w / 2 + lerp01(driftX, 0, ease);
+      const y = canvas.height * Number(layout.anchorY || 0.5) - h / 2 + lerp01(driftY + 10 * screenScale, 0, ease);
 
       ctx.save();
       ctx.globalAlpha = alpha;
@@ -1813,28 +1857,43 @@
     }
 
     const papyrusLayouts = papyrusDuetActiveAt(t) ? papyrusOrbitLayoutsAt(t) : null;
+    const sansPapyrusDuet = !papyrusLayouts && !soulDuet ? sansPapyrusDuetWindowAt(t) : null;
+    const duetPapPack = sansPapyrusDuet ? packById("papyrus", "papyrus") : null;
+    const duetPapLayout = sansPapyrusDuet ? SANS_PAPYRUS_DUET_LAYOUT : null;
     const trailAlpha = brokenRealityTrailAlphaAt(t);
 
     if (trailAlpha > 0.01) {
       drawCharacterTrails("opp", t, trailAlpha, oppPackOverride, oppLayoutOverride);
       drawCharacterTrails("player", t, trailAlpha * 0.9, playerPackOverride, playerLayoutOverride);
+      if (duetPapPack) {
+        drawCharacterTrails("opp", t, trailAlpha * 0.78, duetPapPack, duetPapLayout);
+      }
       if (papyrusLayouts) {
         drawCharacterTrails("opp", t, trailAlpha * 0.82, packById("papyrusBody", "papyrus"), papyrusLayouts.body);
       }
     }
 
     drawCharacterReflection("opp", t, soulDuet ? 0.28 : (usePapyrusStage ? 0.2 : 0.42), oppPackOverride, oppLayoutOverride);
+    if (duetPapPack) {
+      drawCharacterReflection("opp", t, 0.24, duetPapPack, duetPapLayout);
+    }
     if (papyrusLayouts) {
       drawCharacterReflection("opp", t, 0.16, packById("papyrusBody", "papyrus"), papyrusLayouts.body);
     }
     drawCharacterReflection("player", t, soulDuet ? 0.34 : (usePapyrusStage ? 0.26 : 0.52), playerPackOverride, playerLayoutOverride);
 
     drawCharacter("opp", t, 0.22, true, oppPackOverride, oppLayoutOverride);
+    if (duetPapPack) {
+      drawCharacter("opp", t, 0.18, true, duetPapPack, duetPapLayout);
+    }
     if (papyrusLayouts) {
       drawCharacter("opp", t, 0.16, true, packById("papyrusBody", "papyrus"), papyrusLayouts.body);
     }
     drawCharacter("player", t, soulDuet ? 0.24 : 0.2, true, playerPackOverride, playerLayoutOverride);
     drawCharacter("opp", t, soulDuet ? 1 : brokenRealityOpponentAlphaAt(t), false, oppPackOverride, oppLayoutOverride);
+    if (duetPapPack) {
+      drawCharacter("opp", t, 0.92, false, duetPapPack, duetPapLayout);
+    }
     if (papyrusLayouts) {
       drawPapyrusGradient(t, papyrusLayouts.body);
       drawCharacter("opp", t, 1, false, packById("papyrusBody", "papyrus"), papyrusLayouts.body);
