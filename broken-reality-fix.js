@@ -287,20 +287,22 @@
   };
 
   const STAGE_LAYOUT = {
-    sans: { screen: true, x: 0.73, y: 0.958, scale: 0.242 },
-    sansAlt: { screen: true, x: 0.73, y: 0.958, scale: 0.242 },
-    papyrus: { screen: true, x: 0.726, y: 0.972, scale: 0.198 },
-    papyrusBody: { screen: true, x: 0.714, y: 0.982, scale: 0.198 },
-    papyrusHead: { screen: true, x: 0.731, y: 0.892, scale: 0.18 },
-    boyfriend: { screen: true, x: 0.27, y: 0.976, scale: 0.286 },
-    boyfriendRed: { screen: true, x: 0.27, y: 0.988, scale: 0.298 },
-    bfSoul: { x: 0.18, y: 0.92, scale: 0.21 },
-    gfSoul: { x: 0.816, y: 1.018, scale: 0.145 }
+    // Match the real hall stage coordinates from hall.xml instead of pinning
+    // everyone to fake normalized screen slots.
+    sans: { stageX: 5170, stageY: 2700, scale: 0.242 },
+    sansAlt: { stageX: 5170, stageY: 2700, scale: 0.242 },
+    papyrus: { stageX: 5170, stageY: 2738, scale: 0.206 },
+    papyrusBody: { stageX: 5112, stageY: 2752, scale: 0.206 },
+    papyrusHead: { stageX: 5198, stageY: 2592, scale: 0.186 },
+    boyfriend: { stageX: 1400, stageY: 2630, scale: 0.252 },
+    boyfriendRed: { stageX: 1400, stageY: 2648, scale: 0.264 },
+    bfSoul: { stageX: 1710, stageY: 2715, scale: 0.218 },
+    gfSoul: { stageX: 4970, stageY: 2740, scale: 0.155 }
   };
 
   const SOUL_DUET_LAYOUT = {
-    bfSoul: { x: 0.474, y: 0.972, scale: 0.226 },
-    gfSoul: { x: 0.515, y: 0.74, scale: 0.184 }
+    bfSoul: { stageX: 1885, stageY: 2728, scale: 0.226 },
+    gfSoul: { stageX: 4850, stageY: 2745, scale: 0.178 }
   };
 
   const LAYOUTS = {
@@ -633,7 +635,7 @@
   }
 
   function brokenRealityZoomScaleAt(t) {
-    return clamp(0.88 + currentStageZoomAt(t) * 0.54, 0.96, 1.28);
+    return clamp(0.84 + currentStageZoomAt(t) * 0.22, 0.94, 1.12);
   }
 
   function attackVisualState(t) {
@@ -1239,14 +1241,25 @@
     const scale = Number(layout.scale || 0.35);
     const stableFeet = !String(info.pack.id).startsWith("papyrus");
     const baseOffset = Array.isArray(info.pack.def?.baseOffset) ? info.pack.def.baseOffset : [0, 0];
-    const offsetX = stableFeet ? 0 : (Number(info.offset?.[0] || 0) + Number(baseOffset[0] || 0) * 0.02) * scale;
-    const offsetY = stableFeet ? 0 : (Number(info.offset?.[1] || 0) + Number(baseOffset[1] || 0) * 0.01) * scale;
+    const animOffset = stableFeet
+      ? { x: 0, y: 0 }
+      : {
+          x: Number(info.offset?.[0] || 0) * scale,
+          y: Number(info.offset?.[1] || 0) * scale
+        };
     const charOffset = currentCharacterOffsetAt(kind, t);
     const flipX = kind === "player" ? !info.pack.def.flipX : !!info.pack.def.flipX;
     const anchor = stableFeet ? visibleAnchorDeltas(info, scale, flipX) : { x: 0, y: 0 };
     const stagePoint = hallStagePoint(layout);
-    const targetX = (stagePoint ? stagePoint.x : canvas.width * layout.x) - offsetX + charOffset.x * 0.42;
-    const targetY = (stagePoint ? stagePoint.y : canvas.height * layout.y) - offsetY + charOffset.y * 0.36;
+    const useHallCoords = !!stagePoint;
+    const baseShift = useHallCoords
+      ? hallOffsetToScreen(baseOffset[0], baseOffset[1])
+      : { x: 0, y: 0 };
+    const eventShift = useHallCoords
+      ? hallOffsetToScreen(charOffset.x, charOffset.y)
+      : { x: charOffset.x * 0.42, y: charOffset.y * 0.36 };
+    const targetX = (stagePoint ? stagePoint.x : canvas.width * layout.x) + baseShift.x - animOffset.x + eventShift.x;
+    const targetY = (stagePoint ? stagePoint.y : canvas.height * layout.y) + baseShift.y - animOffset.y + eventShift.y;
     let x = targetX - anchor.x + (shadow ? 16 : 0);
     let y = targetY - anchor.y + (shadow ? 24 : 0);
     const attack = state.br?.attack;
@@ -1789,24 +1802,22 @@
     const ease = 1 - Math.exp(-Math.max(1 / 240, dt || 1 / 60) * follow);
     const attackFx = attackVisualState(t);
     const screenTarget = focus.side === "both"
-      ? { x: canvas.width * 0.5, y: canvas.height * 0.76 }
-      : focus.side === "player"
-        ? { x: canvas.width * 0.24, y: canvas.height * 0.84 }
-        : { x: canvas.width * 0.76, y: canvas.height * 0.84 };
+      ? { x: canvas.width * 0.5, y: canvas.height * 0.59 }
+      : { x: canvas.width * 0.5, y: canvas.height * 0.61 };
     const singerZoomBoost =
       focus.side === "both"
         ? 0
         : focus.side === "player"
-          ? (t >= soulPhaseStart && t < soulPhaseEnd ? 0.14 : 0.36) + (attackFx.active ? 0.14 : 0)
-          : (t >= soulPhaseStart && t < soulPhaseEnd ? 0.1 : 0.28) + (attackFx.active ? 0.12 : 0);
+          ? (t >= soulPhaseStart && t < soulPhaseEnd ? 0.07 : 0.18) + (attackFx.active ? 0.08 : 0)
+          : (t >= soulPhaseStart && t < soulPhaseEnd ? 0.06 : 0.16) + (attackFx.active ? 0.06 : 0);
     const targetZoom = clamp(
       brokenRealityZoomScaleAt(t)
         + singerZoomBoost
         + Math.max(0, Number(state.br?.bloom || 1) - 1) * 0.08
         + attackFx.zoomBoost
         - brokenRealityBlackoutAlphaAt(t) * 0.12,
-      0.96,
-      2.58
+      0.94,
+      1.42
     );
     const targetHighwayX = screenTarget.x - focus.x;
     const targetHighwayY = screenTarget.y - focus.y;
@@ -1838,9 +1849,6 @@
   };
 
   laneX = function(i) {
-    if (state.selectedSong === "brokenReality") {
-      return originalLaneX((i + 4) % 8);
-    }
     return originalLaneX(i);
   };
 
@@ -1937,13 +1945,6 @@
         drawHallWindowBloom(rect, t, bloom);
         drawHallDust(rect, t, bloom);
       }
-
-      if (soulDuet) {
-        ctx.save();
-        ctx.fillStyle = "rgba(0,0,0,0.82)";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.restore();
-      }
     }
 
     const papyrusLayouts = papyrusDuetActiveAt(t) ? papyrusOrbitLayoutsAt(t) : null;
@@ -1997,81 +1998,14 @@
     if (state.selectedSong !== "brokenReality") {
       return originalReceptors(t);
     }
-
-    const fix = updateLayoutState(t);
-    const verticalWeight = Math.abs(fix.currentYMult);
-    const horizontalWeight = Math.abs(fix.currentXMult);
-
-    if (verticalWeight >= horizontalWeight * 0.75) {
-      ctx.strokeStyle = "rgba(255,255,255,0.08)";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(canvas.width * 0.5, 72);
-      ctx.lineTo(canvas.width * 0.5, 452);
-      ctx.stroke();
-    }
-
-    for (let lane = 0; lane < 8; lane++) {
-      const x = laneX(lane);
-      const y = fix.currentY;
-      drawReceptor(lane, x, y, t);
-      ctx.strokeStyle = "rgba(255,255,255,0.05)";
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      if (horizontalWeight > verticalWeight) {
-        ctx.moveTo(x + 26, y);
-        ctx.lineTo(canvas.width - 48, y);
-      } else if (fix.currentYMult < 0) {
-        ctx.moveTo(x, y - 26);
-        ctx.lineTo(x, 96);
-      } else {
-        ctx.moveTo(x, y + 26);
-        ctx.lineTo(x, 448);
-      }
-      ctx.stroke();
-    }
+    return originalReceptors(t);
   };
 
   notes = function(t) {
     if (state.selectedSong !== "brokenReality") {
       return originalNotes(t);
     }
-    if (!state.chart) {
-      return;
-    }
-
-    for (const note of state.chart.notes) {
-      if (note.played && note.hit && (!isHoldNote(note) || note.holdDone)) {
-        continue;
-      }
-      if (note.judged && note.side !== "opp" && (!isHoldNote(note) || note.holdDone || !note.hit)) {
-        continue;
-      }
-
-      const place = notePlacement(note, t);
-      if (
-        (place.x < -180 && place.tailX < -180) ||
-        (place.x > canvas.width + 180 && place.tailX > canvas.width + 180) ||
-        (place.y < -180 && place.tailY < -180) ||
-        (place.y > canvas.height + 180 && place.tailY > canvas.height + 180)
-      ) {
-        continue;
-      }
-
-      const diff = note.time - t;
-      const scale = clamp(1 - Math.pow(Math.abs(diff), 0.7) * 0.45, 0.75, 1.1);
-      const alpha = note.side === "opp" ? 0.84 : 1;
-
-      if (isHoldNote(note)) {
-        const headX = note.hit ? laneX(note.lane) : place.x;
-        const headY = note.hit ? updateLayoutState(t).currentY : place.y;
-        drawSustain(note, headX, headY, place.tailX, place.tailY, t, alpha * (note.hit ? 0.94 : 1));
-      }
-      if (note.hit && isHoldNote(note) && t > note.time) {
-        continue;
-      }
-      drawGem(note.lane, place.x, place.y, scale, alpha, t);
-    }
+    return originalNotes(t);
   };
 
   window.brDrawOverlays = function() {
@@ -2179,11 +2113,10 @@
   };
 
   renderScene = function(songT, previewT) {
-    let liveT = previewT;
     if (state.selectedSong === "brokenReality") {
       const fix = getFixState();
       state.br = state.br || {};
-      liveT = state.playing ? songTime() : previewT;
+      const liveT = state.playing ? songTime() : previewT;
       fix.renderTime = liveT;
       state.br.drainEnabled = currentDrainEnabledAt(liveT);
       state.br.drainAmount = currentDrainAmountAt(liveT);
@@ -2195,6 +2128,7 @@
       }
       bg(state.currentSong, liveT);
       stage(liveT, "backdrop");
+      stage(liveT, "actors");
       ctx.save();
       ctx.translate(state.camera.highwayX || 0, state.camera.highwayY || 0);
       const camZ = state.camera.zoom || 1;
@@ -2204,12 +2138,8 @@
         ctx.translate(fx * (1 - camZ), fy * (1 - camZ));
         ctx.scale(camZ, camZ);
       }
-      stage(liveT, "actors");
-      ctx.restore();
-      ctx.save();
-      ctx.translate(state.camera.highwayX || 0, state.camera.highwayY || 0);
-      receptors(liveT);
-      notes(noteT);
+      originalReceptors(liveT);
+      originalNotes(noteT);
       ctx.restore();
       stage(liveT, "foreground");
       stage(liveT, "hud");
