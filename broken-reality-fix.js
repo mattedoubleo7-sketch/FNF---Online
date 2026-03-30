@@ -514,14 +514,6 @@
     if (activeSansHoldDrain(t) || activeSansTapDrain(t)) {
       return true;
     }
-    const pose = state.poses?.sans;
-    if (pose && pose.kind !== "miss") {
-      const age = performance.now() / 1000 - Number(pose.time || -10);
-      const duration = animDuration(pack.def, poseAnimName(pose.lane), 0.15, 0.65);
-      if (age >= 0 && age <= duration) {
-        return true;
-      }
-    }
     return false;
   }
 
@@ -544,6 +536,7 @@
       return;
     }
     if (!state.br.sansDrainActive) {
+      state.br.drainTimer = 0;
       return;
     }
     state.br.drainTimer = Math.max(Number(state.br.drainTimer || 0), Math.max(0.12, dt * 3.4));
@@ -2118,6 +2111,7 @@
       fix.renderTime = liveT;
       state.br.drainEnabled = currentDrainEnabledAt(liveT);
       state.br.drainAmount = currentDrainAmountAt(liveT);
+      state.br.drainTimer = 0;
     }
     let out;
     if (state.selectedSong === "brokenReality") {
