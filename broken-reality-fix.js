@@ -2132,9 +2132,6 @@
       state.br = state.br || {};
       state.br.drainEnabled = currentDrainEnabledAt(liveT);
       state.br.drainAmount = currentDrainAmountAt(liveT);
-      if (state.playing && state.health < 0.05) {
-        state.health = 0.05;
-      }
     }
     if (state.selectedSong === "brokenReality" && state.playing && firstNoteTime && songTime() >= firstNoteTime - 0.05) {
       hideBrokenRealityOpeningVideo();
