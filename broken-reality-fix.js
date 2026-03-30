@@ -1424,45 +1424,55 @@
       return;
     }
     const boost = Math.max(1, bloom);
+    const sourceX = 0.5 + Math.cos(t + 0.16) * 0.04;
+    const sourceY = 0.3 + Math.sin(t * 0.5) * 0.03;
+    const anchorX = rect.x + rect.w * sourceX;
+    const anchorY = rect.y + rect.h * sourceY;
+    const wobbleX = Math.sin(t + rect.y * 0.004) * rect.w * 0.001;
+    const wobbleY = Math.cos(t + rect.x * 0.004) * rect.h * 0.001;
+    const density = 0.54;
+    const bright = 1;
+    const baseWeight = (0.16 * bright) + Math.sin(t) * 0.02;
+    const rayBlur = 10 + boost * 7;
+    let decay = 1;
+
     ctx.save();
     ctx.globalCompositeOperation = "screen";
-    ctx.globalAlpha = Math.min(0.9, 0.42 + boost * 0.24);
-    ctx.drawImage(stageImages.light, rect.x, rect.y, rect.w, rect.h);
-    ctx.filter = "blur(" + (22 + boost * 24).toFixed(2) + "px) brightness(" + (1.95 + boost * 0.45).toFixed(2) + ")";
-    ctx.globalAlpha = Math.min(0.68, 0.26 + boost * 0.16);
-    ctx.drawImage(stageImages.light, rect.x, rect.y, rect.w, rect.h);
-    ctx.filter = "none";
 
-    for (const beam of HALL_BEAMS) {
-      const cx = rect.x + rect.w * beam.x;
-      const beamW = rect.w * beam.width;
-      const topY = rect.y + rect.h * 0.18;
-      const beamBottom = rect.y + rect.h * 0.965;
-      const pulse = 0.94 + Math.sin(t * 0.92 + beam.x * 8.4) * 0.06;
+    // Approximate Dustin's light_preprocess shader with a drifting source point
+    // that repeatedly re-projects the masked light sprite into warm god rays.
+    ctx.globalAlpha = Math.min(0.82, 0.26 + boost * 0.12);
+    ctx.filter = "brightness(" + (1.55 + boost * 0.1).toFixed(2) + ") saturate(1.06)";
+    ctx.drawImage(stageImages.light, rect.x + wobbleX, rect.y + wobbleY, rect.w, rect.h);
 
-      const inner = ctx.createRadialGradient(cx, topY + beamW * 0.04, beamW * 0.04, cx, topY + beamW * 0.1, beamW * 1.14);
-      inner.addColorStop(0, "rgba(255,253,255," + Math.min(0.98, 0.9 * beam.intensity * pulse) + ")");
-      inner.addColorStop(0.16, "rgba(250,242,255," + Math.min(0.9, 0.7 * beam.intensity * pulse) + ")");
-      inner.addColorStop(0.46, "rgba(204,184,255," + Math.min(0.62, 0.36 * beam.intensity * pulse) + ")");
-      inner.addColorStop(1, "rgba(110,76,205,0)");
-      ctx.fillStyle = inner;
-      ctx.fillRect(cx - beamW * 1.42, topY - beamW * 0.68, beamW * 2.84, beamW * 2.56);
-
-      const aura = ctx.createRadialGradient(cx, topY + beamW * 0.12, beamW * 0.24, cx, topY + beamW * 0.12, beamW * 1.92);
-      aura.addColorStop(0, "rgba(222,202,255," + Math.min(0.38, 0.22 * beam.intensity * pulse) + ")");
-      aura.addColorStop(0.55, "rgba(150,118,235," + Math.min(0.26, 0.12 * beam.intensity * pulse) + ")");
-      aura.addColorStop(1, "rgba(84,54,148,0)");
-      ctx.fillStyle = aura;
-      ctx.fillRect(cx - beamW * 2.1, topY - beamW * 1.05, beamW * 4.2, beamW * 3.1);
-
-      const shaft = ctx.createLinearGradient(0, topY, 0, beamBottom);
-      shaft.addColorStop(0, "rgba(255,248,255," + Math.min(0.62, 0.34 * beam.intensity * boost) + ")");
-      shaft.addColorStop(0.18, "rgba(244,231,255," + Math.min(0.4, 0.2 * beam.intensity * boost) + ")");
-      shaft.addColorStop(0.54, "rgba(184,156,245," + Math.min(0.2, 0.1 * beam.intensity * boost) + ")");
-      shaft.addColorStop(1, "rgba(120,90,160,0)");
-      ctx.fillStyle = shaft;
-      ctx.fillRect(cx - beamW * 0.84, topY, beamW * 1.68, beamBottom - topY);
+    for (let i = 0; i < 26; i++) {
+      const step = (i + 1) / 26;
+      const scale = 1 + step * density * 0.38;
+      const drawX = anchorX - (anchorX - rect.x) * scale + wobbleX * (1 - step * 0.4);
+      const drawY = anchorY - (anchorY - rect.y) * scale + wobbleY * (1 - step * 0.4);
+      const blurPx = 1.25 + step * rayBlur;
+      const alpha = Math.min(0.22, Math.max(0.02, decay * baseWeight * (0.92 + boost * 0.08)));
+      ctx.globalAlpha = alpha;
+      ctx.filter = "blur(" + blurPx.toFixed(2) + "px) brightness(" + (1.18 + boost * 0.08).toFixed(2) + ") saturate(1.02)";
+      ctx.drawImage(stageImages.light, drawX, drawY, rect.w * scale, rect.h * scale);
+      decay *= 0.905;
     }
+
+    ctx.filter = "none";
+    const warmGlow = ctx.createRadialGradient(anchorX, anchorY, rect.w * 0.04, anchorX, anchorY, rect.w * 0.4);
+    warmGlow.addColorStop(0, "rgba(255,241,255," + Math.min(0.42, 0.28 + boost * 0.04) + ")");
+    warmGlow.addColorStop(0.18, "rgba(248,236,255," + Math.min(0.28, 0.18 + boost * 0.03) + ")");
+    warmGlow.addColorStop(0.56, "rgba(195,171,255," + Math.min(0.14, 0.08 + boost * 0.02) + ")");
+    warmGlow.addColorStop(1, "rgba(96,68,168,0)");
+    ctx.fillStyle = warmGlow;
+    ctx.fillRect(anchorX - rect.w * 0.46, anchorY - rect.w * 0.28, rect.w * 0.92, rect.w * 0.7);
+
+    const veil = ctx.createLinearGradient(0, rect.y + rect.h * 0.12, 0, rect.y + rect.h * 0.98);
+    veil.addColorStop(0, "rgba(255,244,255," + Math.min(0.16, 0.08 + boost * 0.03) + ")");
+    veil.addColorStop(0.28, "rgba(222,204,255," + Math.min(0.1, 0.05 + boost * 0.02) + ")");
+    veil.addColorStop(1, "rgba(140,110,214,0)");
+    ctx.fillStyle = veil;
+    ctx.fillRect(rect.x, rect.y + rect.h * 0.12, rect.w, rect.h * 0.86);
     ctx.restore();
   }
 
