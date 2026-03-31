@@ -179,9 +179,6 @@
       .filter(Boolean)
       .sort((a, b) => a.time - b.time)
   );
-  const manualDrainFixStart = Number(
-    drainToggleTimeline.find(event => event.enabled === false)?.time ?? Infinity
-  );
 
   function buildCharacterTimeline(targetIndex, initialId, mapping) {
     const timeline = [{ time: 0, id: initialId }];
@@ -225,6 +222,33 @@
       modeEvents.push({ time: Number(event.time || 0), mode: "left" });
     }
   }
+
+  function buildCharacterPhraseWindows(characterIds, maxGap = Number(BR.chart?.spb || (60 / Number(BR.meta?.bpm || 120) || 0.5)) * 1.6) {
+    const ids = new Set(characterIds.map(id => String(id || "")));
+    const notes = ((BR.chart && BR.chart.notes) || [])
+      .filter(note => note.side === "opp" && ids.has(String(note.character || "")))
+      .sort((a, b) => Number(a.time || 0) - Number(b.time || 0));
+    const windows = [];
+    let active = null;
+    for (const note of notes) {
+      const start = Number(note.time || 0) - 0.045;
+      const end = Math.max(Number(note.time || 0), holdEndTime(note)) + 0.18;
+      if (!active || start - active.end > maxGap) {
+        if (active) {
+          windows.push(active);
+        }
+        active = { start, end };
+      } else {
+        active.end = Math.max(active.end, end);
+      }
+    }
+    if (active) {
+      windows.push(active);
+    }
+    return windows;
+  }
+
+  const sansDrainWindows = buildCharacterPhraseWindows(["sans_br", "sans_br_alt"]);
 
   function buildOpponentDuetWindows(primaryId, duetId, maxGap = Number(BR.chart?.spb || 0.5) * 2.25) {
     const oppNotes = ((BR.chart && BR.chart.notes) || [])
@@ -525,14 +549,7 @@
   }
 
   function currentSansDrainActive(t) {
-    const pack = currentPack("opp", t);
-    if (!pack?.def || !isBrokenRealityDrainPackId(pack.id)) {
-      return false;
-    }
-    if (activeSansHoldDrain(t) || activeSansTapDrain(t)) {
-      return true;
-    }
-    return false;
+    return sansDrainWindows.some(window => t >= window.start && t < window.end);
   }
 
   function stepManualDrain(t) {
@@ -546,10 +563,6 @@
     state.br.drainEnabled = currentDrainEnabledAt(t);
     state.br.drainAmount = currentDrainAmountAt(t);
     state.br.sansDrainActive = currentSansDrainActive(t);
-    if (t < manualDrainFixStart) {
-      state.br.drainTimer = 0;
-      return;
-    }
     if (!state.br.drainEnabled) {
       state.br.drainTimer = 0;
       return;
