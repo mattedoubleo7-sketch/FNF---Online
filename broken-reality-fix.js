@@ -27,7 +27,7 @@
   const originalFinish = typeof finish === "function" ? finish : null;
   const SOUL = window.BROKEN_REALITY_SOUL_DATA || {};
   const baseLaneShift = 36;
-  const layoutBaseY = originalReceptorY() - 8;
+  const layoutBaseY = originalReceptorY();
 
   if (typeof window.brDrawOverlays !== "function") {
     window.brDrawOverlays = function() {};
@@ -47,6 +47,14 @@
     { x: 0.5, width: 0.132, intensity: 1.22 },
     { x: 0.81, width: 0.118, intensity: 1.05 }
   ];
+  const HALL_DUST_STYLE = {
+    layers: 15,
+    depth: 0.9,
+    width: 0.01,
+    speed: 0.3,
+    startingLayers: 4,
+    bright: 10
+  };
 
   function seededUnit(seed) {
     return (Math.sin(seed * 127.1 + 311.7) + 1) * 0.5;
@@ -60,7 +68,8 @@
     size: 0.38 + seededUnit(i * 1.41 + 0.81) * 1.18,
     sway: 0.35 + seededUnit(i * 1.19 + 0.44),
     phase: seededUnit(i * 0.63 + 0.58) * Math.PI * 2,
-    alpha: 0.18 + seededUnit(i * 1.07 + 0.29) * 0.42
+    alpha: 0.18 + seededUnit(i * 1.07 + 0.29) * 0.42,
+    layer: HALL_DUST_STYLE.startingLayers + (i % Math.max(1, HALL_DUST_STYLE.layers - HALL_DUST_STYLE.startingLayers))
   }));
 
   function loadImage(bucket, key, src) {
@@ -264,6 +273,10 @@
     return a + (b - a) * clamp(t, 0, 1);
   }
 
+  function quantizeBrokenRealityScrollSpeed(value) {
+    return Math.round(Number(value || 1) * 100) / 100;
+  }
+
   function buildCharacterOffsetTimeline(targetIndex) {
     return buildEventTimeline("Change Character Offset", { x: 0, y: 0 }, event => {
       if (Number(event.params?.[1]) !== targetIndex) {
@@ -284,6 +297,9 @@
   }));
   const stageZoomTimeline = buildEventTimeline("Change Stage Zoom", { zoom: 0.46 }, event => ({
     zoom: Number(event.params?.[5] ?? 0.46)
+  }));
+  const scrollSpeedTimeline = buildEventTimeline("Scroll Speed Change", { speed: 1 }, event => ({
+    speed: Number(event.params?.[1] ?? 1)
   }));
   const oppOffsetTimeline = buildCharacterOffsetTimeline(0);
   const playerOffsetTimeline = buildCharacterOffsetTimeline(1);
@@ -589,6 +605,10 @@
 
   function currentStageZoomAt(t) {
     return timelinePropAt(stageZoomTimeline, t, "zoom");
+  }
+
+  function currentScrollSpeedAt(t) {
+    return quantizeBrokenRealityScrollSpeed(timelinePropAt(scrollSpeedTimeline, t, "speed"));
   }
 
   function currentCharacterOffsetAt(kind, t) {
@@ -1419,38 +1439,42 @@
       return;
     }
     const boost = Math.max(1, bloom);
+    const bright = 1;
+    const samples = 96;
+    const density = 0.54;
+    const weight = (0.16 * bright) + Math.sin(t) * 0.02;
     const sourceX = 0.5 + Math.cos(t + 0.16) * 0.04;
     const sourceY = 0.3 + Math.sin(t * 0.5) * 0.03;
     const anchorX = rect.x + rect.w * sourceX;
     const anchorY = rect.y + rect.h * sourceY;
     const wobbleX = Math.sin(t + rect.y * 0.004) * rect.w * 0.001;
     const wobbleY = Math.cos(t + rect.x * 0.004) * rect.h * 0.001;
-    const density = 0.54;
-    const bright = 1;
-    const baseWeight = (0.16 * bright) + Math.sin(t) * 0.02;
-    const rayBlur = 10 + boost * 7;
+    const deltaX = rect.x + rect.w * 0.5 - anchorX;
+    const deltaY = rect.y + rect.h * 0.5 - anchorY;
     let decay = 1;
 
     ctx.save();
     ctx.globalCompositeOperation = "screen";
-
-    // Approximate Dustin's light_preprocess shader with a drifting source point
-    // that repeatedly re-projects the masked light sprite into warm god rays.
-    ctx.globalAlpha = Math.min(0.82, 0.26 + boost * 0.12);
-    ctx.filter = "brightness(" + (1.55 + boost * 0.1).toFixed(2) + ") saturate(1.06)";
+    ctx.globalAlpha = Math.min(0.92, 0.34 + boost * 0.1);
+    ctx.filter = "brightness(" + (1.62 + boost * 0.12).toFixed(2) + ") saturate(1.05)";
     ctx.drawImage(stageImages.light, rect.x + wobbleX, rect.y + wobbleY, rect.w, rect.h);
 
-    for (let i = 0; i < 26; i++) {
-      const step = (i + 1) / 26;
-      const scale = 1 + step * density * 0.38;
-      const drawX = anchorX - (anchorX - rect.x) * scale + wobbleX * (1 - step * 0.4);
-      const drawY = anchorY - (anchorY - rect.y) * scale + wobbleY * (1 - step * 0.4);
-      const blurPx = 1.25 + step * rayBlur;
-      const alpha = Math.min(0.22, Math.max(0.02, decay * baseWeight * (0.92 + boost * 0.08)));
+    for (let i = 0; i < samples; i++) {
+      const step = (i + 1) / samples;
+      const jitter = (seededUnit(i * 2.13 + t * 0.91) - 0.5) * 0.9;
+      const scale = 1 + step * density * 0.44;
+      const sampleX = rect.x + wobbleX + deltaX * step + jitter;
+      const sampleY = rect.y + wobbleY + deltaY * step;
+      const drawW = rect.w * scale;
+      const drawH = rect.h * scale;
+      const drawX = sampleX - (sampleX - rect.x) * scale;
+      const drawY = sampleY - (sampleY - rect.y) * scale;
+      const blurPx = 0.5 + step * (11 + boost * 6);
+      const alpha = Math.min(0.18, Math.max(0.008, decay * weight * (0.84 + boost * 0.1)));
       ctx.globalAlpha = alpha;
-      ctx.filter = "blur(" + blurPx.toFixed(2) + "px) brightness(" + (1.18 + boost * 0.08).toFixed(2) + ") saturate(1.02)";
-      ctx.drawImage(stageImages.light, drawX, drawY, rect.w * scale, rect.h * scale);
-      decay *= 0.905;
+      ctx.filter = "blur(" + blurPx.toFixed(2) + "px) brightness(" + (1.12 + boost * 0.08).toFixed(2) + ") saturate(1.01)";
+      ctx.drawImage(stageImages.light, drawX, drawY, drawW, drawH);
+      decay *= 0.905 * (1 + ((1 - bright) / 20));
     }
 
     ctx.filter = "none";
@@ -1512,15 +1536,17 @@
     ctx.shadowBlur = 3 + boost * 2.5;
     for (const mote of HALL_DUST) {
       const beam = HALL_BEAMS[mote.beam];
+      const layerRatio = clamp((mote.layer - HALL_DUST_STYLE.startingLayers) / Math.max(1, HALL_DUST_STYLE.layers - HALL_DUST_STYLE.startingLayers), 0, 1);
       const beamW = rect.w * beam.width;
       const cx = rect.x + rect.w * beam.x;
-      const y = topY + ((mote.offsetY * travelH) + t * (18 + mote.speed * 24)) % travelH;
+      const driftSpeed = (18 + mote.speed * 24) * (0.72 + layerRatio * HALL_DUST_STYLE.speed);
+      const y = topY + ((mote.offsetY * travelH) + t * driftSpeed) % travelH;
       const x = cx
-        + Math.sin(t * (0.34 + mote.sway * 0.18) + mote.phase + y * 0.018) * beamW * 0.2
-        + (mote.offsetX - 0.5) * beamW * 0.48;
+        + Math.sin(t * (0.34 + mote.sway * 0.18) + mote.phase + y * 0.018) * beamW * (0.14 + layerRatio * 0.09)
+        + (mote.offsetX - 0.5) * beamW * (0.32 + layerRatio * 0.18);
       const pulse = 0.6 + 0.4 * Math.sin(t * (0.8 + mote.speed * 0.22) + mote.phase);
-      const alpha = Math.min(0.22, (0.02 + mote.alpha * 0.11 * pulse) * (0.82 + boost * 0.14));
-      const size = mote.size * (0.82 + pulse * 0.32);
+      const alpha = Math.min(0.22, (0.014 + mote.alpha * 0.1 * pulse) * (0.8 + boost * 0.16) * (0.42 + layerRatio * 0.85));
+      const size = mote.size * (0.72 + pulse * 0.26) * (0.66 + layerRatio * 0.72);
       ctx.globalAlpha = alpha;
       ctx.fillStyle = mote.beam === 1 ? "#f7f0ff" : "#ede4ff";
       ctx.beginPath();
@@ -1666,12 +1692,13 @@
 
   function notePlacement(note, t) {
     const fix = updateLayoutState(t);
-    const scrollSpeed = Number(state.br?.scrollSpeed || 1);
-    const travel = (note.time - t) * 360 * scrollSpeed;
+    const scrollSpeed = currentScrollSpeedAt(t);
+    const baseScrollFactor = 450 * scrollSpeed;
+    const travel = (note.time - t) * baseScrollFactor;
     const baseX = laneX(note.lane);
     const x = baseX + travel * fix.currentXMult;
     const y = fix.currentY + travel * fix.currentYMult;
-    const tailTravel = (holdEndTime(note) - t) * 360 * scrollSpeed;
+    const tailTravel = (holdEndTime(note) - t) * baseScrollFactor;
     const tailX = baseX + tailTravel * fix.currentXMult;
     const tailY = fix.currentY + tailTravel * fix.currentYMult;
     return { x, y, tailX, tailY };
@@ -1811,6 +1838,15 @@
     if (state.selectedSong !== "brokenReality") {
       return originalStage(t);
     }
+
+    // Let the imported Dustin BR stage logic update its internal mechanics,
+    // drain, prompts, and chart event state, but keep its draw pass invisible.
+    ctx.save();
+    ctx.globalAlpha = 0;
+    try {
+      originalStage(t);
+    } catch {}
+    ctx.restore();
 
     updateLayoutState(t);
     const pack = currentPack("opp", t);
