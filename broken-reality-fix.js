@@ -455,13 +455,15 @@
     return timelinePropAt(drainToggleTimeline, t, "enabled");
   }
 
+  const BROKEN_REALITY_DRAIN_FLOOR = 0.051;
+
   function isBrokenRealityDrainPackId(id) {
-    return id === "sans" || id === "sansAlt" || id === "papyrus" || id === "papyrusBody" || id === "papyrusHead";
+    return id === "sans" || id === "sansAlt";
   }
 
   function isBrokenRealityDrainCharacter(character) {
     const id = String(character || "");
-    return id === "sans_br" || id === "sans_br_alt" || id === "phantom_paps_br" || id === "phantom_paps_br_head";
+    return id === "sans_br" || id === "sans_br_alt";
   }
 
   function activeSansHoldDrain(t) {
@@ -529,6 +531,7 @@
     state.br.drainAmount = currentDrainAmountAt(t);
     state.br.sansDrainActive = currentSansDrainActive(t);
     if (t < manualDrainFixStart) {
+      state.br.drainTimer = 0;
       return;
     }
     if (!state.br.drainEnabled) {
@@ -539,17 +542,16 @@
       state.br.drainTimer = 0;
       return;
     }
-    state.br.drainTimer = Math.max(Number(state.br.drainTimer || 0), Math.max(0.12, dt * 3.4));
-    if (Number(state.br.drainTimer || 0) > 0) {
-      const drainDt = Math.min(Number(state.br.drainTimer || 0), dt);
-      const damageScale = Number(state.br.didDamage) ? 0.65 : 1;
-      state.health = clamp(
-        state.health - 0.05 * (Number(state.br.drainAmount || 1.2) * damageScale) * drainDt,
-        0.05,
-        1
-      );
-      state.br.drainTimer = Math.max(0, Number(state.br.drainTimer || 0) - drainDt);
+    state.br.drainTimer = 0;
+    if (state.health <= BROKEN_REALITY_DRAIN_FLOOR) {
+      return;
     }
+    const damageScale = Number(state.br.didDamage) ? 0.65 : 1;
+    state.health = clamp(
+      state.health - 0.05 * (Number(state.br.drainAmount || 1.2) * damageScale) * dt,
+      BROKEN_REALITY_DRAIN_FLOOR,
+      1
+    );
   }
 
   function currentPack(kind, t) {
