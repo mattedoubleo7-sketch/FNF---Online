@@ -37,6 +37,7 @@
   const cineImages = {};
   const charImages = {};
   const noteImages = {};
+  const cineFlashSurfaceCache = new Map();
   const endingVideoSources = {
     youAre: "you-are-cutscene.mp4",
     uprising: "the-uprising-cutscene.mp4"
@@ -113,6 +114,47 @@
 
   function ready(img) {
     return !!(img && img.complete && img.naturalWidth);
+  }
+
+  function getCineFlashSurface(layout, image) {
+    if (!layout || !ready(image)) {
+      return null;
+    }
+    const screenScale = canvas.height / CINE_REFERENCE_HEIGHT;
+    const maxScale = Number(layout.scale || 1) * 0.84 * screenScale;
+    const width = Math.max(1, Math.round(image.naturalWidth * maxScale));
+    const height = Math.max(1, Math.round(image.naturalHeight * maxScale));
+    const cacheKey = [
+      layout.key || "flash",
+      canvas.width,
+      canvas.height,
+      width,
+      height
+    ].join(":");
+    let surface = cineFlashSurfaceCache.get(cacheKey);
+    if (!surface) {
+      const layer = document.createElement("canvas");
+      layer.width = width;
+      layer.height = height;
+      const layerCtx = layer.getContext("2d");
+      if (!layerCtx) {
+        return null;
+      }
+      layerCtx.imageSmoothingEnabled = true;
+      layerCtx.imageSmoothingQuality = "medium";
+      layerCtx.drawImage(image, 0, 0, width, height);
+      surface = { canvas: layer, width, height, screenScale, maxScale };
+      cineFlashSurfaceCache.set(cacheKey, surface);
+    }
+    return surface;
+  }
+
+  function primeCineFlashSurfaces() {
+    for (let i = 0; i < CINE_FLASH_LAYOUTS.length; i++) {
+      const layout = CINE_FLASH_LAYOUTS[i];
+      const image = cineImages[layout?.key];
+      getCineFlashSurface(layout, image);
+    }
   }
 
   function findEventTime(name, paramIndex, value, fallback) {
@@ -297,8 +339,44 @@
     return a + (b - a) * clamp(t, 0, 1);
   }
 
+  function easeInOutSine01(t) {
+    return 0.5 - Math.cos(clamp(t, 0, 1) * Math.PI) * 0.5;
+  }
+
+  function smoothTimelineNumberAt(timeline, t, key, minDuration, maxDuration, perUnit) {
+    if (!timeline?.length) {
+      return 0;
+    }
+    let previous = timeline[0];
+    let current = timeline[0];
+    for (const item of timeline) {
+      if (item.time > t) {
+        break;
+      }
+      previous = current;
+      current = item;
+    }
+
+    const currentValue = Number(current?.[key] ?? 0);
+    if (current === previous) {
+      return currentValue;
+    }
+
+    const previousValue = Number(previous?.[key] ?? currentValue);
+    const delta = Math.abs(currentValue - previousValue);
+    const duration = clamp(minDuration + delta * perUnit, minDuration, maxDuration);
+    const elapsed = t - Number(current.time || 0);
+    if (elapsed <= 0) {
+      return previousValue;
+    }
+    if (elapsed >= duration) {
+      return currentValue;
+    }
+    return lerp01(previousValue, currentValue, easeInOutSine01(elapsed / duration));
+  }
+
   function quantizeBrokenRealityScrollSpeed(value) {
-    return Math.round(Number(value || 1) * 100) / 100;
+    return Math.round(Number(value || 1) * 1000) / 1000;
   }
 
   function buildCharacterOffsetTimeline(targetIndex) {
@@ -495,7 +573,7 @@
     return timelinePropAt(drainToggleTimeline, t, "enabled");
   }
 
-  const BROKEN_REALITY_DRAIN_FLOOR = 0.051;
+  const BROKEN_REALITY_DRAIN_FLOOR = 0.10;
 
   function isBrokenRealityDrainPackId(id) {
     return id === "sans" || id === "sansAlt";
@@ -613,7 +691,7 @@
   }
 
   function currentCameraSpeedAt(t) {
-    return timelinePropAt(cameraSpeedTimeline, t, "speed");
+    return smoothTimelineNumberAt(cameraSpeedTimeline, t, "speed", 0.18, 0.42, 4.5);
   }
 
   function currentStageZoomAt(t) {
@@ -621,7 +699,9 @@
   }
 
   function currentScrollSpeedAt(t) {
-    return quantizeBrokenRealityScrollSpeed(timelinePropAt(scrollSpeedTimeline, t, "speed"));
+    return quantizeBrokenRealityScrollSpeed(
+      smoothTimelineNumberAt(scrollSpeedTimeline, t, "speed", 0.24, 0.72, 0.18)
+    );
   }
 
   function currentCharacterOffsetAt(kind, t) {
@@ -807,17 +887,19 @@
       return { x: 0, y: 0, angle: 0 };
     }
     const lane = Math.abs(Number(pose.lane || 0)) % 4;
+    const settle = Math.cos(clamp(age / 0.3, 0, 1) * Math.PI * 0.5);
+    const easedMoveOffset = moveOffset * settle;
     const angleOffset = currentCameraAngleOffsetAt(t, kind === "opp" ? 0 : 1);
     if (lane === 0) {
-      return { x: -moveOffset, y: 0, angle: -angleOffset };
+      return { x: -easedMoveOffset, y: 0, angle: -angleOffset * settle };
     }
     if (lane === 1) {
-      return { x: 0, y: moveOffset, angle: 0 };
+      return { x: 0, y: easedMoveOffset, angle: 0 };
     }
     if (lane === 2) {
-      return { x: 0, y: -moveOffset, angle: 0 };
+      return { x: 0, y: -easedMoveOffset, angle: 0 };
     }
-    return { x: moveOffset, y: 0, angle: angleOffset };
+    return { x: easedMoveOffset, y: 0, angle: angleOffset * settle };
   }
 
   function soulDuetLayoutFor(kind, t) {
@@ -899,6 +981,15 @@
         y: player.y,
         side: "player",
         angle: player.angle
+      };
+    }
+    if (focus.side !== "both") {
+      const sidePull = attackFx.active ? 1.3 : 1.22;
+      const verticalPull = attackFx.active ? 1.12 : 1.08;
+      focus = {
+        ...focus,
+        x: clamp(lerp01(both.x, focus.x, sidePull), canvas.width * 0.08, canvas.width * 0.92),
+        y: clamp(lerp01(both.y, focus.y, verticalPull), canvas.height * 0.18, canvas.height * 0.88)
       };
     }
     return focus;
@@ -1512,7 +1603,6 @@
     if (!CINE_FLASH_TIMES.length) {
       return;
     }
-    const screenScale = canvas.height / CINE_REFERENCE_HEIGHT;
     for (let i = 0; i < CINE_FLASH_TIMES.length; i++) {
       const hitTime = CINE_FLASH_TIMES[i];
       const layout = CINE_FLASH_LAYOUTS[i];
@@ -1520,20 +1610,25 @@
       if (!layout || !ready(image) || t < hitTime || t > hitTime + CINE_FLASH_DURATION) {
         continue;
       }
+      const surface = getCineFlashSurface(layout, image);
+      if (!surface) {
+        continue;
+      }
       const p = clamp((t - hitTime) / CINE_FLASH_DURATION, 0, 1);
       const ease = 1 - Math.pow(1 - p, 2);
       const alpha = Math.pow(1 - p, 2);
-      const scale = layout.scale * lerp01(0.84, 0.72, ease) * screenScale;
-      const w = image.naturalWidth * scale;
-      const h = image.naturalHeight * scale;
-      const driftX = Number(layout.driftX || 0) * screenScale;
-      const driftY = Number(layout.driftY || 0) * screenScale;
+      const currentScale = Number(layout.scale || 1) * lerp01(0.84, 0.72, ease) * surface.screenScale;
+      const drawScale = currentScale / Math.max(0.0001, surface.maxScale);
+      const w = surface.width * drawScale;
+      const h = surface.height * drawScale;
+      const driftX = Number(layout.driftX || 0) * surface.screenScale;
+      const driftY = Number(layout.driftY || 0) * surface.screenScale;
       const x = canvas.width * Number(layout.anchorX || 0.5) - w / 2 + lerp01(driftX, 0, ease);
-      const y = canvas.height * Number(layout.anchorY || 0.5) - h / 2 + lerp01(driftY + 10 * screenScale, 0, ease);
+      const y = canvas.height * Number(layout.anchorY || 0.5) - h / 2 + lerp01(driftY + 10 * surface.screenScale, 0, ease);
 
       ctx.save();
       ctx.globalAlpha = alpha;
-      ctx.drawImage(image, x, y, w, h);
+      ctx.drawImage(surface.canvas, x, y, w, h);
       ctx.restore();
     }
   }
@@ -1749,15 +1844,17 @@
       y: targetFocus.y,
       side: targetFocus.side
     };
-    const follow = clamp(7.5 + currentCameraSpeedAt(t) * 70, 7.5, 20);
+    const follow = clamp(6.4 + currentCameraSpeedAt(t) * 58, 6.4, 17.5);
     const ease = 1 - Math.exp(-Math.max(1 / 240, dt || 1 / 60) * follow);
+    const focusEase = Math.min(1, ease * 0.82);
+    const zoomEase = Math.min(1, ease * 1.08);
     const attackFx = attackVisualState(t);
     const singerZoomBoost =
       focus.side === "both"
         ? 0
         : focus.side === "player"
-          ? (t >= soulPhaseStart && t < soulPhaseEnd ? 0.34 : 0.62) + (attackFx.active ? 0.2 : 0)
-          : (t >= soulPhaseStart && t < soulPhaseEnd ? 0.22 : 0.38) + (attackFx.active ? 0.14 : 0);
+          ? ((t >= soulPhaseStart && t < soulPhaseEnd ? 0.34 : 0.62) + (attackFx.active ? 0.2 : 0)) * 1.7
+          : ((t >= soulPhaseStart && t < soulPhaseEnd ? 0.22 : 0.38) + (attackFx.active ? 0.14 : 0)) * 1.7;
     const targetZoom = clamp(
       brokenRealityZoomScaleAt(t)
         + singerZoomBoost
@@ -1768,11 +1865,11 @@
       2.18
     );
 
-    fix.camX += (focus.x - fix.camX) * ease;
-    fix.camY += (focus.y - fix.camY) * ease;
-    fix.camZoom += (targetZoom - fix.camZoom) * Math.min(1, ease * 1.4);
-    fix.camHighwayX += (0 - fix.camHighwayX) * ease;
-    fix.camHighwayY += (0 - fix.camHighwayY) * ease;
+    fix.camX += (focus.x - fix.camX) * focusEase;
+    fix.camY += (focus.y - fix.camY) * focusEase;
+    fix.camZoom += (targetZoom - fix.camZoom) * zoomEase;
+    fix.camHighwayX += (0 - fix.camHighwayX) * focusEase;
+    fix.camHighwayY += (0 - fix.camHighwayY) * focusEase;
 
     state.camera.zoom = fix.camZoom;
     state.camera.focusX = fix.camX;
@@ -1832,6 +1929,7 @@
       fix.camHighwayX = 0;
       fix.camHighwayY = 0;
       fix.attackCueStamp = "";
+      primeCineFlashSurfaces();
       ensureEndingVideos();
       hideEndingVideos();
     }

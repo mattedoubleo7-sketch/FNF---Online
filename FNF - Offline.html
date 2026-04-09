@@ -1847,6 +1847,75 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
   if (statusText) statusText.textContent = "Pick a track and start the battle.";
   if (statusSub) statusSub.textContent = "Offline build: solo and local versus are available with no server setup.";
 })();
+
+(function(){
+  function activeBrokenRealityOpeningVideo() {
+    return Array.from(document.querySelectorAll("video")).find(video => {
+      const src = String(video.currentSrc || video.src || "");
+      return src.includes("broken-reality-opening.mp4") && video.style.display !== "none";
+    }) || null;
+  }
+
+  function brokenRealityOpeningHandoffTime() {
+    const notes = Array.isArray(state?.chart?.notes) ? state.chart.notes : [];
+    const firstPlayer = notes.find(note => note.side === "player");
+    const firstAny = notes[0];
+    return Math.max(0, Number((firstPlayer || firstAny)?.time || 0) - 0.82);
+  }
+
+  function skipBrokenRealityOpeningOffline() {
+    if (state?.selectedSong !== "brokenReality" || !state?.playing) {
+      return false;
+    }
+    const openingVideo = activeBrokenRealityOpeningVideo();
+    const current = typeof songTime === "function" ? Number(songTime() || 0) : 0;
+    const handoff = brokenRealityOpeningHandoffTime();
+    if (!openingVideo && current >= handoff - 0.15) {
+      return false;
+    }
+
+    for (const video of Array.from(document.querySelectorAll("video"))) {
+      try {
+        video.pause();
+        video.style.display = "none";
+        if (String(video.currentSrc || video.src || "").includes("broken-reality-opening.mp4")) {
+          video.currentTime = Math.max(0, handoff);
+        } else {
+          video.currentTime = 0;
+        }
+      } catch {}
+    }
+
+    const tracks = [state.audio?.inst3, state.audio?.voices3a, state.audio?.voices3b];
+    for (const track of tracks) {
+      if (!track) continue;
+      try {
+        track.currentTime = Math.max(0, handoff);
+        if (track.paused) {
+          const playAttempt = track.play();
+          if (playAttempt && typeof playAttempt.catch === "function") playAttempt.catch(() => {});
+        }
+      } catch {}
+    }
+
+    if (state.br) {
+      state.br.openingSkipApplied = true;
+    }
+    if (ui?.statusText) ui.statusText.textContent = "Broken Reality";
+    if (ui?.statusSub) ui.statusSub.textContent = "Opening cutscene skipped. The hall intro is continuing from the handoff point.";
+    return true;
+  }
+
+  window.addEventListener("keydown", e => {
+    if (e.key !== "Enter") {
+      return;
+    }
+    if (skipBrokenRealityOpeningOffline()) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, true);
+})();
 </script>
 <script src="boxing-fight-mode.js?v=20260322-stage6"></script>
 <script src="broken-reality-mode.js"></script>
