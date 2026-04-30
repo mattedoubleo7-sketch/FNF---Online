@@ -17,6 +17,8 @@
           return [state.audio.inst, state.audio.voices];
         case "boxingMatch":
           return [state.audio.boxingInst, state.audio.boxingVoices];
+        case "combat":
+          return [state.audio.combatInst, state.audio.combatVoices];
         case "perseverance":
           return [state.audio.inst2, state.audio.voices2a, state.audio.voices2b];
         case "brokenReality":

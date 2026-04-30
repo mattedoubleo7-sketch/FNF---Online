@@ -125,6 +125,10 @@ function importedTracksForSong(songId = state.selectedSong) {
     ensureBoxingMatchAudio();
     return [state.audio.boxingInst, state.audio.boxingVoices];
   }
+  if (chartSource === "combat") {
+    if (typeof ensureCombatAudio === "function") ensureCombatAudio();
+    return [state.audio.combatInst, state.audio.combatVoices];
+  }
   if (chartSource === "perseverance") {
     ensurePerseveranceAudio();
     return [state.audio.inst2, state.audio.voices2a, state.audio.voices2b];
@@ -215,6 +219,15 @@ async function preloadSongForMatch(songId, matchId) {
       try { track.load(); } catch {}
     });
     await Promise.all([waitForTrackReady(state.audio.boxingInst), waitForTrackReady(state.audio.boxingVoices)]);
+  } else if (SONGS[songId]?.chartSource === "combat") {
+    if (typeof ensureCombatAudio === "function") ensureCombatAudio();
+    [state.audio.combatInst, state.audio.combatVoices].forEach(track => {
+      if (!track) return;
+      track.pause();
+      try { track.currentTime = 0; } catch {}
+      try { track.load(); } catch {}
+    });
+    await Promise.all([waitForTrackReady(state.audio.combatInst), waitForTrackReady(state.audio.combatVoices)]);
   } else if (SONGS[songId]?.chartSource === "perseverance") {
     ensurePerseveranceAudio();
     [state.audio.inst2, state.audio.voices2a, state.audio.voices2b].forEach(track => {
@@ -355,6 +368,10 @@ function syncOnlinePlayback(force = false) {
     ensureBoxingMatchAudio();
     syncTrackToTime(state.audio.boxingInst, targetTime, shouldPlay, syncOptions);
     syncTrackToTime(state.audio.boxingVoices, targetTime, shouldPlay, { ...syncOptions, isSecondary: true });
+  } else if (state.currentSong.chartSource === "combat") {
+    if (typeof ensureCombatAudio === "function") ensureCombatAudio();
+    syncTrackToTime(state.audio.combatInst, targetTime, shouldPlay, syncOptions);
+    syncTrackToTime(state.audio.combatVoices, targetTime, shouldPlay, { ...syncOptions, isSecondary: true });
   } else if (state.currentSong.chartSource === "perseverance") {
     ensurePerseveranceAudio();
     syncTrackToTime(state.audio.inst2, targetTime, shouldPlay, syncOptions);

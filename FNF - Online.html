@@ -371,6 +371,8 @@ body.fullViewport #app { width: 100vw; height: 100vh; aspect-ratio: auto; border
 <script src="boxing-fight-data.js"></script>
 <script src="sporting-chart.js"></script>
 <script src="boxing-match-chart.js"></script>
+<script src="combat-chart.js"></script>
+<script src="combat-visual-data.js?v=20260428c"></script>
 <script src="perseverance-data.js"></script>
 <script src="broken-reality-data.js"></script>
 <script src="challenge-edd-data.js"></script>
@@ -472,6 +474,7 @@ const DEFAULTS = { solo:{left:"a",down:"s",up:"w",right:"d"}, p1:{left:"a",down:
 const SONGS = {
     sporting:{ title:"Sporting", subtitle:"Original hard chart with 1.5x scroll", diff:"Hard (Original Chart)", tempo:300, root:45, scale:[0,2,3,5,7,8,10], prog:[0,5,3,7], scroll:920, seed:29, introBeats:0, outroBeats:4, palette:["#0f1422","#1b2f46","#314f74","#0b0e16","#4de3ff","#ff9d42"], blurb:"Imported from the original VS Matt Sporting hard chart with the real instrumental and vocals at normal speed on the boxing ring stage.", chartSource:"sporting"},
     boxingMatch:{ title:"Boxing Match", subtitle:"Original VS Matt chart", diff:"Normal (Original Chart)", tempo:339, root:45, scale:[0,2,3,5,7,8,10], prog:[0,5,3,7], scroll:760, seed:31, introBeats:0, outroBeats:4, palette:["#0f1422","#1b2f46","#314f74","#0b0e16","#4de3ff","#ff9d42"], blurb:"Imported from the original VS Matt Boxing Match chart with the real instrumental and vocals on the boxing ring, while keeping the Sporting noteskins.", chartSource:"boxingMatch"},
+    combat:{ title:"Combat", subtitle:"Wii Funkin hard chart", diff:"Hard (Original Chart)", tempo:150, root:45, scale:[0,2,3,5,7,8,10], prog:[0,5,3,7], scroll:1125, seed:41, introBeats:0, outroBeats:4, palette:["#0b1021","#202a58","#6573d0","#090b13","#dfe4ff","#8fb8ff"], blurb:"Imported from Wii Funkin with the original Combat hard chart, real instrumental, vocals, and faster scroll.", chartSource:"combat"},
     perseverance:{ title:"Perseverance", subtitle:"Friday Night Dustin hard chart", diff:"Hard (Original Chart)", tempo:120, root:41, scale:[0,2,3,5,7,8,10], prog:[0,5,3,6], scroll:810, seed:33, introBeats:0, outroBeats:4, palette:["#06080d","#182332","#34455b","#0b0d12","#cfe7ff","#7fb7ff"], blurb:"Imported from Friday Night Dustin with the original hard chart, ruins exit stage art, Sans sprites, pixel section, and gaster blaster dodge mechanic.", chartSource:"perseverance"},
     brokenReality:{ title:"Broken Reality", subtitle:"Friday Night Dustin hard chart", diff:"Hard (Original Chart)", tempo:120, root:40, scale:[0,2,3,5,7,8,10], prog:[0,5,3,6], scroll:780, seed:37, introBeats:0, outroBeats:4, palette:["#04050a","#16162a","#2f3251","#08090f","#f2d6ff","#ff5a5a"], blurb:"Imported from Friday Night Dustin with the original hard chart, cutscene videos, hall stage, drain, attack prompt, scroll flips, and red-phase Papyrus swap.", chartSource:"brokenReality"},
 };
@@ -1093,7 +1096,7 @@ const state = {
     poses: { player:{lane:2,time:-10}, dad:{lane:1,time:-10}, matt:{lane:1,time:-10}, sans:{lane:1,time:-10}, skid:{lane:0,time:-10}, pump:{lane:3,time:-10}, pico:{lane:1,time:-10}, monster:{lane:2,time:-10} },
     receptorFx: Array.from({length:8}, () => ({ time:-10, lane:0 })),
     perseverance: { canDodge:false, prompt:false, dodging:false, dodged:false, resolved:false, dodgeStart:-10, flashTime:-10, gfAlpha:0 },
-    audio: { ctx:null, noise:null, inst:null, voices:null, boxingInst:null, boxingVoices:null, inst2:null, voices2a:null, voices2b:null },
+    audio: { ctx:null, noise:null, inst:null, voices:null, boxingInst:null, boxingVoices:null, combatInst:null, combatVoices:null, inst2:null, voices2a:null, voices2b:null },
     shake: { time: -10, intensity: 0 }, _flashWhiteSilhouette: false,
     camera: { zoom: 1, focusX: 640, focusY: 324, sideTime: 0, lastSide: "both", highwayX: 0, highwayY: 0 },
     hitGlow: []
@@ -1166,9 +1169,10 @@ function phrase(notes, rng, startBeat, beats, side, motif, intensity, chars){
         if(stepSize <= .5 && intensity > .76 && rng() < .15){ const grace = beat + stepSize / 2; if(grace < startBeat + beats) note(notes, grace, side, (lane + 1) % 4, char); }
     }
 }
-function isImportedSong(song){ return !!song && (song.chartSource === "sporting" || song.chartSource === "boxingMatch" || song.chartSource === "perseverance" || song.chartSource === "brokenReality"); }
+function isImportedSong(song){ return !!song && (song.chartSource === "sporting" || song.chartSource === "boxingMatch" || song.chartSource === "combat" || song.chartSource === "perseverance" || song.chartSource === "brokenReality"); }
 function makeChart(song){ if(song.chartSource === "sporting" && window.SPORTING_CHART){ return { ...window.SPORTING_CHART, notes: window.SPORTING_CHART.notes.map(n => ({...n})), timeline: window.SPORTING_CHART.timeline.map(s => ({...s})) }; }
     if(song.chartSource === "boxingMatch" && window.BOXING_MATCH_CHART){ return { ...window.BOXING_MATCH_CHART, notes: window.BOXING_MATCH_CHART.notes.map(n => ({...n})), timeline: window.BOXING_MATCH_CHART.timeline.map(s => ({...s})) }; }
+    if(song.chartSource === "combat" && window.COMBAT_CHART){ return { ...window.COMBAT_CHART, notes: window.COMBAT_CHART.notes.map(n => ({...n})), timeline: window.COMBAT_CHART.timeline.map(s => ({...s})) }; }
     if(song.chartSource === "perseverance" && window.PERSEVERANCE_DATA){ return { ...window.PERSEVERANCE_DATA.chart, notes: window.PERSEVERANCE_DATA.chart.notes.map(n => ({...n})), timeline: window.PERSEVERANCE_DATA.chart.timeline.map(s => ({...s})) }; }
     if(song.chartSource === "brokenReality" && window.BROKEN_REALITY_DATA){ return { ...window.BROKEN_REALITY_DATA.chart, notes: window.BROKEN_REALITY_DATA.chart.notes.map(n => ({...n})), timeline: (window.BROKEN_REALITY_DATA.chart.timeline || []).map(s => ({...s})) }; }
     const rng = mulberry32(song.seed); const notes = []; const timeline = []; let beat = song.introBeats ?? 4;
@@ -1211,13 +1215,19 @@ function ensureBoxingMatchAudio(){
     if(!state.audio.boxingInst){ state.audio.boxingInst = new Audio("boxing-match-inst.ogg"); state.audio.boxingInst.preload = "auto"; state.audio.boxingInst.volume = 0.9; }
     if(!state.audio.boxingVoices){ state.audio.boxingVoices = new Audio("boxing-match-voices.ogg"); state.audio.boxingVoices.preload = "auto"; state.audio.boxingVoices.volume = 0.82; }
 }
+function ensureCombatAudio(){
+    if(!state.audio.combatInst){ state.audio.combatInst = new Audio("combat-inst.ogg"); state.audio.combatInst.preload = "auto"; state.audio.combatInst.volume = 0.9; }
+    if(!state.audio.combatVoices){ state.audio.combatVoices = new Audio("combat-voices.ogg"); state.audio.combatVoices.preload = "auto"; state.audio.combatVoices.volume = 0.82; }
+    state.audio.combatInst.playbackRate = 1;
+    state.audio.combatVoices.playbackRate = 1;
+}
 function ensurePerseveranceAudio(){
     if(!state.audio.inst2){ state.audio.inst2 = new Audio("perseverance-inst.ogg"); state.audio.inst2.preload = "auto"; state.audio.inst2.volume = 0.92; }
     if(!state.audio.voices2a){ state.audio.voices2a = new Audio("perseverance-voices-bf.ogg"); state.audio.voices2a.preload = "auto"; state.audio.voices2a.volume = 0.82; }
     if(!state.audio.voices2b){ state.audio.voices2b = new Audio("perseverance-voices-opp.ogg"); state.audio.voices2b.preload = "auto"; state.audio.voices2b.volume = 0.84; }
 }
 function stopExternalAudio(){
-    [state.audio.inst, state.audio.voices, state.audio.boxingInst, state.audio.boxingVoices, state.audio.inst2, state.audio.voices2a, state.audio.voices2b].forEach(track => {
+    [state.audio.inst, state.audio.voices, state.audio.boxingInst, state.audio.boxingVoices, state.audio.combatInst, state.audio.combatVoices, state.audio.inst2, state.audio.voices2a, state.audio.voices2b].forEach(track => {
         if(!track) return;
         track.pause();
         track.currentTime = 0;
@@ -1260,7 +1270,7 @@ function scheduleMusic(){
         state.nextStep++; state.nextStepTime += state.chart.spb / 4;
     }
 }
-function songTime(){ if(!state.playing) return 0; if(state.currentSong.chartSource === "sporting" && state.audio.inst) return state.audio.inst.currentTime; if(state.currentSong.chartSource === "boxingMatch" && state.audio.boxingInst) return state.audio.boxingInst.currentTime; if(state.currentSong.chartSource === "perseverance" && state.audio.inst2) return state.audio.inst2.currentTime; return !state.audio.ctx ? 0 : state.audio.ctx.currentTime - state.songStart; }
+function songTime(){ if(!state.playing) return 0; if(state.currentSong.chartSource === "sporting" && state.audio.inst) return state.audio.inst.currentTime; if(state.currentSong.chartSource === "boxingMatch" && state.audio.boxingInst) return state.audio.boxingInst.currentTime; if(state.currentSong.chartSource === "combat" && state.audio.combatInst) return state.audio.combatInst.currentTime; if(state.currentSong.chartSource === "perseverance" && state.audio.inst2) return state.audio.inst2.currentTime; return !state.audio.ctx ? 0 : state.audio.ctx.currentTime - state.songStart; }
 function songEndTime(){ return Number(state.chart?.totalTime || 0); }
 function feed(side, text, color){ state.feeds[side] = { text, color, time: performance.now() / 1000 }; }
 function pose(char, lane, kind="hit"){
@@ -1626,7 +1636,7 @@ function receptors(t){
     ctx.strokeStyle = "rgba(255,255,255,0.1)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(canvas.width * .5, 72); ctx.lineTo(canvas.width * .5, 452); ctx.stroke();
     for(let lane=0; lane<8; lane++){
         const x = laneX(lane);
-        if((state.selectedSong === "sporting" || state.selectedSong === "boxingMatch") && sportingSpritesReady()){
+        if((state.selectedSong === "sporting" || state.selectedSong === "boxingMatch" || state.selectedSong === "combat") && sportingSpritesReady()){
             drawSportingReceptor(lane, x, y);
         } else if(state.selectedSong === "perseverance" && perseveranceSpritesReady()){
             drawPerseveranceReceptor(lane, x, y);
@@ -1653,7 +1663,7 @@ function notes(t){
             drawPerseveranceSustain(n, laneX(lane), n.hit ? receptorY() : y, tailY, alpha * (n.hit ? 0.94 : 1));
         }
         if(n.hit && isHoldNote(n) && t > n.time) continue;
-        if((state.selectedSong === "sporting" || state.selectedSong === "boxingMatch") && sportingSpritesReady()){
+        if((state.selectedSong === "sporting" || state.selectedSong === "boxingMatch" || state.selectedSong === "combat") && sportingSpritesReady()){
             drawSportingNote(lane, laneX(lane), y, 0.76 * scale, alpha);
         } else if(state.selectedSong === "perseverance" && perseveranceSpritesReady()){
             drawPerseveranceNote(lane, laneX(lane), y, scale, alpha);
@@ -1752,7 +1762,7 @@ function frame(now){
         ctx.save();
         ctx.translate(Math.random() * s * 2 - s, Math.random() * s * 2 - s);
     }
-    if(state.playing && (state.audio.ctx || state.audio.inst || state.audio.boxingInst || state.audio.inst2)){ const t = songTime(); if(t >= 0){ if(!isImportedSong(state.currentSong)) scheduleMusic(); if(state.selectedSong === "perseverance") updatePerseveranceState(Math.max(0, t)); handleMisses(t); updateHoldNotes(t); updateCamera(Math.max(0, t), dt); } refreshHUD(Math.max(0, t)); renderScene(Math.max(0, t), preview); drawHitGlows(); applyDustinBloom(Math.max(0, t)); if(state.health <= 0) finish(true); else if(t >= songEndTime() + .4) finish(false); }
+    if(state.playing && (state.audio.ctx || state.audio.inst || state.audio.boxingInst || state.audio.combatInst || state.audio.inst2)){ const t = songTime(); if(t >= 0){ if(!isImportedSong(state.currentSong)) scheduleMusic(); if(state.selectedSong === "perseverance") updatePerseveranceState(Math.max(0, t)); handleMisses(t); updateHoldNotes(t); updateCamera(Math.max(0, t), dt); } refreshHUD(Math.max(0, t)); renderScene(Math.max(0, t), preview); drawHitGlows(); applyDustinBloom(Math.max(0, t)); if(state.health <= 0) finish(true); else if(t >= songEndTime() + .4) finish(false); }
     else renderScene(0, preview);
     if(shakeAge < 0.15 && shakeAge >= 0) ctx.restore();
     requestAnimationFrame(window.frame || frame);
@@ -1782,6 +1792,16 @@ function startSong(id=state.selectedSong){
         state.playing = true;
         state.audio.boxingInst.play();
         state.audio.boxingVoices.play();
+    } else if(state.currentSong.chartSource === "combat") {
+        ensureCombatAudio();
+        state.audio.combatInst.currentTime = 0;
+        state.audio.combatVoices.currentTime = 0;
+        state.songStart = 0;
+        state.nextStep = 0;
+        state.nextStepTime = 0;
+        state.playing = true;
+        state.audio.combatInst.play();
+        state.audio.combatVoices.play();
     } else if(state.currentSong.chartSource === "perseverance"){
         ensurePerseveranceAudio();
         state.audio.inst2.currentTime = 0;
@@ -1800,7 +1820,7 @@ function startSong(id=state.selectedSong){
         state.nextStepTime = state.songStart;
         state.playing = true;
     }
-    state.feeds.player.time = -10; state.feeds.opp.time = -10; Object.values(state.poses).forEach(p => { p.time = -10; p.kind = "hit"; }); state.receptorFx.forEach(fx => fx.time = -10); state.perseverance = { canDodge:false, prompt:false, dodging:false, dodged:false, resolved:false, dodgeStart:-10, flashTime:-10, gfAlpha:0 }; state.camera = { zoom: 1, focusX: canvas.width / 2, focusY: canvas.height * 0.45, sideTime: 0, lastSide: "both", highwayX: 0, highwayY: 0 }; ui.p1Box.style.display = state.mode === "versus" ? "block" : "none"; ui.songTitle.textContent = state.currentSong.title; ui.songSub.textContent = state.currentSong.subtitle; ui.statusText.textContent = "Get ready"; ui.statusSub.textContent = state.currentSong.chartSource === "sporting" ? "Sporting is using the original hard chart, real vocals, and 1.5x scroll on the boxing ring." : state.currentSong.chartSource === "boxingMatch" ? "Boxing Match is using the imported VS Matt chart with the real instrumental and vocals on the boxing ring." : state.currentSong.chartSource === "perseverance" ? "Perseverance is using the original hard chart, split vocals, pixel section, and dodge mechanic." : "Song starts on the next phrase. Hit right-side notes in solo, or both lanes in versus."; ui.timer.textContent = `0:00 / ${formatTime(state.chart.totalTime)}`; ui.menu.classList.remove("show"); ui.settings.classList.remove("show"); ui.resultsWrap.classList.remove("show");
+    state.feeds.player.time = -10; state.feeds.opp.time = -10; Object.values(state.poses).forEach(p => { p.time = -10; p.kind = "hit"; }); state.receptorFx.forEach(fx => fx.time = -10); state.perseverance = { canDodge:false, prompt:false, dodging:false, dodged:false, resolved:false, dodgeStart:-10, flashTime:-10, gfAlpha:0 }; state.camera = { zoom: 1, focusX: canvas.width / 2, focusY: canvas.height * 0.45, sideTime: 0, lastSide: "both", highwayX: 0, highwayY: 0 }; ui.p1Box.style.display = state.mode === "versus" ? "block" : "none"; ui.songTitle.textContent = state.currentSong.title; ui.songSub.textContent = state.currentSong.subtitle; ui.statusText.textContent = "Get ready"; ui.statusSub.textContent = state.currentSong.chartSource === "sporting" ? "Sporting is using the original hard chart, real vocals, and 1.5x scroll on the boxing ring." : state.currentSong.chartSource === "boxingMatch" ? "Boxing Match is using the imported VS Matt chart with the real instrumental and vocals on the boxing ring." : state.currentSong.chartSource === "combat" ? "Combat is using the original Wii Funkin hard chart with the real instrumental and vocals." : state.currentSong.chartSource === "perseverance" ? "Perseverance is using the original hard chart, split vocals, pixel section, and dodge mechanic." : "Song starts on the next phrase. Hit right-side notes in solo, or both lanes in versus."; ui.timer.textContent = `0:00 / ${formatTime(state.chart.totalTime)}`; ui.menu.classList.remove("show"); ui.settings.classList.remove("show"); ui.resultsWrap.classList.remove("show");
 }
 function keydown(e){
     const key = e.key.toLowerCase();
@@ -1822,6 +1842,7 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 </script>
 <script src="online-mode.js"></script>
 <script src="boxing-fight-mode.js?v=20260322-stage6"></script>
+<script src="combat-mode.js?v=20260429j"></script>
 <script src="broken-reality-mode.js"></script>
 <script src="broken-reality-soul-data.js"></script>
 <script src="broken-reality-fix.js?v=20260331a"></script>
