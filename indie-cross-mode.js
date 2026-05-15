@@ -5,7 +5,7 @@
     if ((!SANSATIONAL && !LAST_REEL) || typeof SONGS === "undefined") return;
 
     const nowSec = () => performance.now() / 1000;
-    const INDIE_CROSS_ASSET_VER = "20260325a";
+    const INDIE_CROSS_ASSET_VER = "20260429d";
     const versionedAsset = (path) => path ? `${path}${String(path).includes("?") ? "&" : "?"}v=${INDIE_CROSS_ASSET_VER}` : path;
     const DIR_TO_ANIM = {
       left: "singLEFT",
@@ -34,7 +34,7 @@
         scroll: 1160,
         palette: ["#040711", "#0e1631", "#130a1f", "#090d17", "#75b9ff", "#f5f7ff"],
         blurb: "Imported from Indie Cross with the original Sansational hard chart, the hall stage, real Sans/BF placements, and the dodge and attack mechanics.",
-        roleScale: { opponent: 0.74, boyfriend: 0.5 },
+        roleScale: { opponent: 0.74, boyfriend: 1.04 },
         roleGround: {
           opponent: { x: 302, y: 678 },
           boyfriend: { x: 884, y: 646 }
@@ -237,7 +237,11 @@
     }
 
     function indieSkinReady(config) {
-      return false;
+      if (!config) return false;
+      const image = assetsFor(config.id).noteSkin;
+      const skin = indieState.noteSkin;
+      if (!imageReady(image) || !skin) return false;
+      return ["left", "down", "up", "right"].every(dir => skin[dir]?.static && skin[dir]?.tap);
     }
 
     function buildAltSprite(xmlText, baseSprite, mapping) {
@@ -287,10 +291,10 @@
         ? {
             stageMain: versionedAsset("assets/indie-cross/hall.png"),
             stageShade: versionedAsset("assets/indie-cross/halldark.png"),
-            sans: versionedAsset("assets/indie-cross/SansWF.png"),
-            sansAlt: versionedAsset("assets/indie-cross/Sans.png"),
+            sans: versionedAsset(data.sprites.sans.image),
+            sansAlt: versionedAsset((data.sprites.sansAlt || data.sprites.sans).image),
             boyfriend: versionedAsset(data.sprites.boyfriend.image),
-            boyfriendAlt: versionedAsset("assets/indie-cross/UT BF.png"),
+            boyfriendAlt: versionedAsset(data.sprites.boyfriend.image),
             dodgeMechs: versionedAsset("assets/indie-cross/DodgeMechs.png"),
             warning: versionedAsset("assets/indie-cross/Warning.png"),
             alert: versionedAsset(data.sprites.alert)
@@ -304,51 +308,22 @@
             roomCandles: versionedAsset("assets/indie-cross/last-reel-candles.png"),
             rain: versionedAsset(data.stage.rain.image),
             inkOverlay: versionedAsset(data.stage.inkOverlay),
-            bendy: versionedAsset("assets/indie-cross/BendyDAgames.png"),
+            bendy: versionedAsset("assets/indie-cross/Bendy_remastered.png"),
             boyfriend: versionedAsset("assets/indie-cross/BoyFriend_NM_Bendy.png"),
             piper: versionedAsset(data.sprites.piper.image),
             striker: versionedAsset(data.sprites.striker.image),
             warning: versionedAsset(data.sprites.warning.image),
             alert: versionedAsset(data.sprites.alert)
           };
+      sources.noteSkin = versionedAsset("assets/NOTE_assets.png");
       Object.entries(sources).forEach(([key, src]) => {
         if (!src) return;
         const image = new Image();
         image.src = src;
         images[key] = image;
       });
-      if (id === "sansational") {
-        requestAltSprite("sansationalSans", "assets/indie-cross/Sans.xml", xmlText => {
-          return buildAltSprite(xmlText, data.sprites.sans, {
-            idle: "Sans FNF",
-            singLEFT: "Left",
-            singDOWN: "Down",
-            singUP: "Up",
-            singRIGHT: "Right"
-          });
-        });
-        requestAltSprite("sansationalBF", "assets/indie-cross/UT BF.xml", xmlText => {
-          return buildAltSprite(xmlText, data.sprites.boyfriend, {
-            idle: "0Idle",
-            singLEFT: "0EEEE",
-            singDOWN: "0Ouu",
-            singUP: "0UPPP",
-            singRIGHT: "0EERR",
-            hurt: "Ouch",
-            dodge: "Pee",
-            attack: "Pee"
-          });
-        });
-      } else {
-        requestAltSprite("lastReelBendy", "assets/indie-cross/BendyDAgames.xml", xmlText => {
-          return buildAltSprite(xmlText, data.sprites.bendy, {
-            idle: "Idle Normal",
-            singLEFT: "Left",
-            singDOWN: "Down Normal",
-            singUP: "Up Normal",
-            singRIGHT: "Right Normal"
-          });
-        });
+      requestNoteSkin();
+      if (id !== "sansational") {
         requestAltSprite("lastReelCandles", "assets/indie-cross/last-reel-candles.xml", xmlText => {
           const frames = parseAtlasFrames(xmlText);
           return {
@@ -557,24 +532,32 @@
       return point;
     }
 
-    function roleSprite(config, role) {
+    function timelineSectionAt(t) {
+      return state.chart?.timeline?.find(item => t >= Number(item.startTime || 0) && t < Number(item.endTime || 0));
+    }
+
+    function useSansAltAnim(t) {
+      return !!timelineSectionAt(t)?.altAnim;
+    }
+
+    function roleSprite(config, role, t = songTime()) {
       const sprites = dataFor(config)?.sprites;
       if (!sprites) return null;
       if (config.id === "sansational") {
-        if (role === "opponent") return indieState.altSprites.sansationalSans || sprites.sans;
-        if (role === "boyfriend") return indieState.altSprites.sansationalBF || sprites.boyfriend;
+        if (role === "opponent") return useSansAltAnim(t) ? (sprites.sansAlt || sprites.sans) : sprites.sans;
+        if (role === "boyfriend") return sprites.boyfriend;
       }
-      if (role === "opponent") return indieState.altSprites.lastReelBendy || sprites.bendy;
+      if (role === "opponent") return sprites.bendy;
       if (role === "boyfriend") return sprites.boyfriend;
       if (role === "left") return sprites.piper;
       if (role === "right") return sprites.striker;
       return null;
     }
 
-    function roleImage(config, role) {
+    function roleImage(config, role, t = songTime()) {
       const images = assetsFor(config.id);
       if (config.id === "sansational") {
-        if (role === "opponent") return imageReady(images.sansAlt) ? images.sansAlt : images.sans;
+        if (role === "opponent") return useSansAltAnim(t) && imageReady(images.sansAlt) ? images.sansAlt : images.sans;
         if (role === "boyfriend") return imageReady(images.boyfriendAlt) ? images.boyfriendAlt : images.boyfriend;
       }
       if (role === "opponent") return images.bendy;
@@ -602,7 +585,7 @@
     }
 
     function roleAnimation(config, role, t) {
-      const sprite = roleSprite(config, role);
+      const sprite = roleSprite(config, role, t);
       if (!sprite) return null;
       const action = currentModeState()?.actions?.[role];
       if (action?.name && sprite.animations[action.name]) {
@@ -630,8 +613,8 @@
     }
 
     function drawRole(config, role, t, overrideAnim = null, alpha = 1) {
-      const sprite = roleSprite(config, role);
-      const image = roleImage(config, role);
+      const sprite = roleSprite(config, role, t);
+      const image = roleImage(config, role, t);
       if (!sprite || !imageReady(image)) return;
       const animState = overrideAnim || roleAnimation(config, role, t);
       const anim = sprite.animations?.[animState?.name] || sprite.animations?.idle || Object.values(sprite.animations || {})[0];
@@ -671,7 +654,8 @@
     function useSportingNotes(config) {
       return !!(
         config
-        && (config.id === "sansational" || config.id === "lastReel")
+        && config.id !== "sansational"
+        && config.id !== "lastReel"
         && typeof drawSportingReceptor === "function"
         && typeof drawSportingNote === "function"
         && imageReady(spriteState?.images?.notes)
@@ -1577,7 +1561,7 @@
       if (!config) return baseRefreshHUD(t);
       baseRefreshHUD(t);
       const mode = currentModeState();
-      const section = state.chart?.timeline?.find(item => t >= Number(item.startTime || 0) && t < Number(item.endTime || 0));
+      const section = timelineSectionAt(t);
       if (mode?.prompt) {
         ui.statusText.textContent = mode.prompt;
         ui.statusSub.textContent = mode.promptSub || "";

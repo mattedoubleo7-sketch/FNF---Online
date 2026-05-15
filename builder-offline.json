@@ -18,6 +18,10 @@
     "sprite-data.js",
     "sporting-chart.js",
     "boxing-match-chart.js",
+    "boxing-match-wg-chart.js",
+    "boxing-match-wg-visual-data.js",
+    "boxing-match-wg-shader-events.js",
+    "boxing-match-wg-mode.js",
     "combat-chart.js",
     "combat-visual-data.js",
     "combat-mode.js",
@@ -57,10 +61,10 @@
     "artifactName": "FNF-Browser-Jam-offline-1.0.0-portable.${ext}",
     "signAndEditExecutable": false,
     "verifyUpdateCodeSignature": false,
-    "icon": "assets/bf-logo-256.png"
+    "icon": "assets/icon.ico"
   },
   "npmRebuild": false,
-  "icon": "assets/bf-logo-256.png",
+  "icon": "assets/icon.ico",
   "publish": [
     {
       "provider": "generic",

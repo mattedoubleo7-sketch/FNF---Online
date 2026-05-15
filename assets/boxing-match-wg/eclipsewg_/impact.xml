@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Created with Funkin Packer v0.1.3 https://neeeoo.github.io/funkin-packer/
+-->
+<TextureAtlas imagePath="texture.png" width="2307" height="2230">
+	<SubTexture name="BF Drop Effect instance 10000" x="4" y="1186" width="517" height="646" frameX="-160" frameY="-21" frameWidth="800" frameHeight="788"/>
+	<SubTexture name="BF Drop Effect instance 10001" x="4" y="1836" width="630" height="390" frameX="-89" frameY="-294" frameWidth="800" frameHeight="788"/>
+	<SubTexture name="BF Drop Effect instance 10002" x="1299" y="1245" width="728" height="479" frameX="-31" frameY="-245" frameWidth="800" frameHeight="788"/>
+	<SubTexture name="BF Drop Effect instance 10003" x="800" y="4" width="771" height="567" frameX="-6" frameY="-201" frameWidth="800" frameHeight="788"/>
+	<SubTexture name="BF Drop Effect instance 10004" x="4" y="4" width="792" height="587" frameX="-1" frameY="-194" frameWidth="800" frameHeight="788"/>
+	<SubTexture name="BF Drop Effect instance 10005" x="1575" y="487" width="710" height="471" frameX="-56" frameY="-197" frameWidth="800" frameHeight="788"/>
+	<SubTexture name="BF Drop Effect instance 10006" x="525" y="1186" width="242" height="42" frameX="-297" frameY="-195" frameWidth="800" frameHeight="788"/>
+	<SubTexture name="BF Drop Effect instance 10007" x="771" y="1186" width="1" height="1" frameX="-0" frameY="-0" frameWidth="800" frameHeight="788"/>
+	<SubTexture name="BF Drop Effect instance 10008" x="771" y="1186" width="1" height="1" frameX="-0" frameY="-0" frameWidth="800" frameHeight="788"/>
+	<SubTexture name="BF Drop Effect instance 10009" x="771" y="1186" width="1" height="1" frameX="-0" frameY="-0" frameWidth="800" frameHeight="788"/>
+	<SubTexture name="BF Drop Effect instance 10010" x="771" y="1186" width="1" height="1" frameX="-0" frameY="-0" frameWidth="800" frameHeight="788"/>
+	<SubTexture name="BF Drop Effect instance 10011" x="771" y="1186" width="1" height="1" frameX="-0" frameY="-0" frameWidth="800" frameHeight="788"/>
+	<SubTexture name="BF Drop Effect instance 10012" x="771" y="1186" width="1" height="1" frameX="-0" frameY="-0" frameWidth="800" frameHeight="788"/>
+	<SubTexture name="BF Drop Effect instance 10013" x="771" y="1186" width="1" height="1" frameX="-0" frameY="-0" frameWidth="800" frameHeight="788"/>
+	<SubTexture name="BF Drop Effect instance 10014" x="771" y="1186" width="1" height="1" frameX="-0" frameY="-0" frameWidth="800" frameHeight="788"/>
+	<SubTexture name="Matt Drop Effect  instance 10000" x="799" y="595" width="518" height="646" frameX="-118" frameY="-21" frameWidth="801" frameHeight="788"/>
+	<SubTexture name="Matt Drop Effect  instance 10001" x="638" y="1816" width="630" height="390" frameX="-76" frameY="-294" frameWidth="801" frameHeight="788"/>
+	<SubTexture name="Matt Drop Effect  instance 10002" x="1575" y="4" width="728" height="479" frameX="-37" frameY="-245" frameWidth="801" frameHeight="788"/>
+	<SubTexture name="Matt Drop Effect  instance 10003" x="525" y="1245" width="770" height="567" frameX="-19" frameY="-201" frameWidth="801" frameHeight="788"/>
+	<SubTexture name="Matt Drop Effect  instance 10004" x="4" y="595" width="791" height="587" frameX="-3" frameY="-194" frameWidth="801" frameHeight="788"/>
+	<SubTexture name="Matt Drop Effect  instance 10005" x="1299" y="1728" width="710" height="471" frameX="-29" frameY="-197" frameWidth="801" frameHeight="788"/>
+	<SubTexture name="Matt Drop Effect  instance 10006" x="1321" y="575" width="242" height="42" frameX="-257" frameY="-195" frameWidth="801" frameHeight="788"/>
+	<SubTexture name="Matt Drop Effect  instance 10007" x="771" y="1186" width="1" height="1" frameX="-0" frameY="-0" frameWidth="801" frameHeight="788"/>
+	<SubTexture name="Matt Drop Effect  instance 10008" x="771" y="1186" width="1" height="1" frameX="-0" frameY="-0" frameWidth="801" frameHeight="788"/>
+	<SubTexture name="Matt Drop Effect  instance 10009" x="771" y="1186" width="1" height="1" frameX="-0" frameY="-0" frameWidth="801" frameHeight="788"/>
+	<SubTexture name="Matt Drop Effect  instance 10010" x="771" y="1186" width="1" height="1" frameX="-0" frameY="-0" frameWidth="801" frameHeight="788"/>
+	<SubTexture name="Matt Drop Effect  instance 10011" x="771" y="1186" width="1" height="1" frameX="-0" frameY="-0" frameWidth="801" frameHeight="788"/>
+	<SubTexture name="Matt Drop Effect  instance 10012" x="771" y="1186" width="1" height="1" frameX="-0" frameY="-0" frameWidth="801" frameHeight="788"/>
+	<SubTexture name="Matt Drop Effect  instance 10013" x="771" y="1186" width="1" height="1" frameX="-0" frameY="-0" frameWidth="801" frameHeight="788"/>
+	<SubTexture name="Matt Drop Effect  instance 10014" x="771" y="1186" width="1" height="1" frameX="-0" frameY="-0" frameWidth="801" frameHeight="788"/>
+</TextureAtlas>

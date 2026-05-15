@@ -18,6 +18,7 @@
       const chartSource = String(song?.chartSource || "");
       if (chartSource === "sporting") return [state.audio.inst, state.audio.voices];
       if (chartSource === "boxingMatch") return [state.audio.boxingInst, state.audio.boxingVoices];
+      if (chartSource === "boxingMatchWg") return [state.audio.boxingWgInst, state.audio.boxingWgVoices];
       if (chartSource === "combat") return [state.audio.combatInst, state.audio.combatVoices];
       if (chartSource === "perseverance") return [state.audio.inst2, state.audio.voices2a, state.audio.voices2b];
       if (chartSource === "brokenReality") return [state.audio.inst3, state.audio.voices3a, state.audio.voices3b];
@@ -33,6 +34,7 @@
       const chartSource = String(song?.chartSource || "");
       if (chartSource === "sporting" && typeof ensureSportingAudio === "function") ensureSportingAudio();
       else if (chartSource === "boxingMatch" && typeof ensureBoxingMatchAudio === "function") ensureBoxingMatchAudio();
+      else if (chartSource === "boxingMatchWg" && typeof window.ensureBoxingMatchWgAudio === "function") window.ensureBoxingMatchWgAudio();
       else if (chartSource === "combat" && typeof ensureCombatAudio === "function") ensureCombatAudio();
       else if (chartSource === "perseverance" && typeof ensurePerseveranceAudio === "function") ensurePerseveranceAudio();
       else if (chartSource === "brokenReality" && typeof window.ensureBrokenRealityAudio === "function") window.ensureBrokenRealityAudio();

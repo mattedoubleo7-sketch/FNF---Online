@@ -10,6 +10,19 @@
     fxCtx: null
   };
 
+  const WII_COMBAT_DEPTH = {
+    fov: Math.PI / 2,
+    focalLength: 250,
+    eyeZ: -150,
+    maxZ: 900,
+    layers: {
+      far: { z: 900, scrollX: 0.03, travel: 16, sway: 4, floatY: -3, floatRate: 0.26, phase: 0.2, angle: 0.004 },
+      mid: { z: 430, scrollX: 0.2, travel: 42, sway: 8, floatY: 5, floatRate: 0.34, phase: 1.15, angle: 0.009 },
+      near: { z: 150, scrollX: 0.6, travel: 70, sway: 12, floatY: 9, floatRate: 0.42, phase: 2.3, angle: 0.015 },
+      platform: { z: 35, scrollX: 1, travel: 86, sway: 15, floatY: 0, floatRate: 0.42, phase: 0, angle: 0.018 }
+    }
+  };
+
   function isCombat(){
     return typeof state !== "undefined" && state.selectedSong === "combat";
   }
@@ -27,17 +40,25 @@
     Object.entries(data.stage).forEach(([key, src]) => loadImage(key, src));
     loadImage("matt", data.sprites.matt.image);
     if(data.sprites.bfSword) loadImage("bfSword", data.sprites.bfSword.image);
-    for(let i = 0; i < 72; i++){
-      const layer = i % 3 === 0 ? "near" : i % 3 === 1 ? "mid" : "far";
-      combatState.dust.push({
-        layer,
-        x: (i * 211) % 1460 - 90,
-        y: 40 + ((i * 97) % 640),
-        speed: layer === "near" ? 34 : layer === "mid" ? 20 : 11,
-        scale: layer === "near" ? 0.72 + (i % 5) * 0.08 : layer === "mid" ? 0.6 : 0.48,
-        alpha: layer === "near" ? 0.32 : layer === "mid" ? 0.2 : 0.12
-      });
-    }
+    const dustSpecs = {
+      far: { count: 51, speed: 24, scale: 0.48, alpha: 0.13, sway: 5, startBelow: 160 },
+      mid: { count: 16, speed: 48, scale: 0.72, alpha: 0.22, sway: 10, startBelow: 170 },
+      near: { count: 11, speed: 92, scale: 1.18, alpha: 0.34, sway: 18, startBelow: 260 }
+    };
+    Object.entries(dustSpecs).forEach(([layer, spec]) => {
+      for(let i = 0; i < spec.count; i++){
+        combatState.dust.push({
+          layer,
+          x: (i * 233 + (layer === "near" ? 97 : layer === "mid" ? 41 : 0)) % 1760 - 240,
+          phase: (i * 137) % 980,
+          speed: spec.speed,
+          scale: spec.scale * (0.86 + (i % 5) * 0.07),
+          alpha: spec.alpha,
+          sway: spec.sway,
+          startBelow: spec.startBelow
+        });
+      }
+    });
   }
 
   function imgReady(image){
@@ -65,9 +86,116 @@
     ctx.restore();
   }
 
+  function drawImageRotated(key, x, y, scale = 1, angle = 0, alpha = 1, flipX = false){
+    const image = combatState.images[key];
+    if(!imgReady(image)) return;
+    const width = image.naturalWidth * scale;
+    const height = image.naturalHeight * scale;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.translate(x + width * 0.5, y + height * 0.5);
+    ctx.rotate(angle);
+    if(flipX) ctx.scale(-1, 1);
+    ctx.drawImage(image, -width * 0.5, -height * 0.5, width, height);
+    ctx.restore();
+  }
+
+  function wiiProjectionScale(z){
+    const distance = Math.max(1, z - WII_COMBAT_DEPTH.eyeZ);
+    return WII_COMBAT_DEPTH.focalLength / (WII_COMBAT_DEPTH.focalLength + distance);
+  }
+
+  function wiiLayerDepth(name, pan, sway, t){
+    const spec = WII_COMBAT_DEPTH.layers[name];
+    const projection = wiiProjectionScale(spec.z);
+    const zNorm = Math.max(0, Math.min(1, spec.z / WII_COMBAT_DEPTH.maxZ));
+    const perspectiveLift = 1 - projection;
+    return {
+      x: -pan * spec.travel + sway * spec.sway,
+      y: Math.sin(t * spec.floatRate + spec.phase) * spec.floatY * (1 + perspectiveLift * 0.35),
+      scale: 1 + (1 - zNorm) * 0.06 + perspectiveLift * 0.012,
+      angle: pan * spec.angle,
+      projection,
+      scrollX: spec.scrollX
+    };
+  }
+
+  function combatDepth(t){
+    const focus = (state.camera?.focusX || 640) - 640;
+    const pan = Math.max(-1, Math.min(1, focus / 360));
+    const sway = Math.sin(t * 0.55) * 0.35;
+    const far = wiiLayerDepth("far", pan, sway, t);
+    const mid = wiiLayerDepth("mid", pan, sway, t);
+    const near = wiiLayerDepth("near", pan, sway, t);
+    const platform = wiiLayerDepth("platform", pan, sway, t);
+    return {
+      far: far.x,
+      mid: mid.x,
+      near: near.x,
+      farY: far.y,
+      midY: mid.y,
+      nearY: near.y,
+      lean: pan * WII_COMBAT_DEPTH.layers.platform.angle,
+      scale: {
+        far: far.scale,
+        mid: mid.scale,
+        near: near.scale,
+        platform: platform.scale
+      },
+      angle: {
+        far: far.angle,
+        mid: mid.angle,
+        near: near.angle
+      },
+      projection: {
+        far: far.projection,
+        mid: mid.projection,
+        near: near.projection
+      }
+    };
+  }
+
+  function drawCombatDepthWash(depth){
+    ctx.save();
+    const floor = ctx.createLinearGradient(0, canvas.height * 0.48, 0, canvas.height);
+    floor.addColorStop(0, "rgba(255,255,255,0)");
+    floor.addColorStop(0.45, "rgba(35,22,82,0.11)");
+    floor.addColorStop(1, "rgba(0,0,0,0.28)");
+    ctx.fillStyle = floor;
+    ctx.beginPath();
+    ctx.moveTo(-40 + depth.near * 0.2, canvas.height * 0.58);
+    ctx.lineTo(canvas.width + 40 + depth.near * 0.2, canvas.height * 0.54);
+    ctx.lineTo(canvas.width + 60, canvas.height + 40);
+    ctx.lineTo(-60, canvas.height + 40);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.globalCompositeOperation = "screen";
+    const leftLight = ctx.createLinearGradient(0, 0, canvas.width, 0);
+    leftLight.addColorStop(0, "rgba(126,104,255,0.16)");
+    leftLight.addColorStop(0.44, "rgba(126,104,255,0)");
+    leftLight.addColorStop(1, "rgba(78,196,255,0.12)");
+    ctx.fillStyle = leftLight;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  }
+
   function worldX(x){ return x * 0.5 + 10; }
   function worldY(y){ return y * 0.5; }
   function worldScale(scale){ return scale * 0.5; }
+
+  function rotatePointAround(x, y, cx, cy, angle){
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const dx = x - cx;
+    const dy = y - cy;
+    return {
+      x: cx + dx * cos - dy * sin,
+      y: cy + dx * sin + dy * cos
+    };
+  }
 
   function currentFrame(spriteName, characterKey, t){
     const data = window.COMBAT_VISUAL_DATA?.sprites?.[spriteName];
@@ -97,7 +225,7 @@
     return Math.max(0, (fw - idleFrameWidth) * 0.5 * scale);
   }
 
-  function drawCharacter(spriteName, imageKey, characterKey, x, y, scale, flipX, t){
+  function drawCharacter(spriteName, imageKey, characterKey, x, y, scale, flipX, t, lean = 0){
     const frame = currentFrame(spriteName, characterKey, t);
     if(!frame || typeof drawAtlasFrame !== "function") return;
     const pose = state.poses?.[characterKey] || { time: -10, lane: 1 };
@@ -109,13 +237,15 @@
     const bob = Math.sin(t * Math.PI * 2 * 1.5) * 1.8;
     const plainSprite = spriteName === "matt";
     const anchorFeet = spriteName === "matt";
-    const drawX = anchorFeet ? x + mattHorizontalAnchorCorrection(frame, scale) : x + dx * hit;
-    const drawY = anchorFeet ? y + atlasFootCorrection(frame, scale) : y + bob + dy * hit;
+    const drawX = anchorFeet ? mattHorizontalAnchorCorrection(frame, scale) : dx * hit;
+    const drawY = anchorFeet ? atlasFootCorrection(frame, scale) : bob + dy * hit;
     ctx.save();
     if(!plainSprite){
       ctx.shadowColor = "rgba(118,180,255,0.46)";
       ctx.shadowBlur = 12;
     }
+    ctx.translate(x, y);
+    ctx.rotate(lean);
     drawAtlasFrame(combatState.images[imageKey], frame, drawX, drawY, scale, 1, flipX);
     if(!plainSprite){
       ctx.globalCompositeOperation = "screen";
@@ -211,7 +341,7 @@
     return pose.kind === "miss" ? `miss ${dir}` : dir;
   }
 
-  function drawBfSwordCharacter(x, y, scale, flipX, t){
+  function drawBfSwordCharacter(x, y, scale, flipX, t, lean = 0){
     const rt = combatAnimateRuntime();
     if(!rt || !imgReady(combatState.images.bfSword)) return;
     const label = combatBfAnimLabel();
@@ -229,22 +359,52 @@
     ctx.shadowColor = "rgba(118,180,255,0.46)";
     ctx.shadowBlur = 12;
     ctx.translate(x, y);
+    ctx.rotate(lean);
     ctx.scale(flipX ? -scale : scale, scale);
     ctx.translate(-anchor.centerX, -anchor.bottomY);
     drawAnimateTimeline(rt, rt.data.animation.AN.TL, range.start + frameOffset);
     ctx.restore();
   }
 
-  function drawCombatDust(t){
+  function combatDustDepthStyle(layer, depth){
+    const spec = layer === "near"
+      ? { strength: 1.25, y: 18, scale: 1.08, angle: 1.15, alpha: 1.05 }
+      : layer === "mid"
+        ? { strength: 0.82, y: 4, scale: 1, angle: 0.62, alpha: 1 }
+        : { strength: 0.38, y: -16, scale: 0.94, angle: 0.28, alpha: 0.9 };
+    const offset = Number(depth?.[layer] || 0);
+    const lean = Number(depth?.lean || 0);
+    const layerY = Number(depth?.[layer + "Y"] || 0);
+    const layerScale = Number(depth?.scale?.[layer] || 1);
+    const layerAngle = Number(depth?.angle?.[layer] || 0);
+    return {
+      x: offset * spec.strength,
+      y: spec.y + layerY * spec.strength + lean * 150 * spec.strength,
+      scale: spec.scale * layerScale + Math.abs(lean) * 1.25 * spec.strength,
+      angle: layerAngle + lean * spec.angle,
+      alpha: spec.alpha
+    };
+  }
+
+  function drawCombatDust(layer, t, depth){
+    const depthStyle = combatDustDepthStyle(layer, depth || combatDepth(t));
     combatState.dust.forEach(p => {
+      if(p.layer !== layer) return;
       const image = combatState.images[p.layer];
       if(!imgReady(image)) return;
-      const drift = (p.x + t * p.speed) % 1460 - 90;
-      const sway = Math.sin(t * 0.7 + p.x * 0.01) * 8;
+      const spanX = canvas.width + 420;
+      const spanY = canvas.height + p.startBelow + 220;
+      const x = ((p.x + Math.sin(t * 0.2 + p.phase) * p.sway + spanX * 3) % spanX) - 210;
+      const y = canvas.height + p.startBelow - ((t * p.speed + p.phase) % spanY);
+      if(y < -180) return;
       ctx.save();
-      ctx.globalAlpha = p.alpha;
+      ctx.globalAlpha = p.alpha * depthStyle.alpha;
       ctx.globalCompositeOperation = "screen";
-      ctx.drawImage(image, drift, p.y + sway, image.naturalWidth * p.scale, image.naturalHeight * p.scale);
+      ctx.translate(canvas.width * 0.5 + depthStyle.x, canvas.height * 0.58 + depthStyle.y);
+      ctx.rotate(depthStyle.angle);
+      ctx.scale(depthStyle.scale, depthStyle.scale);
+      ctx.translate(-canvas.width * 0.5, -canvas.height * 0.58);
+      ctx.drawImage(image, x, y, image.naturalWidth * p.scale, image.naturalHeight * p.scale);
       ctx.restore();
     });
   }
@@ -431,29 +591,40 @@
 
     ctx.fillStyle = "#050612";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    drawImage("unknownBG", -410, -210, 1.65);
-    drawImage("back4", worldX(23), worldY(150), worldScale(2), 0.98);
-    drawImage("back5", worldX(-458.4), worldY(253.6), worldScale(2.4), 0.95);
+    const depth = combatDepth(t);
+    drawImage("unknownBG", -410 + depth.far, -210 + depth.farY, 1.68 * depth.scale.far);
+    drawCombatDust("far", t, depth);
+    drawImage("back4", worldX(23) + depth.mid, worldY(150) - 4 + depth.midY, worldScale(2.05) * depth.scale.mid, 0.98);
+    drawImage("back5", worldX(-458.4) + depth.near, worldY(253.6) + 4 + depth.nearY, worldScale(2.45) * depth.scale.near, 0.95);
+    drawCombatDust("mid", t, depth);
+    drawCombatDepthWash(depth);
 
     const float = Math.sin(t * 1.5) * 2;
-    const platformScale = worldScale(1);
+    const platformScale = worldScale(1) * (1 + (depth.scale.platform - 1) * 0.35);
     const platformImage = combatState.images.platform;
     const leftPlatformX = worldX(207);
     const rightPlatformX = worldX(1471);
     const leftPlatformY = worldY(924) + float;
     const rightPlatformY = worldY(924) - float * 0.7;
+    const rockTilt = Math.sin(t * 1.35) * 0.035 + depth.lean;
+    const rightRockTilt = -rockTilt * 0.85;
     const leftRockCenter = leftPlatformX + platformImage.naturalWidth * platformScale * 0.5;
     const rightRockCenter = rightPlatformX + platformImage.naturalWidth * platformScale * 0.5;
+    const platformCenterY = platformImage.naturalHeight * platformScale * 0.5;
+    const leftRockPivotY = leftPlatformY + platformCenterY;
+    const rightRockPivotY = rightPlatformY + platformCenterY;
     const mattRockFeetY = worldY(924) + 64;
     const bfRockFeetY = worldY(924) + 132;
-    drawImage("platform", leftPlatformX, leftPlatformY, platformScale);
-    drawImage("platform", rightPlatformX, rightPlatformY, platformScale, 1, true);
-    drawImage("split", worldX(0), worldY(-500), worldScale(2.4), 0.88);
-    drawImage("split", worldX(2212.8), worldY(-500), worldScale(2.4), 0.88, true);
-    drawCombatDust(t);
+    drawImageRotated("platform", leftPlatformX, leftPlatformY, platformScale, rockTilt);
+    drawImageRotated("platform", rightPlatformX, rightPlatformY, platformScale, rightRockTilt, 1, true);
+    drawImage("split", worldX(0) + depth.near * 0.32, worldY(-500), worldScale(2.42), 0.88);
+    drawImage("split", worldX(2212.8) + depth.near * 0.32, worldY(-500), worldScale(2.42), 0.88, true);
 
-    drawCharacter("matt", "matt", "matt", leftRockCenter - 22, mattRockFeetY + float, 0.66, false, t);
-    drawBfSwordCharacter(rightRockCenter + 8, bfRockFeetY - float * 0.7, 0.6, false, t);
+    const mattFeet = rotatePointAround(leftRockCenter - 22, mattRockFeetY + float, leftRockCenter, leftRockPivotY, rockTilt);
+    const bfFeet = rotatePointAround(rightRockCenter + 8, bfRockFeetY - float * 0.7, rightRockCenter, rightRockPivotY, rightRockTilt);
+    drawCharacter("matt", "matt", "matt", mattFeet.x, mattFeet.y, 0.66, false, t, rockTilt);
+    drawBfSwordCharacter(bfFeet.x, bfFeet.y, 0.6, false, t, rightRockTilt);
+    drawCombatDust("near", t, depth);
 
     ctx.save();
     ctx.globalCompositeOperation = "screen";
@@ -475,6 +646,14 @@
     return side;
   }
 
+  function combatRockCameraMotion(t, side){
+    const float = Math.sin(t * 1.5) * 2;
+    const tilt = Math.sin(t * 1.35) * 0.035;
+    if(side === "opp") return { x: tilt * 210, y: float * 4.2 + tilt * 95 };
+    if(side === "player") return { x: -tilt * 160, y: -float * 0.7 * 4.2 - tilt * 70 };
+    return { x: tilt * 24, y: float * 0.75 };
+  }
+
   const originalStage = typeof stage === "function" ? stage : null;
   if(originalStage){
     stage = function(t){
@@ -492,11 +671,12 @@
       originalUpdateCamera.apply(this, arguments);
       if(!isCombat()) return;
       const side = activeCombatSide(t);
+      const rockMotion = combatRockCameraMotion(t, side);
       const target = side === "opp"
-        ? { x: 332, y: 468, zoom: 1.76 }
+        ? { x: 332 + rockMotion.x, y: 468 + rockMotion.y, zoom: 1.76 }
         : side === "player"
-          ? { x: 958, y: 468, zoom: 1.76 }
-          : { x: 640, y: 448, zoom: 1.54 };
+          ? { x: 958 + rockMotion.x, y: 468 + rockMotion.y, zoom: 1.76 }
+          : { x: 640 + rockMotion.x, y: 448 + rockMotion.y, zoom: 1.54 };
       const lerp = 1 - Math.pow(0.001, Math.max(0, dt || 0.016));
       combatState.cameraCurrent.x += (target.x - combatState.cameraCurrent.x) * lerp;
       combatState.cameraCurrent.y += (target.y - combatState.cameraCurrent.y) * lerp;
