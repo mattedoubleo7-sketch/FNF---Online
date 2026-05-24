@@ -41,6 +41,8 @@
       "combat-chart.js",
       "combat-visual-data.js",
       "combat-mode.js",
+      "ballistic-data.js",
+      "ballistic-mode.js",
       "boxing-fight-mode.js",
       "boxing-fight-data.js",
       "perseverance-data.js",

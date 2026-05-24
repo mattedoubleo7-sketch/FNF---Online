@@ -5,7 +5,7 @@
     if ((!SANSATIONAL && !LAST_REEL) || typeof SONGS === "undefined") return;
 
     const nowSec = () => performance.now() / 1000;
-    const INDIE_CROSS_ASSET_VER = "20260429d";
+    const INDIE_CROSS_ASSET_VER = "20260524b";
     const versionedAsset = (path) => path ? `${path}${String(path).includes("?") ? "&" : "?"}v=${INDIE_CROSS_ASSET_VER}` : path;
     const DIR_TO_ANIM = {
       left: "singLEFT",
@@ -201,8 +201,7 @@
         .sort((a, b) => frameOrder(a.name) - frameOrder(b.name));
     }
 
-    function buildNoteSkin(xmlText) {
-      const frames = parseAtlasFrames(xmlText);
+    function buildNoteSkinFromFrames(frames) {
       const map = {
         left: { static: "arrowLEFT", tap: "purple alone", hold: "purple hold", tail: "purple tail", press: "left press", confirm: "left confirm" },
         down: { static: "arrowDOWN", tap: "blue alone", hold: "blue hold", tail: "blue tail", press: "down press", confirm: "down confirm" },
@@ -223,9 +222,18 @@
       return skin;
     }
 
-    function requestNoteSkin() {
+    function buildNoteSkin(xmlText) {
+      return buildNoteSkinFromFrames(parseAtlasFrames(xmlText));
+    }
+
+    function requestNoteSkin(config) {
       if (indieState.atlasRequested.noteSkin) return;
       indieState.atlasRequested.noteSkin = true;
+      const embeddedFrames = dataFor(config)?.noteSkin?.frames;
+      if (Array.isArray(embeddedFrames) && embeddedFrames.length) {
+        indieState.noteSkin = buildNoteSkinFromFrames(embeddedFrames);
+        return;
+      }
       fetch("assets/NOTE_assets.xml")
         .then(resp => resp.ok ? resp.text() : Promise.reject(new Error(`assets/NOTE_assets.xml ${resp.status}`)))
         .then(text => {
@@ -289,27 +297,34 @@
       const data = dataFor(config);
       const sources = id === "sansational"
         ? {
-            stageMain: versionedAsset("assets/indie-cross/hall.png"),
-            stageShade: versionedAsset("assets/indie-cross/halldark.png"),
+            stageMain: versionedAsset(data.stage.hall || "assets/indie-cross/hall.png"),
+            stageShade: versionedAsset(data.stage.hallDark || "assets/indie-cross/halldark.png"),
             sans: versionedAsset(data.sprites.sans.image),
             sansAlt: versionedAsset((data.sprites.sansAlt || data.sprites.sans).image),
             boyfriend: versionedAsset(data.sprites.boyfriend.image),
             boyfriendAlt: versionedAsset(data.sprites.boyfriend.image),
-            dodgeMechs: versionedAsset("assets/indie-cross/DodgeMechs.png"),
+            dodgeMechs: [
+              versionedAsset((data.sprites.dodgeMechsShader || data.sprites.dodgeMechs).image),
+              versionedAsset(data.sprites.dodgeMechs?.image)
+            ],
             warning: versionedAsset("assets/indie-cross/Warning.png"),
             alert: versionedAsset(data.sprites.alert)
           }
         : {
-            roomBackBack: versionedAsset("assets/indie-cross/last-reel-backback.png"),
-            roomBackMain: versionedAsset("assets/indie-cross/last-reel-backmain.png"),
-            roomMidGround: versionedAsset("assets/indie-cross/last-reel-midground.png"),
-            roomForeground: versionedAsset("assets/indie-cross/last-reel-foreground.png"),
-            roomChainOrig: versionedAsset("assets/indie-cross/last-reel-chain-orig.png"),
-            roomCandles: versionedAsset("assets/indie-cross/last-reel-candles.png"),
+            roomBackBack: versionedAsset(data.stage.roomBackBack || "assets/indie-cross/last-reel-backback.png"),
+            roomBackground: versionedAsset(data.stage.roomBackground || data.stage.roomBackMain || "assets/indie-cross/last-reel-background.png"),
+            roomBackMain: versionedAsset(data.stage.roomBackMain || data.stage.roomBackground || "assets/indie-cross/last-reel-backmain.png"),
+            roomMidGround: versionedAsset(data.stage.roomMidGround || "assets/indie-cross/last-reel-midground.png"),
+            roomForeground: versionedAsset(data.stage.roomForeground || "assets/indie-cross/last-reel-foreground.png"),
+            roomTop: versionedAsset(data.stage.roomTop || "assets/indie-cross/last-reel-room-top.png"),
+            roomChainOrig: versionedAsset(data.stage.roomChain || "assets/indie-cross/last-reel-chain-orig.png"),
+            roomCandles: versionedAsset(data.stage.roomCandles?.image || "assets/indie-cross/last-reel-candles.png"),
+            inkyDepths: versionedAsset(data.stage.inkyDepths || "assets/indie-cross/last-reel-inky-depths.png"),
+            butcherBack: versionedAsset(data.stage.back?.image),
             rain: versionedAsset(data.stage.rain.image),
             inkOverlay: versionedAsset(data.stage.inkOverlay),
-            bendy: versionedAsset("assets/indie-cross/Bendy_remastered.png"),
-            boyfriend: versionedAsset("assets/indie-cross/BoyFriend_NM_Bendy.png"),
+            bendy: versionedAsset(data.sprites.bendy.image),
+            boyfriend: versionedAsset(data.sprites.boyfriend.image),
             piper: versionedAsset(data.sprites.piper.image),
             striker: versionedAsset(data.sprites.striker.image),
             warning: versionedAsset(data.sprites.warning.image),
@@ -317,20 +332,34 @@
           };
       sources.noteSkin = versionedAsset("assets/NOTE_assets.png");
       Object.entries(sources).forEach(([key, src]) => {
-        if (!src) return;
+        const attempts = (Array.isArray(src) ? src : [src]).filter(Boolean);
+        if (!attempts.length) return;
         const image = new Image();
-        image.src = src;
+        let attemptIndex = 0;
+        image.onerror = () => {
+          attemptIndex += 1;
+          if (attemptIndex < attempts.length) image.src = attempts[attemptIndex];
+        };
+        image.src = attempts[0];
         images[key] = image;
       });
-      requestNoteSkin();
+      requestNoteSkin(config);
       if (id !== "sansational") {
-        requestAltSprite("lastReelCandles", "assets/indie-cross/last-reel-candles.xml", xmlText => {
-          const frames = parseAtlasFrames(xmlText);
-          return {
-            candles: atlasFramesByLabel(frames, "Candless"),
-            lights: atlasFramesByLabel(frames, "Lights")
+        const candleData = data.stage.roomCandles?.animations;
+        if (candleData?.candles?.frames?.length || candleData?.lights?.frames?.length) {
+          indieState.altSprites.lastReelCandles = {
+            candles: candleData.candles?.frames || [],
+            lights: candleData.lights?.frames || []
           };
-        });
+        } else {
+          requestAltSprite("lastReelCandles", "assets/indie-cross/last-reel-candles.xml", xmlText => {
+            const frames = parseAtlasFrames(xmlText);
+            return {
+              candles: atlasFramesByLabel(frames, "Candless"),
+              lights: atlasFramesByLabel(frames, "Lights")
+            };
+          });
+        }
       }
       indieState.ready[id] = true;
     }
@@ -485,6 +514,51 @@
       ctx.save();
       ctx.globalAlpha = alpha;
       drawAtlasSub(image, frame, dx - Number(frame.fx || 0) * scale, dy - Number(frame.fy || 0) * scale, scale);
+      ctx.restore();
+    }
+
+    function stageTransform(baseW = 3348, baseH = 1883, scaleMul = 1, alignX = 0.5, alignY = 0.5) {
+      const scale = Math.max(canvas.width / baseW, canvas.height / baseH) * scaleMul;
+      return {
+        scale,
+        x: (canvas.width - baseW * scale) * alignX,
+        y: (canvas.height - baseH * scale) * alignY
+      };
+    }
+
+    function drawStageImage(image, alpha = 1, opts = {}) {
+      if (!imageReady(image)) return;
+      const transform = stageTransform(
+        Number(opts.baseW || 3348),
+        Number(opts.baseH || 1883),
+        Number(opts.scaleMul || 1),
+        Number(opts.alignX ?? 0.5),
+        Number(opts.alignY ?? 0.5)
+      );
+      const width = Number(opts.width || image.naturalWidth) * transform.scale;
+      const height = Number(opts.height || image.naturalHeight) * transform.scale;
+      const x = transform.x + Number(opts.x || 0) * transform.scale;
+      const y = transform.y + Number(opts.y || 0) * transform.scale;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(image, x, y, width, height);
+      ctx.restore();
+    }
+
+    function drawStageAtlasFrame(image, frame, alpha = 1, opts = {}) {
+      if (!imageReady(image) || !frame) return;
+      const transform = stageTransform(
+        Number(opts.baseW || 3348),
+        Number(opts.baseH || 1883),
+        Number(opts.scaleMul || 1),
+        Number(opts.alignX ?? 0.5),
+        Number(opts.alignY ?? 0.5)
+      );
+      const x = transform.x + Number(opts.x || 0) * transform.scale - Number(frame.fx || 0) * transform.scale;
+      const y = transform.y + Number(opts.y || 0) * transform.scale - Number(frame.fy || 0) * transform.scale;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      drawAtlasSub(image, frame, x, y, transform.scale);
       ctx.restore();
     }
 
@@ -1084,10 +1158,6 @@
       }
     }
 
-    function drawLayerImage(image, alpha = 1, scaleMul = 1.02, yOffset = 0) {
-      drawCoverImage(image, alpha, scaleMul, yOffset);
-    }
-
     function activeButcherThreats(t) {
       const mode = currentModeState();
       const threats = { left: null, right: null };
@@ -1131,12 +1201,16 @@
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.restore();
-      drawLayerImage(images.roomBackBack, 1, 1.03, -8);
-      drawLayerImage(images.roomBackMain, 1, 1.03, -8);
-      drawLayerImage(images.roomMidGround, 1, 1.03, -6);
+      drawStageImage(images.roomBackBack, 1, { baseW: 2148, baseH: 1513, scaleMul: 1.03, alignY: 0.45 });
+      drawStageImage(images.roomBackground || images.roomBackMain, 1);
+      drawStageImage(images.roomTop, 1);
+      drawStageImage(images.roomMidGround, 1);
       const candleAtlas = indieState.altSprites.lastReelCandles;
       const candleFrame = frameFromList(candleAtlas?.candles, t, 14, true);
-      if (candleFrame) drawCoverAtlasFrame(images.roomCandles, candleFrame, 0.86, 1.03, -6);
+      if (candleFrame) drawStageAtlasFrame(images.roomCandles, candleFrame, 0.88, { x: 1362, y: 1210 });
+      if (imageReady(images.inkyDepths) && mode?.inkAlpha > 0.08) {
+        drawStageImage(images.inkyDepths, Math.min(0.3, mode.inkAlpha * 0.2), { baseW: 2000, baseH: 1231, scaleMul: 1.04 });
+      }
       const threats = activeButcherThreats(t);
       drawRole(config, "opponent", t);
       drawRole(config, "boyfriend", t);
@@ -1148,10 +1222,10 @@
         const anim = butcherAnim(threats.right, t);
         drawRole(config, "right", t, anim, anim.alpha);
       }
-      drawLayerImage(images.roomForeground, 1, 1.03, -4);
-      drawLayerImage(images.roomChainOrig, 0.9, 1.03, -4);
+      drawStageImage(images.roomForeground, 1);
+      drawStageImage(images.roomChainOrig, 0.9, { x: 2920, y: 28 });
       const lightFrame = frameFromList(candleAtlas?.lights, t, 16, true);
-      if (lightFrame) drawCoverAtlasFrame(images.roomCandles, lightFrame, 0.28 + Math.min(0.16, (mode?.flash || 0) * 0.18), 1.03, -6);
+      if (lightFrame) drawStageAtlasFrame(images.roomCandles, lightFrame, 0.28 + Math.min(0.16, (mode?.flash || 0) * 0.18), { x: 1278, y: 1016 });
       if (imageReady(images.rain)) {
         const data = dataFor(config);
         const rainAnim = data.stage.rain.animations.idle || Object.values(data.stage.rain.animations || {})[0];
