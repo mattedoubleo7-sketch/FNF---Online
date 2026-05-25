@@ -1,7 +1,10 @@
 node_modules/
 dist/
 dist-offline/
+dist-online-fixed/
+dist-*/
+upload-*/
+tmp-*
 *.log
 public-share-pids.json
 cloudflared.exe
-dist-online-fixed/

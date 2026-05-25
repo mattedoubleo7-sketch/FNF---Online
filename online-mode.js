@@ -157,6 +157,10 @@ function importedTracksForSong(songId = state.selectedSong) {
     if (typeof window.ensureLastReelAudio === "function") window.ensureLastReelAudio();
     return [state.audio.lastReelInst, state.audio.lastReelVoices];
   }
+  if (chartSource === "overthrone") {
+    if (typeof window.ensureOverthroneAudio === "function") return mediaListFrom(window.ensureOverthroneAudio());
+    return [state.audio.overthroneInst, state.audio.overthroneVoices];
+  }
   return [];
 }
 
@@ -291,6 +295,15 @@ async function preloadSongForMatch(songId, matchId) {
     const media = mediaListFrom(prepared);
     const tracks = media.length ? media : [state.audio.lastReelInst, state.audio.lastReelVoices];
     await Promise.all(tracks.filter(Boolean).map(track => waitForTrackReady(track)));
+  } else if (SONGS[songId]?.chartSource === "overthrone") {
+    const prepared = typeof window.prepareOverthroneOnlineStart === "function"
+      ? window.prepareOverthroneOnlineStart()
+      : (typeof window.ensureOverthroneAudio === "function"
+        ? window.ensureOverthroneAudio()
+        : []);
+    const media = mediaListFrom(prepared);
+    const tracks = media.length ? media : [state.audio.overthroneInst, state.audio.overthroneVoices];
+    await Promise.all(tracks.filter(Boolean).map(track => waitForTrackReady(track)));
   }
   if (state.network.prepareMatchId !== matchId) return false;
   state.network.preparedSongId = songId;
@@ -385,6 +398,10 @@ function syncOnlinePlayback(force = false) {
     if (typeof window.ensureLastReelAudio === "function") window.ensureLastReelAudio();
     syncTrackToTime(state.audio.lastReelInst, targetTime, shouldPlay, syncOptions);
     syncTrackToTime(state.audio.lastReelVoices, targetTime, shouldPlay, { ...syncOptions, isSecondary: true });
+  } else if (state.currentSong.chartSource === "overthrone") {
+    if (typeof window.ensureOverthroneAudio === "function") window.ensureOverthroneAudio();
+    syncTrackToTime(state.audio.overthroneInst, targetTime, shouldPlay, syncOptions);
+    syncTrackToTime(state.audio.overthroneVoices, targetTime, shouldPlay, { ...syncOptions, isSecondary: true });
   }
   return targetTime;
 }

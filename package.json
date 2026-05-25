@@ -39,6 +39,9 @@
       "boxing-match-wg-shader-events.js",
       "boxing-match-wg-mode.js",
       "combat-chart.js",
+      "one-hit-chart.js",
+      "overthrone-data.js",
+      "overthrone-mode.js",
       "combat-visual-data.js",
       "combat-mode.js",
       "ballistic-data.js",
@@ -51,24 +54,24 @@
       "package.json",
       "broken-reality-data.js",
       "broken-reality-mode.js",
-        "broken-reality-fix.js",
-        "broken-reality-soul-data.js",
-        "*.mp4",
-        "auto-update.js",
-        "challenge-edd-data.js",
-        "challenge-edd-mode.js",
-        "challenge-edd-bf-data.js",
-        "fallen-stars-data.js",
-        "fallen-stars-mode.js",
-        "playback-stability-fix.js",
-        "playback-start-fix.js",
-        "genocide-data.js",
-        "genocide-commands.js",
-        "genocide-mode.js",
-        "sansational-data.js",
-        "last-reel-data.js",
-        "indie-cross-mode.js"
-      ],
+      "broken-reality-fix.js",
+      "broken-reality-soul-data.js",
+      "*.mp4",
+      "auto-update.js",
+      "challenge-edd-data.js",
+      "challenge-edd-mode.js",
+      "challenge-edd-bf-data.js",
+      "fallen-stars-data.js",
+      "fallen-stars-mode.js",
+      "playback-stability-fix.js",
+      "playback-start-fix.js",
+      "genocide-data.js",
+      "genocide-commands.js",
+      "genocide-mode.js",
+      "sansational-data.js",
+      "last-reel-data.js",
+      "indie-cross-mode.js"
+    ],
     "directories": {
       "output": "dist"
     },
@@ -99,6 +102,7 @@
   "dependencies": {
     "electron-updater": "^6.8.3",
     "express": "^4.21.2",
+    "playwright": "^1.60.0",
     "socket.io": "^4.8.1"
   },
   "engines": {
@@ -106,5 +110,3 @@
   },
   "fnfDefaultDesktopMode": "online"
 }
-
-

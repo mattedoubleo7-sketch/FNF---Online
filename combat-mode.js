@@ -10,6 +10,15 @@
     fxCtx: null
   };
 
+  const ONE_HIT_SPEED_STEPS = [528, 600, 632, 652, 704, 3344, 3416, 3448, 3468, 3520, 4864];
+  const ONE_HIT_BLOOM_STEPS = [256, 512, 640, 768, 1024, 1280, 1408, 1536, 1600, 1664, 1728, 1792, 1856, 1920, 1984, 2048, 2080, 2112, 2144, 2176, 2208, 2240, 2272, 2304, 2368, 2432, 2496, 2560, 2624, 2688, 2752, 2816, 3072, 3328, 3456, 3584, 3840, 4096, 4224, 4352, 4480, 4608, 4736, 4864, 4992, 5120, 5248, 5376];
+  const ONE_HIT_BARS_STEPS = [504, 760, 1272, 1528, 1592, 1656, 1720, 1784, 1848, 1912, 1976, 2040, 2072, 2104, 2136, 2168, 2200, 2232, 2264, 2296, 2360, 2424, 2488, 2552, 2616, 2680, 2744, 2808, 3320, 3576, 3832, 4088, 4344, 4856];
+  const ONE_HIT_BLUR_STEPS = [2560, 2568, 2576, 2584, 2624, 2632, 2640, 2648, 2688, 2696, 2704, 2712, 2752, 2760, 2768, 2776];
+  const ONE_HIT_WARP_STEPS = [2048, 2080, 2112, 2144, 2176, 2208, 2240, 2272, 2560, 2568, 2576, 2584, 2624, 2632, 2640, 2648, 2688, 2696, 2704, 2712, 2752, 2760, 2768, 2776];
+  const ONE_HIT_GREYSCALE_WINDOWS = [[1024, 256, 1], [1392, 32, 0.55], [2304, 64, 0.55], [3840, 256, 1], [4208, 32, 0.55], [4320, 32, 1], [4848, 16, 0.55]];
+  const ONE_HIT_SIDE_SPEED_START = 191;
+  const ONE_HIT_MOVING_ROCK_START = 192;
+
   const WII_COMBAT_DEPTH = {
     fov: Math.PI / 2,
     focalLength: 250,
@@ -24,7 +33,11 @@
   };
 
   function isCombat(){
-    return typeof state !== "undefined" && state.selectedSong === "combat";
+    return typeof state !== "undefined" && (state.selectedSong === "combat" || state.selectedSong === "oneHit");
+  }
+
+  function isOneHit(){
+    return typeof state !== "undefined" && state.selectedSong === "oneHit";
   }
 
   function loadImage(key, src){
@@ -409,6 +422,72 @@
     });
   }
 
+  function drawOneHitBackgroundRockField(t, depth){
+    if(!isOneHit() || t < ONE_HIT_MOVING_ROCK_START) return;
+    const elapsed = t - ONE_HIT_MOVING_ROCK_START;
+    const warmup = easeOutCubic(elapsed / 2.4);
+    const rocks = [
+      { key: "back4", delay: 0.0, duration: 4.7, sx: 0.46, sy: 0.27, ex: -0.28, ey: 0.48, s0: 0.24, s1: 0.98, alpha: 0.72, rot: -0.1, drift: 34, flip: false },
+      { key: "back5", delay: 0.55, duration: 5.3, sx: 0.58, sy: 0.32, ex: 0.93, ey: 0.55, s0: 0.18, s1: 1.05, alpha: 0.62, rot: 0.13, drift: 42, flip: true },
+      { key: "back4", delay: 1.15, duration: 4.2, sx: 0.51, sy: 0.2, ex: 0.78, ey: 0.34, s0: 0.16, s1: 0.72, alpha: 0.52, rot: 0.2, drift: 28, flip: true },
+      { key: "back5", delay: 1.75, duration: 5.8, sx: 0.42, sy: 0.36, ex: -0.18, ey: 0.62, s0: 0.22, s1: 0.92, alpha: 0.56, rot: -0.18, drift: 38, flip: false },
+      { key: "back4", delay: 2.45, duration: 4.9, sx: 0.63, sy: 0.24, ex: 1.02, ey: 0.46, s0: 0.2, s1: 0.84, alpha: 0.5, rot: -0.04, drift: 30, flip: false },
+      { key: "back5", delay: 3.1, duration: 5.1, sx: 0.37, sy: 0.25, ex: 0.12, ey: 0.43, s0: 0.15, s1: 0.68, alpha: 0.46, rot: 0.16, drift: 24, flip: true }
+    ];
+    const queue = [];
+    for(const spec of rocks){
+      const local = elapsed - spec.delay;
+      if(local < 0) continue;
+      const rawP = (local % spec.duration) / spec.duration;
+      const p = rawP * rawP * (3 - 2 * rawP);
+      const image = combatState.images[spec.key];
+      if(!imgReady(image)) continue;
+      const fadeIn = Math.min(1, rawP / 0.14);
+      const fadeOut = 1 - Math.max(0, (rawP - 0.82) / 0.18);
+      const centerX = canvas.width * (spec.sx + (spec.ex - spec.sx) * p) + depth.mid * 0.16 + Math.sin(t * 1.1 + spec.delay * 3) * spec.drift * (0.25 + p);
+      const centerY = canvas.height * (spec.sy + (spec.ey - spec.sy) * p) + depth.midY * 0.52 + Math.cos(t * 0.9 + spec.delay * 4) * spec.drift * 0.22;
+      const scale = spec.s0 + (spec.s1 - spec.s0) * p;
+      queue.push({
+        p,
+        key: spec.key,
+        x: centerX - image.naturalWidth * scale * 0.5,
+        y: centerY - image.naturalHeight * scale * 0.5,
+        scale,
+        angle: spec.rot + Math.sin(t * 0.65 + spec.delay * 5) * 0.045 + p * spec.rot * 0.8,
+        alpha: warmup * fadeIn * Math.max(0, fadeOut) * spec.alpha,
+        flip: spec.flip
+      });
+    }
+    queue.sort((a, b) => a.p - b.p);
+    for(const rock of queue){
+      drawImageRotated(rock.key, rock.x, rock.y, rock.scale, rock.angle, rock.alpha, rock.flip);
+    }
+  }
+
+  function oneHitSectionAmount(t, start = ONE_HIT_SIDE_SPEED_START){
+    if(!isOneHit() || t < start) return 0;
+    return easeOutCubic((t - start) / 1.35);
+  }
+
+  function oneHitPlatformMotion(t, depth){
+    const amount = oneHitSectionAmount(t);
+    if(amount <= 0.001) return { x: 0, y: 0, spread: 0, leftY: 0, rightY: 0, angle: 0 };
+    const midSpec = WII_COMBAT_DEPTH.layers.mid;
+    const phase = t * midSpec.floatRate + midSpec.phase;
+    const midSway = Math.sin(phase);
+    const slowDrift = Math.sin(t * 0.22 + 1.4);
+    const x = (depth.mid * 0.34 + midSway * 16 + slowDrift * 14) * amount;
+    const y = (depth.midY * 0.9 + Math.cos(phase) * 7) * amount;
+    return {
+      x,
+      y,
+      spread: Math.sin(t * 0.28 + 0.8) * 10 * amount,
+      leftY: Math.sin(phase + 0.7) * 5 * amount,
+      rightY: Math.sin(phase + 2.2) * 5 * amount,
+      angle: (depth.angle?.mid || 0) * 0.8 * amount + Math.sin(phase) * 0.012 * amount
+    };
+  }
+
   function ensureCombatFxCanvas(){
     if(!combatState.fxCanvas){
       combatState.fxCanvas = document.createElement("canvas");
@@ -433,6 +512,12 @@
     const age = step - start;
     if(age < 0 || age > length) return 0;
     return 1 - easeOutCubic(age / length);
+  }
+
+  function maxStepPulse(step, starts, length){
+    let value = 0;
+    for(const start of starts) value = Math.max(value, pulseFromStep(step, start, length));
+    return value;
   }
 
   function combatSongStep(t){
@@ -468,6 +553,42 @@
     };
   }
 
+  function oneHitShaderFxState(t){
+    const step = combatSongStep(t);
+    let greyscale = 0;
+    for(const win of ONE_HIT_GREYSCALE_WINDOWS){
+      const age = step - win[0];
+      if(age >= 0 && age <= win[1]) greyscale = Math.max(greyscale, win[2] * (1 - Math.max(0, age - win[1] * 0.82) / Math.max(1, win[1] * 0.18)));
+    }
+    const speed = maxStepPulse(step, ONE_HIT_SPEED_STEPS, 16);
+    const sideSpeed = oneHitSideSpeedAmount(t);
+    const bloom = maxStepPulse(step, ONE_HIT_BLOOM_STEPS, 16);
+    const bars = maxStepPulse(step, ONE_HIT_BARS_STEPS, 16);
+    const blur = maxStepPulse(step, ONE_HIT_BLUR_STEPS, 8);
+    const warp = Math.max(maxStepPulse(step, ONE_HIT_WARP_STEPS, 16), speed * 0.42);
+    return {
+      step,
+      greyscale,
+      blur,
+      warp,
+      speed,
+      sideSpeed,
+      bloom,
+      bars,
+      chrom: bloom * 10 + speed * 9 + sideSpeed * 7 + warp * 8 + blur * 7,
+      active: greyscale + blur + warp + speed + sideSpeed + bloom + bars
+    };
+  }
+
+  function oneHitSideSpeedAmount(t){
+    if(!isOneHit() || t < ONE_HIT_SIDE_SPEED_START) return 0;
+    const end = ONE_HIT_SIDE_SPEED_START + 9.6;
+    if(t >= end) return 0;
+    const fadeIn = easeOutCubic((t - ONE_HIT_SIDE_SPEED_START) / 0.45);
+    const fadeOut = 1 - easeOutCubic((t - (end - 1.4)) / 1.4);
+    return Math.max(0, Math.min(1, fadeIn, fadeOut));
+  }
+
   function drawCombatSpeedLines(amount, t){
     if(amount <= 0.01) return;
     ctx.save();
@@ -495,28 +616,74 @@
     ctx.restore();
   }
 
+  function drawOneHitSideSpeedLines(amount, t){
+    if(amount <= 0.01) return;
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    ctx.lineCap = "round";
+    for(let side = -1; side <= 1; side += 2){
+      for(let i = 0; i < 24; i++){
+        const seed = i * 61 + (side > 0 ? 19 : 0);
+        const y = ((seed + t * (520 + (i % 5) * 28)) % (canvas.height + 160)) - 80;
+        const reach = 100 + (i % 7) * 18 + Math.sin(t * 2 + i) * 14;
+        const x1 = side < 0 ? -42 : canvas.width + 42;
+        const x2 = side < 0 ? reach : canvas.width - reach;
+        const y2 = y + Math.sin(t * 2.7 + i) * 16;
+        const grad = ctx.createLinearGradient(x1, y, x2, y2);
+        if(side < 0){
+          grad.addColorStop(0, "rgba(255,255,255,0)");
+          grad.addColorStop(0.35, "rgba(196,224,255," + (0.34 * amount).toFixed(3) + ")");
+          grad.addColorStop(1, "rgba(130,90,255,0)");
+        } else {
+          grad.addColorStop(0, "rgba(255,255,255,0)");
+          grad.addColorStop(0.65, "rgba(196,224,255," + (0.34 * amount).toFixed(3) + ")");
+          grad.addColorStop(1, "rgba(130,90,255,0)");
+        }
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = (2 + (i % 4) * 0.9) * amount;
+        ctx.beginPath();
+        ctx.moveTo(x1, y);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
   function drawCombatInsanePostFx(t){
     if(!isCombat() || !state.playing || !Number.isFinite(t)) return;
     const fx = combatInsaneFxState(t);
-    const active = fx.mirror + fx.bloom + fx.speed + fx.burst;
-    if(active <= 0.015 && fx.chrom <= 1.21) return;
+    const oneHitFx = isOneHit() ? oneHitShaderFxState(t) : null;
+    const active = fx.mirror + fx.bloom + fx.speed + fx.burst + (oneHitFx?.active || 0);
+    if(active <= 0.015 && fx.chrom <= 1.21 && (!oneHitFx || oneHitFx.active <= 0.015)) return;
     const source = ensureCombatFxCanvas();
     const cx = canvas.width / 2, cy = canvas.height / 2;
 
-    if(fx.mirror > 0.01){
+    if(oneHitFx && (oneHitFx.greyscale > 0.01 || oneHitFx.blur > 0.01)){
       ctx.save();
-      ctx.globalCompositeOperation = "screen";
-      ctx.globalAlpha = Math.min(0.23, 0.05 + fx.mirror * 0.16);
-      ctx.translate(cx, cy);
-      ctx.rotate(fx.angle * Math.PI / 180 * 0.35);
-      const scale = 1 + fx.mirror * 0.045;
-      ctx.scale(scale, scale);
-      ctx.drawImage(source, -cx + Math.sin(t * 12) * fx.mirror * 5, -cy);
+      ctx.globalAlpha = Math.min(0.86, 0.2 + oneHitFx.greyscale * 0.58 + oneHitFx.blur * 0.18);
+      ctx.filter = "grayscale(" + oneHitFx.greyscale.toFixed(3) + ") contrast(" + (1 + oneHitFx.greyscale * 0.22).toFixed(3) + ") blur(" + (oneHitFx.blur * 4.5).toFixed(2) + "px)";
+      ctx.drawImage(source, 0, 0);
+      ctx.filter = "none";
       ctx.restore();
     }
 
-    if(fx.chrom > 1.4){
-      const offset = Math.min(16, fx.chrom);
+    if(fx.mirror > 0.01 || (oneHitFx?.warp || 0) > 0.01){
+      const mirror = Math.max(fx.mirror, (oneHitFx?.warp || 0) * 0.86);
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      ctx.globalAlpha = Math.min(0.28, 0.05 + mirror * 0.18);
+      ctx.translate(cx, cy);
+      ctx.rotate((fx.angle + (oneHitFx?.warp || 0) * Math.sin(t * 8) * 7) * Math.PI / 180 * 0.35);
+      const scale = 1 + mirror * 0.05;
+      ctx.scale(scale, scale);
+      ctx.drawImage(source, -cx + Math.sin(t * 12) * mirror * 6, -cy);
+      ctx.restore();
+    }
+
+    const chrom = Math.max(fx.chrom, oneHitFx?.chrom || 0);
+    if(chrom > 1.4){
+      const offset = Math.min(18, chrom);
       ctx.save();
       ctx.globalCompositeOperation = "screen";
       ctx.globalAlpha = Math.min(0.22, 0.06 + active * 0.09);
@@ -528,29 +695,32 @@
       ctx.restore();
     }
 
-    if(fx.bloom > 0.01){
+    const bloom = Math.max(fx.bloom, oneHitFx?.bloom || 0);
+    if(bloom > 0.01){
       ctx.save();
       ctx.globalCompositeOperation = "screen";
-      ctx.globalAlpha = Math.min(0.68, 0.18 + fx.bloom * 0.45);
-      ctx.filter = "blur(" + (6 + fx.bloom * 15).toFixed(1) + "px) saturate(1.8) brightness(1.18)";
+      ctx.globalAlpha = Math.min(0.7, 0.18 + bloom * 0.46);
+      ctx.filter = "blur(" + (6 + bloom * 15).toFixed(1) + "px) saturate(1.8) brightness(1.18)";
       ctx.drawImage(source, 0, 0);
       ctx.filter = "none";
-      ctx.globalAlpha = Math.min(0.26, fx.bloom * 0.2);
+      ctx.globalAlpha = Math.min(0.28, bloom * 0.22);
       ctx.fillStyle = "#f2eaff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.restore();
     }
 
-    drawCombatSpeedLines(Math.max(fx.speed, fx.burst * 0.7), t);
+    drawCombatSpeedLines(Math.max(fx.speed, fx.burst * 0.7, oneHitFx?.speed || 0), t);
+    drawOneHitSideSpeedLines(oneHitFx?.sideSpeed || 0, t);
 
-    if(fx.bars > 0.01){
+    const bars = Math.max(fx.bars, oneHitFx?.bars || 0);
+    if(bars > 0.01){
       ctx.save();
-      const h = 22 + fx.bars * 40;
-      ctx.fillStyle = "rgba(3,4,12," + Math.min(0.42, fx.bars * 0.32).toFixed(3) + ")";
+      const h = 22 + bars * 42;
+      ctx.fillStyle = "rgba(3,4,12," + Math.min(0.44, bars * 0.34).toFixed(3) + ")";
       ctx.fillRect(0, 0, canvas.width, h);
       ctx.fillRect(0, canvas.height - h, canvas.width, h);
       ctx.globalCompositeOperation = "screen";
-      ctx.globalAlpha = Math.min(0.18, fx.bars * 0.12);
+      ctx.globalAlpha = Math.min(0.2, bars * 0.14);
       for(let y = 0; y < canvas.height; y += 18){
         ctx.fillStyle = y % 36 === 0 ? "#c4d6ff" : "#9d6cff";
         ctx.fillRect(0, y, canvas.width, 1);
@@ -594,20 +764,25 @@
     const depth = combatDepth(t);
     drawImage("unknownBG", -410 + depth.far, -210 + depth.farY, 1.68 * depth.scale.far);
     drawCombatDust("far", t, depth);
-    drawImage("back4", worldX(23) + depth.mid, worldY(150) - 4 + depth.midY, worldScale(2.05) * depth.scale.mid, 0.98);
-    drawImage("back5", worldX(-458.4) + depth.near, worldY(253.6) + 4 + depth.nearY, worldScale(2.45) * depth.scale.near, 0.95);
+    if(isOneHit() && t >= ONE_HIT_MOVING_ROCK_START){
+      drawOneHitBackgroundRockField(t, depth);
+    } else {
+      drawImage("back4", worldX(23) + depth.mid, worldY(150) - 4 + depth.midY, worldScale(2.05) * depth.scale.mid, 0.98);
+      drawImage("back5", worldX(-458.4) + depth.near, worldY(253.6) + 4 + depth.nearY, worldScale(2.45) * depth.scale.near, 0.95);
+    }
     drawCombatDust("mid", t, depth);
     drawCombatDepthWash(depth);
 
     const float = Math.sin(t * 1.5) * 2;
     const platformScale = worldScale(1) * (1 + (depth.scale.platform - 1) * 0.35);
     const platformImage = combatState.images.platform;
-    const leftPlatformX = worldX(207);
-    const rightPlatformX = worldX(1471);
-    const leftPlatformY = worldY(924) + float;
-    const rightPlatformY = worldY(924) - float * 0.7;
-    const rockTilt = Math.sin(t * 1.35) * 0.035 + depth.lean;
-    const rightRockTilt = -rockTilt * 0.85;
+    const platformMotion = oneHitPlatformMotion(t, depth);
+    const leftPlatformX = worldX(207) + platformMotion.x - platformMotion.spread;
+    const rightPlatformX = worldX(1471) + platformMotion.x + platformMotion.spread;
+    const leftPlatformY = worldY(924) + float + platformMotion.y + platformMotion.leftY;
+    const rightPlatformY = worldY(924) - float * 0.7 + platformMotion.y + platformMotion.rightY;
+    const rockTilt = Math.sin(t * 1.35) * 0.035 + depth.lean + platformMotion.angle;
+    const rightRockTilt = -rockTilt * 0.85 + platformMotion.angle * 0.35;
     const leftRockCenter = leftPlatformX + platformImage.naturalWidth * platformScale * 0.5;
     const rightRockCenter = rightPlatformX + platformImage.naturalWidth * platformScale * 0.5;
     const platformCenterY = platformImage.naturalHeight * platformScale * 0.5;
@@ -638,12 +813,36 @@
 
   function activeCombatSide(t){
     if(!state.chart?.notes) return "both";
+    const oneHitCamera = oneHitCameraState(t);
+    if(oneHitCamera.duet) return "both";
     let side = "both";
     for(const note of state.chart.notes){
       if(note.time > t + 0.09) break;
       if(note.time >= t - 0.05) side = note.side || side;
     }
     return side;
+  }
+
+  function oneHitCameraState(t){
+    const result = { duet: false, zoomOffset: 0, flash: 0 };
+    if(!isOneHit()) return result;
+    const events = window.ONE_HIT_CHART?.cameraEvents || [];
+    for(const event of events){
+      const eventTime = Number(event.time || 0);
+      if(eventTime <= t && event.type === "duetCamera") result.duet = !!event.enabled;
+      if(event.type === "betterZoom"){
+        const duration = Math.max(0.01, Number(event.duration || 0.5));
+        const age = t - eventTime;
+        if(age >= 0 && age <= duration){
+          const fade = 1 - easeOutCubic(age / duration);
+          result.zoomOffset += Number(event.amount || 0) * fade;
+        }
+      } else if(event.type === "flash") {
+        const age = t - eventTime;
+        if(age >= 0 && age <= 0.45) result.flash = Math.max(result.flash, 1 - age / 0.45);
+      }
+    }
+    return result;
   }
 
   function combatRockCameraMotion(t, side){
@@ -671,12 +870,20 @@
       originalUpdateCamera.apply(this, arguments);
       if(!isCombat()) return;
       const side = activeCombatSide(t);
+      const oneHitCamera = oneHitCameraState(t);
       const rockMotion = combatRockCameraMotion(t, side);
       const target = side === "opp"
         ? { x: 332 + rockMotion.x, y: 468 + rockMotion.y, zoom: 1.76 }
         : side === "player"
           ? { x: 958 + rockMotion.x, y: 468 + rockMotion.y, zoom: 1.76 }
           : { x: 640 + rockMotion.x, y: 448 + rockMotion.y, zoom: 1.54 };
+      if(isOneHit()) {
+        target.zoom = Math.max(1.2, target.zoom + oneHitCamera.zoomOffset);
+        if(oneHitCamera.duet) {
+          target.x = 640 + rockMotion.x * 0.34;
+          target.y = 456 + rockMotion.y * 0.3;
+        }
+      }
       const lerp = 1 - Math.pow(0.001, Math.max(0, dt || 0.016));
       combatState.cameraCurrent.x += (target.x - combatState.cameraCurrent.x) * lerp;
       combatState.cameraCurrent.y += (target.y - combatState.cameraCurrent.y) * lerp;

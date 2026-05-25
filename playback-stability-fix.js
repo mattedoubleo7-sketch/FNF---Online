@@ -21,6 +21,10 @@
           return [state.audio.boxingWgInst, state.audio.boxingWgVoices];
         case "combat":
           return [state.audio.combatInst, state.audio.combatVoices];
+        case "oneHit":
+          return [state.audio.oneHitInst, state.audio.oneHitVoices];
+        case "overthrone":
+          return [state.audio.overthroneInst, state.audio.overthroneVoices];
         case "perseverance":
           return [state.audio.inst2, state.audio.voices2a, state.audio.voices2b];
         case "brokenReality":

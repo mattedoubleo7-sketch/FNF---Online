@@ -5,7 +5,7 @@
     if ((!SANSATIONAL && !LAST_REEL) || typeof SONGS === "undefined") return;
 
     const nowSec = () => performance.now() / 1000;
-    const INDIE_CROSS_ASSET_VER = "20260524b";
+    const INDIE_CROSS_ASSET_VER = "20260524c";
     const versionedAsset = (path) => path ? `${path}${String(path).includes("?") ? "&" : "?"}v=${INDIE_CROSS_ASSET_VER}` : path;
     const DIR_TO_ANIM = {
       left: "singLEFT",
@@ -34,7 +34,7 @@
         scroll: 1160,
         palette: ["#040711", "#0e1631", "#130a1f", "#090d17", "#75b9ff", "#f5f7ff"],
         blurb: "Imported from Indie Cross with the original Sansational hard chart, the hall stage, real Sans/BF placements, and the dodge and attack mechanics.",
-        roleScale: { opponent: 0.74, boyfriend: 1.04 },
+        roleScale: { opponent: 0.74, boyfriend: 1 },
         roleGround: {
           opponent: { x: 302, y: 678 },
           boyfriend: { x: 884, y: 646 }
@@ -319,6 +319,8 @@
             roomTop: versionedAsset(data.stage.roomTop || "assets/indie-cross/last-reel-room-top.png"),
             roomChainOrig: versionedAsset(data.stage.roomChain || "assets/indie-cross/last-reel-chain-orig.png"),
             roomCandles: versionedAsset(data.stage.roomCandles?.image || "assets/indie-cross/last-reel-candles.png"),
+            jzBoy: versionedAsset(data.stage.jzBoy?.image),
+            sammyBg: versionedAsset(data.stage.sammyBg?.image),
             inkyDepths: versionedAsset(data.stage.inkyDepths || "assets/indie-cross/last-reel-inky-depths.png"),
             butcherBack: versionedAsset(data.stage.back?.image),
             rain: versionedAsset(data.stage.rain.image),
@@ -1203,8 +1205,18 @@
       ctx.restore();
       drawStageImage(images.roomBackBack, 1, { baseW: 2148, baseH: 1513, scaleMul: 1.03, alignY: 0.45 });
       drawStageImage(images.roomBackground || images.roomBackMain, 1);
-      drawStageImage(images.roomTop, 1);
+      const data = dataFor(config);
+      const jzAnim = data.stage.jzBoy?.animations?.walk;
+      const jzFrame = frameFromList(jzAnim?.frames, t, Number(jzAnim?.fps || 24), true);
+      if (jzFrame) drawStageAtlasFrame(images.jzBoy, jzFrame, 0.72, { x: 320, y: 982 });
+      const sammyAnim = data.stage.sammyBg?.animations?.idle;
+      const sammyFrame = frameFromList(sammyAnim?.frames, t, Number(sammyAnim?.fps || 24), true);
+      if (sammyFrame) drawStageAtlasFrame(images.sammyBg, sammyFrame, 0.86, { x: 2290, y: 690 });
       drawStageImage(images.roomMidGround, 1);
+      const backAnim = data.stage.back?.animations?.idle;
+      const backFrame = frameFromList(backAnim?.frames, t, Number(backAnim?.fps || 24), true);
+      if (backFrame) drawStageAtlasFrame(images.butcherBack, backFrame, 0.52, { x: 1070, y: 1010 });
+      drawStageImage(images.roomTop, 1);
       const candleAtlas = indieState.altSprites.lastReelCandles;
       const candleFrame = frameFromList(candleAtlas?.candles, t, 14, true);
       if (candleFrame) drawStageAtlasFrame(images.roomCandles, candleFrame, 0.88, { x: 1362, y: 1210 });
@@ -1227,7 +1239,6 @@
       const lightFrame = frameFromList(candleAtlas?.lights, t, 16, true);
       if (lightFrame) drawStageAtlasFrame(images.roomCandles, lightFrame, 0.28 + Math.min(0.16, (mode?.flash || 0) * 0.18), { x: 1278, y: 1016 });
       if (imageReady(images.rain)) {
-        const data = dataFor(config);
         const rainAnim = data.stage.rain.animations.idle || Object.values(data.stage.rain.animations || {})[0];
         const frame = frameFromList(rainAnim?.frames, t, Number(rainAnim?.fps || 24), true);
         drawCoverAtlasFrame(images.rain, frame, 0.12 + Math.min(0.24, (mode?.inkAlpha || 0) * 0.28), 1.03, -6);

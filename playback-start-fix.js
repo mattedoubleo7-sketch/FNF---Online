@@ -20,6 +20,8 @@
       if (chartSource === "boxingMatch") return [state.audio.boxingInst, state.audio.boxingVoices];
       if (chartSource === "boxingMatchWg") return [state.audio.boxingWgInst, state.audio.boxingWgVoices];
       if (chartSource === "combat") return [state.audio.combatInst, state.audio.combatVoices];
+      if (chartSource === "oneHit") return [state.audio.oneHitInst, state.audio.oneHitVoices];
+      if (chartSource === "overthrone") return [state.audio.overthroneInst, state.audio.overthroneVoices];
       if (chartSource === "perseverance") return [state.audio.inst2, state.audio.voices2a, state.audio.voices2b];
       if (chartSource === "brokenReality") return [state.audio.inst3, state.audio.voices3a, state.audio.voices3b];
       if (chartSource === "challengeEdd") return [state.audio.challengeInst, state.audio.challengeVoices];
@@ -36,6 +38,8 @@
       else if (chartSource === "boxingMatch" && typeof ensureBoxingMatchAudio === "function") ensureBoxingMatchAudio();
       else if (chartSource === "boxingMatchWg" && typeof window.ensureBoxingMatchWgAudio === "function") window.ensureBoxingMatchWgAudio();
       else if (chartSource === "combat" && typeof ensureCombatAudio === "function") ensureCombatAudio();
+      else if (chartSource === "oneHit" && typeof ensureOneHitAudio === "function") ensureOneHitAudio();
+      else if (chartSource === "overthrone" && typeof window.ensureOverthroneAudio === "function") window.ensureOverthroneAudio();
       else if (chartSource === "perseverance" && typeof ensurePerseveranceAudio === "function") ensurePerseveranceAudio();
       else if (chartSource === "brokenReality" && typeof window.ensureBrokenRealityAudio === "function") window.ensureBrokenRealityAudio();
       else if (chartSource === "challengeEdd" && typeof window.ensureChallengeEddAudio === "function") window.ensureChallengeEddAudio();

@@ -164,6 +164,20 @@ function classifyLastReel(group, time, lane, side) {
   return null;
 }
 
+function pushConvertedNote(notes, options, noteIndex, time, spb, laneBase, side, sustain, special, sideCharacter) {
+  const fullLane = laneBase + (side === "player" ? 4 : 0);
+  notes.push({
+    id: `${options.prefix}-${noteIndex}`,
+    beat: time / spb,
+    time,
+    lane: fullLane,
+    side,
+    character: sideCharacter[side],
+    sLen: sustain,
+    specialType: special?.noteType || null
+  });
+}
+
 function convertPsychChart(chartFileRelative, options) {
   const rawSong = readJson(chartFileRelative).song;
   const bpm = Number(options.bpm || rawSong.bpm || 120);
@@ -208,19 +222,8 @@ function convertPsychChart(chartFileRelative, options) {
           side,
           ...special
         });
-        continue;
       }
-      const fullLane = laneBase + (side === "player" ? 4 : 0);
-      notes.push({
-        id: `${options.prefix}-${noteIndex++}`,
-        beat: time / spb,
-        time,
-        lane: fullLane,
-        side,
-        character: sideCharacter[side],
-        sLen: sustain,
-        specialType: special?.noteType || null
-      });
+      pushConvertedNote(notes, options, noteIndex++, time, spb, laneBase, side, sustain, special, sideCharacter);
     }
     cursorBeat = endBeat;
   }
@@ -314,8 +317,8 @@ function buildSansational() {
         { scale: 1.02, flipX: false }
       ),
       boyfriend: buildSpriteData(
-        "assets/shared/images/characters/BoyFriend_SansWT.png",
-        "assets/shared/images/characters/BoyFriend_SansWT.xml",
+        "assets/shared/images/characters/BF-BS-shader.png",
+        "assets/shared/images/characters/BF-BS-shader.xml",
         {
           idle: { prefix: "BF idle dance instance", fps: 24 },
           singLEFT: { prefix: "BF NOTE LEFT instance", fps: 24 },
@@ -330,7 +333,7 @@ function buildSansational() {
           attack: { prefix: "0BF attack instance", fps: 24 },
           hurt: { prefix: "BF hit instance", fps: 24 }
         },
-        { scale: 0.98, flipX: false }
+        { scale: 1, flipX: false }
       ),
       dodgeMechsShader: buildStageAnimData(
         "assets/sans/images/DodgeMechsBS-Shader.png",
@@ -403,6 +406,22 @@ function buildLastReel() {
       roomTop: copyAsset("assets/bendy/images/NUTS.png", "assets/indie-cross/last-reel-room-top.png"),
       roomChain: copyAsset("assets/bendy/images/ChainUTS.png", "assets/indie-cross/last-reel-chain-orig.png"),
       inkyDepths: copyAsset("assets/bendy/images/inky depths.png", "assets/indie-cross/last-reel-inky-depths.png"),
+      jzBoy: buildStageAnimData(
+        "assets/bendy/images/third/JzBoy.png",
+        "assets/bendy/images/third/JzBoy.xml",
+        {
+          walk: { prefix: "Jack Copper Walk by instance", fps: 24, loop: true }
+        },
+        { image: "last-reel-jzboy.png", xml: "last-reel-jzboy.xml" }
+      ),
+      sammyBg: buildStageAnimData(
+        "assets/bendy/images/third/SammyBg.png",
+        "assets/bendy/images/third/SammyBg.xml",
+        {
+          idle: { prefix: "Sam instance", fps: 24, loop: true }
+        },
+        { image: "last-reel-sammy-bg.png", xml: "last-reel-sammy-bg.xml" }
+      ),
       roomCandles: buildStageAnimData(
         "assets/bendy/images/Candles.png",
         "assets/bendy/images/Candles.xml",
