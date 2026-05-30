@@ -823,6 +823,8 @@
     }
 
     function overthroneNoteHidden(note, t) {
+      // In online matches every note stays visible (invisible flag ignored).
+      try { if (typeof state !== "undefined" && state.mode === "online") return false; } catch (e) {}
       if (!note.invisible) return false;
       return !(note.side === "opp" && sansOpponentNoteAlpha(t) > 0.01);
     }
@@ -834,7 +836,10 @@
       const fx = latestEventState(t);
       const scroll = currentScrollPx(t);
       ctx.save();
-      ctx.globalAlpha = Math.max(0.12, Math.min(1, fx.hudAlpha));
+      // Online matches: force full HUD alpha so the dim-arrows shader event
+      // never hides notes during play.
+      const isOnlineMatch = (typeof state !== "undefined" && state.mode === "online");
+      ctx.globalAlpha = isOnlineMatch ? 1 : Math.max(0.12, Math.min(1, fx.hudAlpha));
       for (const note of state.chart.notes) {
         if (overthroneNoteHidden(note, t)) continue;
         if (note.played && note.hit && (!isHoldNote(note) || note.holdDone)) continue;

@@ -390,7 +390,18 @@ body.mobile .top .health {
 body.mobile .top .health .label,
 body.mobile .top .health .sub { display: none !important; }
 body.mobile .top .health .bar { height: 10px !important; }
-body.mobile #touchControls { bottom: 8px !important; left: 6px !important; right: 6px !important; gap: 8px !important; z-index: 1001 !important; }
+body.mobile #touchControls {
+    display: flex !important;
+    bottom: max(8px, env(safe-area-inset-bottom)) !important;
+    left: max(6px, env(safe-area-inset-left)) !important;
+    right: max(6px, env(safe-area-inset-right)) !important;
+    gap: 8px !important;
+    z-index: 1001 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: none !important;
+}
+body.mobile .touchBtn { pointer-events: auto !important; }
 body.mobile .touchBtn { height: 64px !important; font-size: 26px !important; border-width: 2px !important; max-width: none !important; border-radius: 10px !important; }
 #portraitNag {
     display: none;
@@ -2583,9 +2594,16 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
     function isMobileDevice() {
         try {
             const ua = navigator.userAgent || "";
-            if (/iPhone|iPod|Android.*Mobile|BlackBerry|Opera Mini|IEMobile|Silk-Accelerated|webOS/i.test(ua)) return true;
+            if (/iPhone|iPod|Android.*Mobile|Android.*Tablet|BlackBerry|Opera Mini|IEMobile|Silk-Accelerated|webOS|Mobile Safari|Kindle/i.test(ua)) return true;
             const isiPad = /iPad/i.test(ua) || (/Macintosh/i.test(ua) && (navigator.maxTouchPoints || 0) >= 2 && !(window.matchMedia && window.matchMedia("(pointer: fine)").matches));
             if (isiPad) return true;
+            // Fallback: touchscreen + NO mouse + narrow viewport. The !pointer:fine
+            // gate ensures touchscreen laptops (which have a mouse/trackpad) are
+            // NOT caught here.
+            if (window.matchMedia
+                && window.matchMedia("(pointer: coarse)").matches
+                && !window.matchMedia("(pointer: fine)").matches
+                && (window.innerWidth <= 900 || (navigator.maxTouchPoints || 0) >= 1)) return true;
         } catch (e) {}
         return false;
     }
