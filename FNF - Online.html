@@ -355,6 +355,28 @@ body.mobile .actions { gap: 6px !important; flex-wrap: wrap !important; }
 body.mobile .modalFoot { flex-wrap: wrap !important; gap: 8px !important; }
 body.mobile .authFields { gap: 8px !important; }
 body.mobile .authInput { font-size: 14px !important; padding: 8px 10px !important; }
+
+/* ===== MOBILE PERF: kill expensive CSS effects =====
+   backdrop-filter is the single biggest mobile killer (mobile GPUs can spend
+   3-6ms PER FRAME on a single blur layer). box-shadow with big blur radii is
+   the second worst. Transitions/animations stack with everything else. */
+body.mobile *, body.mobile *::before, body.mobile *::after {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    filter: none !important;
+    transition: none !important;
+    animation: none !important;
+    -webkit-transform: translateZ(0); /* hint GPU compositing where useful */
+}
+/* Re-enable the few animations we actually want */
+body.mobile .liveDot, body.mobile #portraitNag .ic { animation: revert !important; }
+/* Drop the heavy radial-gradient backdrops on overlays (cheaper solid bg) */
+body.mobile .overlay { background: rgba(4,7,16,0.92) !important; }
+/* Hide every <video> element on mobile (silly billy plays MP4s that pin the
+   decoder; the sprite animation already plays as a fallback) */
+body.mobile video { display: none !important; visibility: hidden !important; }
 body.mobile .grid2 { grid-template-columns: 1fr !important; }
 body.mobile .resultGrid { grid-template-columns: repeat(2, 1fr) !important; }
 body.mobile .btn { font-size: 14px !important; padding: 10px 14px !important; min-height: 40px !important; }
@@ -2185,14 +2207,14 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
         }
         if (toggle) toggle.checked = !!state.settings.mobile;
     }
-    // Cap render to ~30fps on mobile to fight lag. The game loop reads audio
+    // Cap render to ~24fps on mobile to fight lag. The game loop reads audio
     // time (not RAF delta) for chart positions, so visuals just run at lower
     // frame rate while audio + hit detection stay in real time.
     let _origRaf = null;
     function enableMobileRafThrottle() {
         if (_origRaf) return;
         _origRaf = window.requestAnimationFrame.bind(window);
-        const MIN_MS = 33; // ~30fps
+        const MIN_MS = 42; // ~24fps — film-grade, leaves room for slow phones
         let lastT = 0;
         window.requestAnimationFrame = function(cb) {
             return _origRaf(function (t) {

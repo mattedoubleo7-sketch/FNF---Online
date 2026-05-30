@@ -346,6 +346,21 @@ body.mobile .actions { gap: 6px !important; flex-wrap: wrap !important; }
 body.mobile .modalFoot { flex-wrap: wrap !important; gap: 8px !important; }
 body.mobile .authFields { gap: 8px !important; }
 body.mobile .authInput { font-size: 14px !important; padding: 8px 10px !important; }
+
+/* ===== MOBILE PERF: kill expensive CSS effects ===== */
+body.mobile *, body.mobile *::before, body.mobile *::after {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    filter: none !important;
+    transition: none !important;
+    animation: none !important;
+    -webkit-transform: translateZ(0);
+}
+body.mobile .liveDot, body.mobile #portraitNag .ic { animation: revert !important; }
+body.mobile .overlay { background: rgba(4,7,16,0.92) !important; }
+body.mobile video { display: none !important; visibility: hidden !important; }
 body.mobile .grid2 { grid-template-columns: 1fr !important; }
 body.mobile .resultGrid { grid-template-columns: repeat(2, 1fr) !important; }
 body.mobile .btn { font-size: 14px !important; padding: 10px 14px !important; min-height: 40px !important; }
@@ -2269,7 +2284,7 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
     function enableMobileRafThrottle() {
         if (_origRaf) return;
         _origRaf = window.requestAnimationFrame.bind(window);
-        const MIN_MS = 33;
+        const MIN_MS = 42; // ~24fps for mobile headroom
         let lastT = 0;
         window.requestAnimationFrame = function(cb) {
             return _origRaf(function (t) {
