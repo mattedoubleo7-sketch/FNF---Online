@@ -255,77 +255,100 @@ body.fullViewport #app { width: 100vw; height: 100vh; aspect-ratio: auto; border
 .touchBtn { flex: 1; min-width: 0; height: 95px; max-width: 180px; border: 3px solid var(--c, #fff); background: rgba(0,0,0,0.55); color: var(--c, #fff); font-size: 44px; line-height: 1; border-radius: 14px; pointer-events: auto; touch-action: none; user-select: none; cursor: pointer; transition: transform .05s, background .1s, color .1s; font-weight: 900; padding: 0; }
 .touchBtn:active, .touchBtn.pressed { background: var(--c, #fff); color: #000; transform: scale(0.94); }
 @media (max-width: 700px) { .touchBtn { height: 78px; font-size: 38px; } }
-/* Mobile mode — letterbox the 16:9 canvas to fit phone screens, shrink HUD,
-   re-size touch buttons. Toggled by Settings > Mobile (sets body.mobile). */
-html.mobile, body.mobile { background: #000; overflow: hidden; }
-body.mobile { padding: 0; margin: 0; }
+/* MOBILE MODE — full rewrite. Use !important to beat all the desktop sizing
+   rules (min-height:720, position:absolute inset:0, etc.). Strategy:
+   - #app fixed to viewport, no min-height
+   - Canvas centered with 16:9 letterbox via min()/calc()
+   - Pixelated rendering for perf (skips smoothing on the scale-down)
+   - Almost all HUD chunks HIDDEN — only the health bar survives
+   - Touch buttons sit at the bottom overlaying the letterbox bars
+   - Portrait shows a "rotate to landscape" overlay */
+html.mobile, body.mobile { background: #000 !important; overflow: hidden !important; padding: 0 !important; margin: 0 !important; }
+body.mobile { width: 100vw !important; height: 100vh !important; }
 body.mobile #app {
-    width: 100vw;
-    height: 100vh;
-    min-height: 0;
-    aspect-ratio: auto;
-    background: #000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 0;
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    min-height: 0 !important;
+    max-height: 100vh !important;
+    aspect-ratio: auto !important;
+    background: #000 !important;
+    border-radius: 0 !important;
+    border: 0 !important;
+    overflow: hidden !important;
+    display: block !important;
 }
-body.mobile canvas {
-    width: min(100vw, calc(100vh * 16 / 9));
-    height: min(100vh, calc(100vw * 9 / 16));
-    display: block;
+body.mobile #canvas, body.mobile canvas {
+    position: absolute !important;
+    left: 50% !important;
+    top: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    width: min(100vw, calc(100vh * 16 / 9)) !important;
+    height: min(100vh, calc(100vw * 9 / 16)) !important;
+    max-width: 100vw !important;
+    max-height: 100vh !important;
+    display: block !important;
+    image-rendering: optimizeSpeed;
+    image-rendering: pixelated;
 }
+/* HUD sized to match the letterbox so chips line up with the playfield */
 body.mobile .hud, body.mobile .overlay {
-    /* HUD is positioned over the canvas, so size it to the canvas box too. */
-    width: min(100vw, calc(100vh * 16 / 9));
-    height: min(100vh, calc(100vw * 9 / 16));
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    inset: auto;
-    pointer-events: none;
-    font-size: 11px;
+    position: absolute !important;
+    left: 50% !important;
+    top: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    inset: auto !important;
+    width: min(100vw, calc(100vh * 16 / 9)) !important;
+    height: min(100vh, calc(100vw * 9 / 16)) !important;
+    pointer-events: none !important;
+    font-size: 10px !important;
 }
-body.mobile .top, body.mobile .bottom { left: 4px; right: 4px; gap: 4px; }
-body.mobile .top { top: 4px; }
-body.mobile .bottom { bottom: 4px; }
-body.mobile .now, body.mobile .health, body.mobile .stats, body.mobile .status {
-    min-width: 0; padding: 6px 8px;
+/* Hide everything except the health bar to keep the playfield uncluttered */
+body.mobile .top .now,
+body.mobile .top .stats,
+body.mobile .top .status,
+body.mobile .bottom,
+body.mobile .help,
+body.mobile #judgments .feed { display: none !important; }
+body.mobile .top {
+    position: absolute !important;
+    left: 4px !important; right: 4px !important; top: 4px !important;
+    gap: 4px !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
 }
-body.mobile .now { min-width: 100px; }
-body.mobile .now .title { font-size: 13px; margin-top: 2px; }
-body.mobile .now .sub { font-size: 10px; margin-top: 2px; }
-body.mobile .health { flex: 1 1 100px; max-width: none; }
-body.mobile .health .bar { height: 12px; }
-body.mobile .stats { padding: 4px; gap: 4px; margin-left: auto; }
-body.mobile .mini { min-width: 0; padding: 4px 6px; }
-body.mobile .mini .value { font-size: 14px; margin-top: 2px; }
-body.mobile .mini .label, body.mobile .mini .sub { font-size: 9px; }
-body.mobile .status { min-width: 0; max-width: 200px; padding: 6px 8px; }
-body.mobile #statusText { font-size: 14px; }
-body.mobile #statusSub { font-size: 10px; margin-top: 2px; }
-body.mobile .help { gap: 4px; }
-body.mobile .pill { padding: 4px 8px; font-size: 10px; }
-body.mobile #touchControls { bottom: 6px; left: 6px; right: 6px; gap: 8px; }
-body.mobile .touchBtn { height: 64px; font-size: 26px; border-width: 2px; max-width: none; border-radius: 10px; }
-body.mobile #judgments { width: 100%; height: 100%; }
-/* Portrait nag overlay — gameplay needs landscape on phones */
+body.mobile .top .health {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    padding: 4px 8px !important;
+    border-radius: 10px !important;
+}
+body.mobile .top .health .label,
+body.mobile .top .health .sub { display: none !important; }
+body.mobile .top .health .bar { height: 10px !important; }
+/* Touch controls — sit fixed at bottom over the letterbox bar */
+body.mobile #touchControls { bottom: 8px !important; left: 6px !important; right: 6px !important; gap: 8px !important; z-index: 1001 !important; }
+body.mobile .touchBtn { height: 64px !important; font-size: 26px !important; border-width: 2px !important; max-width: none !important; border-radius: 10px !important; }
+/* Portrait nag — game needs landscape */
 #portraitNag {
     display: none;
     position: fixed; inset: 0; z-index: 9999;
-    background: rgba(0,0,0,0.95);
+    background: rgba(0,0,0,0.96);
     color: #fff;
     text-align: center;
     flex-direction: column;
     align-items: center; justify-content: center;
-    gap: 14px; padding: 24px;
+    gap: 12px; padding: 22px;
     font-family: Impact, Haettenschweiler, sans-serif;
 }
-#portraitNag .ic { font-size: 64px; animation: rotateHint 2.4s ease-in-out infinite; transform-origin: center; display: inline-block; }
+#portraitNag .ic { font-size: 56px; animation: rotateHint 2.4s ease-in-out infinite; transform-origin: center; display: inline-block; }
 @keyframes rotateHint { 0%, 100% { transform: rotate(-12deg); } 50% { transform: rotate(78deg); } }
-#portraitNag h2 { margin: 0; font-size: 30px; color: #ffd166; letter-spacing: 0.04em; }
-#portraitNag p { margin: 0; font-size: 15px; max-width: 320px; line-height: 1.4; color: #d7dff8; font-family: Arial, sans-serif; }
-@media (orientation: portrait) { body.mobile #portraitNag { display: flex; } }
+#portraitNag h2 { margin: 0; font-size: 28px; color: #ffd166; letter-spacing: 0.04em; }
+#portraitNag p { margin: 0; font-size: 13px; max-width: 320px; line-height: 1.45; color: #d7dff8; font-family: Arial, sans-serif; }
+#portraitNag .perfTip { margin-top: 6px; padding: 8px 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); border-radius: 10px; color: #b9c7ff; font-size: 11px; font-family: Arial, sans-serif; max-width: 320px; }
+@media (orientation: portrait) { body.mobile #portraitNag { display: flex !important; } }
 </style>
 </head>
 <body>
@@ -2059,6 +2082,7 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
     <span class="ic">📱</span>
     <h2>Rotate to landscape</h2>
     <p>FNF Onliine is designed for a wide screen. Turn your phone sideways to see the game properly.</p>
+    <div class="perfTip">If it's laggy: close other browser tabs, use Chrome, and let the page load fully before tapping play. Mobile performance is best on newer phones.</div>
 </div>
 <script>
 (function() {
@@ -2071,12 +2095,35 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
             tc.classList.add("show");
             document.body.classList.add("mobile");
             document.documentElement.classList.add("mobile");
+            enableMobileRafThrottle();
         } else {
             tc.classList.remove("show");
             document.body.classList.remove("mobile");
             document.documentElement.classList.remove("mobile");
+            disableMobileRafThrottle();
         }
         if (toggle) toggle.checked = !!state.settings.mobile;
+    }
+    // Cap render to ~30fps on mobile to fight lag. The game loop reads audio
+    // time (not RAF delta) for chart positions, so visuals just run at lower
+    // frame rate while audio + hit detection stay in real time.
+    let _origRaf = null;
+    function enableMobileRafThrottle() {
+        if (_origRaf) return;
+        _origRaf = window.requestAnimationFrame.bind(window);
+        const MIN_MS = 33; // ~30fps
+        let lastT = 0;
+        window.requestAnimationFrame = function(cb) {
+            return _origRaf(function (t) {
+                if (t - lastT >= MIN_MS) { lastT = t; cb(t); }
+                else _origRaf(cb);
+            });
+        };
+    }
+    function disableMobileRafThrottle() {
+        if (!_origRaf) return;
+        window.requestAnimationFrame = _origRaf;
+        _origRaf = null;
     }
     if (toggle) toggle.addEventListener("change", () => {
         state.settings.mobile = !!toggle.checked;
