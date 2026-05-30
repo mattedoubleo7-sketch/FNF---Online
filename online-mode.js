@@ -262,6 +262,15 @@ async function preloadSongForMatch(songId, matchId) {
       try { track.load(); } catch {}
     });
     await Promise.all([waitForTrackReady(state.audio.shimmyInst), waitForTrackReady(state.audio.shimmyVoices)]);
+  } else if (SONGS[songId]?.chartSource === "sillyBilly") {
+    if (typeof window.ensureSillyBillyAudio === "function") window.ensureSillyBillyAudio();
+    [state.audio.sillyBillyInst, state.audio.sillyBillyVoices].forEach(track => {
+      if (!track) return;
+      track.pause();
+      try { track.currentTime = 0; } catch {}
+      try { track.load(); } catch {}
+    });
+    await Promise.all([waitForTrackReady(state.audio.sillyBillyInst), waitForTrackReady(state.audio.sillyBillyVoices)]);
   } else if (SONGS[songId]?.chartSource === "perseverance") {
     ensurePerseveranceAudio();
     [state.audio.inst2, state.audio.voices2a, state.audio.voices2b].forEach(track => {
@@ -423,6 +432,10 @@ function syncOnlinePlayback(force = false) {
     if (typeof ensureShimmyAudio === "function") ensureShimmyAudio();
     syncTrackToTime(state.audio.shimmyInst, targetTime, shouldPlay, syncOptions);
     syncTrackToTime(state.audio.shimmyVoices, targetTime, shouldPlay, { ...syncOptions, isSecondary: true });
+  } else if (state.currentSong.chartSource === "sillyBilly") {
+    if (typeof window.ensureSillyBillyAudio === "function") window.ensureSillyBillyAudio();
+    syncTrackToTime(state.audio.sillyBillyInst, targetTime, shouldPlay, syncOptions);
+    syncTrackToTime(state.audio.sillyBillyVoices, targetTime, shouldPlay, { ...syncOptions, isSecondary: true });
   } else if (state.currentSong.chartSource === "perseverance") {
     ensurePerseveranceAudio();
     syncTrackToTime(state.audio.inst2, targetTime, shouldPlay, syncOptions);
