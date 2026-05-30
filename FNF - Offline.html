@@ -412,6 +412,208 @@ body.mobile .touchBtn { height: 64px !important; font-size: 26px !important; bor
     body.mobile #portraitNag { display: flex !important; }
     body.mobile:has(.overlay.show) #portraitNag { display: none !important; }
 }
+
+/* === Reworked menu — Silly Billy themed song selector === */
+#menu { padding: 22px; gap: 16px; flex-direction: column !important; align-items: stretch !important; }
+.menuTopBar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    border-radius: 18px;
+    background:
+        linear-gradient(135deg, rgba(255, 31, 109, 0.14), rgba(70, 197, 255, 0.04)),
+        rgba(20, 5, 14, 0.78);
+    border: 1px solid rgba(255, 31, 109, 0.24);
+}
+.menuBrand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.menuBrandLogo { width: 44px; height: 44px; border-radius: 10px; display: block; flex-shrink: 0; }
+.menuBrandName { font-size: 22px; font-weight: 900; line-height: 1; letter-spacing: -0.02em; }
+.menuBrandTag { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.16em; margin-top: 3px; }
+.menuTopActions { display: flex; gap: 8px; }
+.iconBtn {
+    width: 42px; height: 42px; border-radius: 12px;
+    border: 1px solid rgba(255, 31, 109, 0.32);
+    background: rgba(255, 31, 109, 0.06);
+    color: #fff;
+    font-size: 18px;
+    font-family: inherit;
+    cursor: pointer;
+    display: grid; place-items: center;
+    transition: transform 0.12s, background 0.12s, border-color 0.12s;
+}
+.iconBtn:hover { background: rgba(255, 31, 109, 0.18); transform: translateY(-1px); border-color: rgba(255, 31, 109, 0.55); }
+.songSearchBar { display: flex; gap: 10px; align-items: center; }
+.songSearchInput {
+    flex: 1; min-width: 0;
+    padding: 12px 16px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 31, 109, 0.24);
+    background: rgba(255, 255, 255, 0.05);
+    color: #fff;
+    font: inherit; font-size: 15px;
+    transition: border-color 0.12s, box-shadow 0.12s;
+}
+.songSearchInput::placeholder { color: #a9b9d9; }
+.songSearchInput:focus { outline: none; border-color: rgba(255, 31, 109, 0.65); box-shadow: 0 0 0 3px rgba(255, 31, 109, 0.18); }
+.songSearchCount { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.14em; padding: 0 8px; white-space: nowrap; }
+.songCategories { display: flex; gap: 8px; flex-wrap: wrap; }
+.catChip {
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+    color: #d7dff8;
+    font: inherit; font-size: 12px; font-weight: 700;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s, color 0.12s, transform 0.12s;
+    letter-spacing: 0.04em;
+}
+.catChip:hover { background: rgba(255, 255, 255, 0.09); transform: translateY(-1px); }
+.catChip.active { background: linear-gradient(135deg, #ff3a82, #c8102e); color: #fff; border-color: rgba(255, 31, 109, 0.6); }
+.catChip.new-chip { color: #ffd166; border-color: rgba(255, 209, 102, 0.4); }
+.catChip.new-chip.active { background: linear-gradient(135deg, #ffd166, #ff7b54); color: #1d0512; border-color: rgba(255, 209, 102, 0.7); }
+.songGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 14px;
+    align-content: start;
+    flex: 1;
+}
+.songGrid:empty::after {
+    content: "No songs match. Try a different filter.";
+    grid-column: 1 / -1;
+    text-align: center;
+    color: var(--muted);
+    padding: 40px 16px;
+    font-size: 14px;
+}
+.songGrid > .songCard {
+    display: grid; grid-template-rows: auto auto 1fr;
+    gap: 6px;
+    padding: 14px 14px 14px 18px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    background:
+        linear-gradient(160deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
+        rgba(20, 5, 14, 0.5);
+    text-align: left;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.12s, border-color 0.12s, background 0.12s, box-shadow 0.18s;
+}
+.songGrid > .songCard::before {
+    content: "";
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 4px;
+    background: var(--accent, #ff3a82);
+    transition: width 0.12s;
+}
+.songGrid > .songCard:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255, 31, 109, 0.42);
+    background:
+        linear-gradient(160deg, rgba(255, 31, 109, 0.08), rgba(255, 255, 255, 0.02)),
+        rgba(20, 5, 14, 0.6);
+}
+.songGrid > .songCard:hover::before { width: 6px; }
+.songGrid > .songCard.selected {
+    border-color: rgba(255, 31, 109, 0.85);
+    background:
+        linear-gradient(160deg, rgba(255, 31, 109, 0.2), rgba(255, 31, 109, 0.04)),
+        rgba(20, 5, 14, 0.7);
+    box-shadow: 0 8px 32px rgba(255, 31, 109, 0.22);
+}
+.songGrid > .songCard.selected::before { width: 6px; }
+.songCardTop { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.songCardName { font-size: 19px; font-weight: 900; line-height: 1.1; }
+.songCardBadge {
+    font-size: 9px; padding: 3px 8px; border-radius: 999px;
+    font-weight: 900; letter-spacing: 0.14em; text-transform: uppercase;
+    background: rgba(255, 255, 255, 0.08); color: #d7dff8;
+    flex-shrink: 0;
+}
+.songCardBadge.new {
+    background: linear-gradient(135deg, #ffd166, #ff7b54);
+    color: #1d0512;
+}
+.songCardMeta {
+    display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+    font-size: 10px; color: #c8d2f4;
+    text-transform: uppercase; letter-spacing: 0.1em;
+}
+.songCardMeta .dot { opacity: 0.4; }
+.songCardDesc {
+    font-size: 12px; line-height: 1.45; color: #e2e8fc;
+    display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3;
+    -webkit-box-orient: vertical; overflow: hidden;
+}
+.menuStickyBar {
+    position: sticky; bottom: 0;
+    display: grid; grid-template-columns: 1fr auto;
+    gap: 14px; align-items: center;
+    padding: 14px 16px;
+    border-radius: 20px;
+    background:
+        linear-gradient(135deg, rgba(20, 5, 14, 0.96), rgba(8, 14, 28, 0.94)),
+        rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 31, 109, 0.4);
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(8px);
+}
+.selectedTrack { min-width: 0; }
+.selectedTrackTitle { font-size: 22px; font-weight: 900; line-height: 1.1; }
+.selectedTrackMeta { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.selectedTrackActions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.modeToggle {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--line);
+    font-size: 12px;
+    cursor: pointer;
+    font-weight: 700;
+}
+.modeToggle input { width: 16px; height: 16px; accent-color: #ff3a82; cursor: pointer; }
+.cameraSelect {
+    padding: 8px 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--line);
+    color: #fff;
+    font: inherit; font-size: 12px; font-weight: 700;
+    cursor: pointer;
+}
+.playBig {
+    background: linear-gradient(135deg, #ff3a82, #c8102e);
+    color: #fff;
+    padding: 14px 28px;
+    font-size: 16px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    box-shadow: 0 14px 34px rgba(255, 31, 109, 0.34);
+    border: 0;
+    border-radius: 16px;
+    cursor: pointer;
+}
+.playBig:hover { box-shadow: 0 18px 44px rgba(255, 31, 109, 0.45); transform: translateY(-2px); }
+@media (max-width: 700px) {
+    .menuStickyBar { grid-template-columns: 1fr; }
+    .selectedTrackActions { justify-content: stretch; }
+    .playBig { flex: 1; }
+}
+body.mobile .menuTopBar { padding: 10px 12px !important; }
+body.mobile .menuBrandName { font-size: 18px !important; }
+body.mobile .menuBrandLogo { width: 36px !important; height: 36px !important; }
+body.mobile .songSearchInput { font-size: 14px !important; padding: 10px 12px !important; }
+body.mobile .songGrid { grid-template-columns: 1fr !important; gap: 10px !important; }
+body.mobile .songCardName { font-size: 17px !important; }
+body.mobile .menuStickyBar { padding: 10px 12px !important; grid-template-columns: 1fr !important; }
+body.mobile .selectedTrackActions { gap: 6px !important; }
+body.mobile .playBig { padding: 12px 16px !important; font-size: 14px !important; flex: 1 !important; }
 </style>
 </head>
 <body>
@@ -448,48 +650,49 @@ body.mobile .touchBtn { height: 64px !important; font-size: 26px !important; bor
     </div>
     <div id="judgments"><div class="feed" id="oppFeed"></div><div class="feed" id="playerFeed"></div></div>
     <div class="overlay show" id="menu">
-        <section class="hero">
-            <div class="eyebrow">Standalone rhythm battle</div>
-            <div class="heroBrand">
-                <img class="heroLogo" src="assets/bf-logo.png.png" alt="Boyfriend logo">
-                <div class="heroTitle">
-                    <h1>Friday Night Funkin' Browser Jam</h1>
+        <div class="menuTopBar">
+            <div class="menuBrand">
+                <img class="menuBrandLogo" src="assets/icon.ico" alt="">
+                <div>
+                    <div class="menuBrandName">FNF Onliine</div>
+                    <div class="menuBrandTag">Silly Billy Build · Offline</div>
                 </div>
             </div>
-            <p>This is a self-contained Friday Night Funkin' style browser game with procedural charts, synthesized music, judgments, health, rebindable controls, and a proper results screen.</p>
-            <div class="features">
-                <div class="feature"><div class="name">Four-lane highway</div><div class="desc">Classic left, down, up, right note lanes with timing windows, combo tracking, and misses.</div></div>
-                <div class="feature"><div class="name">Week-style tracks</div><div class="desc">Battle Matt in Sporting or Boxing Match, Sans in Perseverance, or Broken Reality's hall showdown.</div></div>
-                <div class="feature"><div class="name">No setup required</div><div class="desc">Open the file and play. No installs, assets, or servers required.</div></div>
+            <div class="menuTopActions">
+                <button class="iconBtn" id="settingsBtn" title="Controls / Settings" aria-label="Settings">⚙</button>
             </div>
-            <div class="actions">
-                <button class="btn primary" id="playBtn">Play Selected</button>
-                <button class="btn secondary" id="settingsBtn">Controls</button>
+        </div>
+        <div class="songSearchBar">
+            <input type="search" class="songSearchInput" id="songSearch" placeholder="🔍  Search songs, characters, tags..." autocomplete="off">
+            <span class="songSearchCount" id="songSearchCount">0 songs</span>
+        </div>
+        <div class="songCategories" id="songCategories"></div>
+        <div class="songGrid songList" id="songList"></div>
+        <div class="menuStickyBar">
+            <div class="selectedTrack">
+                <div class="selectedTrackTitle" id="selectedSongName">Pick a track</div>
+                <div class="selectedTrackMeta" id="selectedSongMeta">Browse the songs above to start a battle.</div>
             </div>
-        </section>
-        <section class="songs">
-            <div class="row" style="justify-content:space-between; align-items:flex-end;"><div><div class="eyebrow">Set List</div><div style="font-size:30px; font-weight:900; line-height:1; margin-top:4px;">Select a track</div></div><div class="eyebrow" id="difficulty">Difficulty: Normal</div></div>
-            <div class="songList" id="songList"></div>
-            <div class="menuFoot" style="margin-top:auto; justify-content:space-between; align-items:center;">
-                <label class="toggle"><input type="checkbox" id="versusToggle"><span>Local 1v1 versus mode</span></label>
-                <label class="toggle"><select id="cameraMode" style="font:inherit;background:rgba(255,255,255,0.08);color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:6px 10px;cursor:pointer;"><option value="off">Camera: Off</option><option value="center">Camera: Stay Center</option><option value="pan" selected>Camera: Pan L/R</option></select></label>
+            <div class="selectedTrackActions">
+                <label class="modeToggle"><input type="checkbox" id="versusToggle"><span>Versus</span></label>
+                <select class="cameraSelect" id="cameraMode">
+                    <option value="off">📷 Off</option>
+                    <option value="center">📷 Center</option>
+                    <option value="pan" selected>📷 Pan L/R</option>
+                </select>
+                <button class="btn playBig" id="playBtn">▶ PLAY</button>
             </div>
-            <div class="onlineCard">
-                <div class="onlineMeta">
-                    <div><div class="eyebrow">Online</div><div class="onlineStatus" id="onlineStatus">Offline</div></div>
-                    <div><div class="eyebrow">Account</div><div class="onlineAccount" id="onlineAccount">Signed out</div></div>
-                </div>
-                <div class="onlineRow">
-                    <button class="btn secondary onlineBtn" id="onlineAuthBtn">Online</button>
-                    <input class="onlineInput" id="roomCodeInput" placeholder="Room Code" maxlength="6">
-                    <button class="btn secondary onlineBtn" id="hostOnlineBtn">Host</button>
-                    <button class="btn secondary onlineBtn" id="joinOnlineBtn">Join</button>
-                    <button class="btn secondary onlineBtn" id="leaveOnlineBtn">Leave</button>
-                    <button class="btn secondary onlineBtn" id="onlineLogoutBtn">Log Out</button>
-                </div>
-                <div class="onlineHint" id="onlineHint">Create an account to host or join online rooms.</div>
-            </div>
-        </section>
+        </div>
+        <span id="difficulty" style="display:none;"></span>
+        <span id="onlineStatus" style="display:none;"></span>
+        <span id="onlineAccount" style="display:none;"></span>
+        <span id="onlineHint" style="display:none;"></span>
+        <button id="onlineAuthBtn" style="display:none;"></button>
+        <button id="hostOnlineBtn" style="display:none;"></button>
+        <button id="joinOnlineBtn" style="display:none;"></button>
+        <button id="leaveOnlineBtn" style="display:none;"></button>
+        <button id="onlineLogoutBtn" style="display:none;"></button>
+        <input id="roomCodeInput" style="display:none;">
     </div>
     <div class="overlay" id="settings">
         <div class="modal">
@@ -1375,22 +1578,123 @@ function bindButton(container, group, title){
 }
 function renderBinds(){ ui.soloBinds.innerHTML = ""; ui.p1Binds.innerHTML = ""; ui.p2Binds.innerHTML = ""; bindButton(ui.soloBinds, "solo"); bindButton(ui.p1Binds, "p1", "Player 1"); bindButton(ui.p2Binds, "p2", "Player 2"); }
 function clearBinding(){ if(!state.binding) return; state.binding.el.classList.remove("waiting"); state.binding.el.querySelector("strong").textContent = keyName(state.settings[state.binding.group][state.binding.dir]); state.binding = null; }
-function selectSong(id){
-    state.selectedSong = id; state.currentSong = SONGS[id];
-    ui.songList.querySelectorAll(".songCard").forEach(el => el.classList.toggle("selected", el.dataset.id === id));
-    ui.songTitle.textContent = state.currentSong.title; ui.songSub.textContent = state.currentSong.subtitle; ui.difficulty.textContent = `Difficulty: ${state.currentSong.diff}`;
-    if(!state.playing){ ui.statusText.textContent = `Selected: ${state.currentSong.title}`; ui.statusSub.textContent = state.currentSong.blurb; }
+// Songs marked NEW (gold badge + "🆕 New" category filter)
+const NEW_SONGS = new Set(["sillyBilly", "shimmy"]);
+const SONG_CATEGORIES = [
+    { id: "matt",    label: "VS Matt",      match: /matt|sporting|boxing match/i },
+    { id: "wii",     label: "Wii Funkin",   match: /wii funkin/i },
+    { id: "dustin",  label: "Dustin",       match: /dustin|broken reality|overthrone/i },
+    { id: "whitty",  label: "Whitty",       match: /whitty|ballistic/i },
+    { id: "indie",   label: "Indie Cross",  match: /indie cross|bendy/i },
+    { id: "sans",    label: "Sans",         match: /\bsans\b|nightmare|sansational|perseverance/i },
+    { id: "tabi",    label: "Tabi",         match: /tabi|genocide/i },
+    { id: "space",   label: "Space",        match: /fallen stars|constellation/i },
+    { id: "edd",     label: "Eddsworld",    match: /eddsworld|challenge edd/i },
+    { id: "silly",   label: "Silly Billy",  match: /silly billy|dave|bambi/i },
+];
+function songCategoriesOf(song) {
+    const blob = ((song.title || "") + " " + (song.subtitle || "") + " " + (song.blurb || ""));
+    const out = [];
+    for (const c of SONG_CATEGORIES) if (c.match.test(blob)) out.push(c.id);
+    return out;
 }
+let _songFilter = { search: "", category: "" };
+
+function selectSong(id){
+    if (!SONGS[id]) id = Object.keys(SONGS)[0];
+    state.selectedSong = id; state.currentSong = SONGS[id];
+    if (ui.songList) ui.songList.querySelectorAll(".songCard").forEach(el => el.classList.toggle("selected", el.dataset.id === id));
+    if (ui.songTitle) ui.songTitle.textContent = state.currentSong.title;
+    if (ui.songSub) ui.songSub.textContent = state.currentSong.subtitle;
+    if (ui.difficulty) ui.difficulty.textContent = `Difficulty: ${state.currentSong.diff}`;
+    const nameEl = document.getElementById("selectedSongName");
+    const metaEl = document.getElementById("selectedSongMeta");
+    if (nameEl) nameEl.textContent = state.currentSong.title;
+    if (metaEl) metaEl.textContent = `${state.currentSong.diff} • ${state.currentSong.tempo} BPM • ${state.currentSong.subtitle}`;
+    if (!state.playing) {
+        if (ui.statusText) ui.statusText.textContent = `Selected: ${state.currentSong.title}`;
+        if (ui.statusSub) ui.statusSub.textContent = state.currentSong.blurb;
+    }
+}
+
+function renderSongCategories() {
+    const wrap = document.getElementById("songCategories");
+    if (!wrap) return;
+    wrap.innerHTML = "";
+    function chip(id, label, extra = "") {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "catChip " + extra + (_songFilter.category === id ? " active" : "");
+        b.textContent = label;
+        b.onclick = () => { _songFilter.category = id; renderSongs(); renderSongCategories(); };
+        return b;
+    }
+    wrap.appendChild(chip("", "All"));
+    wrap.appendChild(chip("new", "🆕 New", "new-chip"));
+    const present = new Set();
+    for (const song of Object.values(SONGS)) for (const c of songCategoriesOf(song)) present.add(c);
+    for (const c of SONG_CATEGORIES) if (present.has(c.id)) wrap.appendChild(chip(c.id, c.label));
+}
+
 function renderSongs(){
-    ui.songList.innerHTML = "";
-    Object.entries(SONGS).forEach(([id, song]) => {
-        const card = document.createElement("button");
-        card.className = "songCard"; card.dataset.id = id;
-        card.innerHTML = `<div class="name">${song.title}</div><div class="meta"><span>${song.subtitle}</span><span>${song.tempo} BPM</span></div><div class="desc">${song.blurb}</div>`;
-        card.onclick = () => selectSong(id);
-        ui.songList.appendChild(card);
+    if (!ui.songList) return;
+    const grid = ui.songList;
+    grid.innerHTML = "";
+    const q = (_songFilter.search || "").toLowerCase().trim();
+    const cat = _songFilter.category;
+    const entries = Object.entries(SONGS).filter(([id, song]) => {
+        if (cat === "new") { if (!NEW_SONGS.has(id)) return false; }
+        else if (cat) { if (!songCategoriesOf(song).includes(cat)) return false; }
+        if (q) {
+            const blob = (id + " " + (song.title||"") + " " + (song.subtitle||"") + " " + (song.blurb||"")).toLowerCase();
+            if (!blob.includes(q)) return false;
+        }
+        return true;
     });
-    selectSong(state.selectedSong);
+    for (const [id, song] of entries) {
+        const card = document.createElement("button");
+        card.type = "button";
+        card.className = "songCard"; card.dataset.id = id;
+        const isNew = NEW_SONGS.has(id);
+        const accent = (song.palette && song.palette[5]) || "#ff3a82";
+        card.style.setProperty("--accent", accent);
+        const cats = songCategoriesOf(song)
+            .map(c => SONG_CATEGORIES.find(x => x.id === c)?.label)
+            .filter(Boolean).slice(0, 2);
+        const metaParts = [];
+        cats.forEach((t, i) => { if (i > 0) metaParts.push('<span class="dot">•</span>'); metaParts.push(`<span>${t}</span>`); });
+        if (cats.length) metaParts.push('<span class="dot">•</span>');
+        metaParts.push(`<span>${song.tempo} BPM</span>`);
+        card.innerHTML =
+            `<div class="songCardTop"><span class="songCardName">${song.title}</span>${isNew ? '<span class="songCardBadge new">NEW</span>' : ''}</div>` +
+            `<div class="songCardMeta">${metaParts.join("")}</div>` +
+            `<div class="songCardDesc">${song.blurb || song.subtitle || ""}</div>`;
+        card.onclick = () => selectSong(id);
+        card.ondblclick = () => { selectSong(id); if (ui.playBtn) ui.playBtn.click(); };
+        grid.appendChild(card);
+    }
+    const countEl = document.getElementById("songSearchCount");
+    if (countEl) {
+        const total = Object.keys(SONGS).length;
+        countEl.textContent = entries.length === total
+            ? `${total} song${total === 1 ? "" : "s"}`
+            : `${entries.length} of ${total}`;
+    }
+    const visibleIds = new Set(entries.map(e => e[0]));
+    if (visibleIds.has(state.selectedSong)) selectSong(state.selectedSong);
+    else if (entries.length) selectSong(entries[0][0]);
+    else selectSong(state.selectedSong);
+    renderSongCategories();
+    if (!renderSongs._wired) {
+        const searchEl = document.getElementById("songSearch");
+        if (searchEl) {
+            searchEl.addEventListener("input", e => {
+                _songFilter.search = e.target.value;
+                renderSongs();
+            });
+        }
+        renderSongs._wired = true;
+    }
 }
 function note(notes, beat, side, lane, character){ notes.push({ beat, lane: side === "player" ? lane + 4 : lane, side, character, time: 0, judged:false, hit:false, played:false }); }
 function phrase(notes, rng, startBeat, beats, side, motif, intensity, chars){
