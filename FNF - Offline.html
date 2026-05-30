@@ -751,33 +751,15 @@ body.loaded #loadingScreen { opacity: 0; visibility: hidden; pointer-events: non
 </div>
 <script>
 (function () {
+    // See FNF - Online.html for the rationale. Short version: don't mass-
+    // preload audio - it starves the script downloads and makes the bar
+    // sit at "0 songs" for a minute.
     const bar = document.getElementById("loadBar");
     const pct = document.getElementById("loadPercent");
     const status = document.getElementById("loadStatus");
     if (!bar || !pct || !status) return;
-    const AUDIO_FILES = [
-        "sporting-inst.ogg", "sporting-voices.ogg",
-        "boxing-match-inst.ogg", "boxing-match-voices.ogg",
-        "boxing-match-wg-inst.ogg", "boxing-match-wg-voices.ogg",
-        "combat-inst.ogg", "combat-voices.ogg",
-        "one-hit-inst.ogg", "one-hit-voices.ogg",
-        "shimmy-inst.ogg", "shimmy-voices.ogg",
-        "silly-billy-inst.ogg", "silly-billy-voices.ogg",
-        "perseverance-inst.ogg", "perseverance-voices-bf.ogg", "perseverance-voices-opp.ogg",
-        "broken-reality-inst.ogg", "broken-reality-voices-bf.ogg", "broken-reality-voices-opp.ogg",
-        "challenge-edd-inst.ogg", "challenge-edd-voices.ogg",
-        "our-broken-constellations-inst.ogg", "our-broken-constellations-voices.ogg",
-        "genocide-inst.ogg", "genocide-voices.ogg",
-        "sansational-inst.ogg", "sansational-voices.ogg",
-        "last-reel-inst.ogg", "last-reel-voices.ogg",
-        "overthrone-inst.ogg", "overthrone-voices.ogg",
-        "ballistic-inst.ogg", "ballistic-voices-opp.ogg", "ballistic-voices-player.ogg",
-    ];
-    const IMAGE_FILES = ["assets/icon.ico"];
-    const TOTAL_FILES = AUDIO_FILES.length + IMAGE_FILES.length;
 
-    let target = 1, current = 0, ready = false;
-    let filesLoaded = 0;
+    let target = 6, current = 0, ready = false;
     function setStatus(txt) { status.textContent = txt; }
     function setTarget(value) { target = Math.max(target, Math.min(100, value)); }
     function tick() {
@@ -793,55 +775,47 @@ body.loaded #loadingScreen { opacity: 0; visibility: hidden; pointer-events: non
         requestAnimationFrame(tick);
     }
     requestAnimationFrame(tick);
-    document.addEventListener("DOMContentLoaded", () => { setStatus("Preloading assets..."); });
 
-    function refreshProgress() {
-        const pctDone = (filesLoaded / TOTAL_FILES) * 90;
-        setTarget(pctDone);
-    }
-    function fetchOne(path) {
-        return fetch(path, { cache: "default" })
-            .then(r => r.ok ? r.arrayBuffer() : null)
-            .catch(() => null)
-            .then(() => {
-                filesLoaded++;
-                refreshProgress();
-                setStatus(filesLoaded + " / " + TOTAL_FILES + " — " + path);
-            });
-    }
-    async function pump(queue, parallel) {
-        const workers = Array.from({ length: parallel }, async () => {
-            while (queue.length) {
-                const p = queue.shift();
-                if (!p) return;
-                await fetchOne(p);
-            }
-        });
-        await Promise.all(workers);
-    }
-    const allFiles = AUDIO_FILES.concat(IMAGE_FILES);
-    pump(allFiles.slice(), 4).then(() => {
-        setStatus("All assets cached — waiting for engine...");
-        setTarget(92);
-    });
+    document.addEventListener("DOMContentLoaded", () => { setTarget(28); setStatus("Loading game scripts..."); });
+    window.addEventListener("load", () => { setTarget(70); setStatus("Scripts loaded - waiting for songs to register..."); });
 
     let pollCount = 0;
+    let lastReported = -1;
     const poll = setInterval(() => {
         pollCount++;
-        if (typeof state !== "undefined" && typeof ui !== "undefined" && typeof SONGS !== "undefined") {
+        if (typeof state === "undefined" || typeof ui === "undefined" || typeof SONGS === "undefined") {
+            if (pollCount % 5 === 0) {
+                const missing = [];
+                if (typeof state === "undefined") missing.push("state");
+                if (typeof ui === "undefined") missing.push("ui");
+                if (typeof SONGS === "undefined") missing.push("SONGS");
+                setStatus("Waiting on: " + missing.join(", "));
+            }
+        } else {
             const songCount = Object.keys(SONGS).length;
+            const EXPECTED = 14;
+            const songPct = Math.min(1, songCount / EXPECTED);
+            setTarget(70 + songPct * 25);
+            if (songCount !== lastReported) {
+                lastReported = songCount;
+                setStatus(songCount + " songs registered...");
+            }
             if (songCount >= 5) {
-                clearInterval(poll);
-                setTarget(100);
-                setStatus("Loaded " + songCount + " songs — ready to play.");
-                ready = true;
-                return;
+                if (!poll._stableSince || songCount !== poll._stableCount) {
+                    poll._stableSince = pollCount;
+                    poll._stableCount = songCount;
+                } else if (pollCount - poll._stableSince >= 4) {
+                    clearInterval(poll);
+                    setTarget(100);
+                    setStatus("Loaded " + songCount + " songs - ready to play.");
+                    ready = true;
+                }
             }
         }
-        if (pollCount >= 300) {
+        if (pollCount >= 150) {
             clearInterval(poll);
             setTarget(100);
-            setStatus("Engine took too long — opening menu.");
+            setStatus("Took too long - opening menu anyway.");
             ready = true;
         }
     }, 200);
