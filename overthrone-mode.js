@@ -759,7 +759,10 @@
       const fx = latestEventState(t);
       const y = overthroneReceptorY();
       ctx.save();
-      ctx.globalAlpha = Math.max(0.12, Math.min(1, fx.hudAlpha));
+      // Online matches: every receptor stays fully visible the whole song
+      // (no hudAlpha fade, no sansOpponentNoteAlpha gate on opp lanes).
+      const isOnlineMatch = (typeof state !== "undefined" && state.mode === "online");
+      ctx.globalAlpha = isOnlineMatch ? 1 : Math.max(0.12, Math.min(1, fx.hudAlpha));
       ctx.strokeStyle = "rgba(255,80,88,0.16)";
       ctx.lineWidth = 3;
       ctx.beginPath();
@@ -767,7 +770,7 @@
       ctx.lineTo(724, 368);
       ctx.stroke();
       for (let lane = 0; lane < 8; lane++) {
-        const laneAlpha = lane < 4 ? 0.72 * sansOpponentNoteAlpha(t) : 1;
+        const laneAlpha = isOnlineMatch ? 1 : (lane < 4 ? 0.72 * sansOpponentNoteAlpha(t) : 1);
         if (laneAlpha <= 0.01) continue;
         const x = overthroneLaneX(lane);
         drawOverthroneReceptor(lane, x, y, laneAlpha);
