@@ -899,23 +899,43 @@ body.mobile .chatLog { max-height: 130px !important; font-size: 12px !important;
 </div>
 <script>
 (function () {
-    // Loading screen: waits for the game scripts to register songs so the
-    // menu has something to show. Audio files are NOT mass-preloaded here -
-    // doing that was starving script downloads of bandwidth (the bar would
-    // sit at "0 songs" for a minute on residential connections). The first
-    // time a song is selected its audio streams in normally; the browser
-    // caches it after that.
+    // Loading screen - REAL preload. Two-phase:
+    //   Phase 1 (0-25%):  wait for scripts to download + execute. Fast, no
+    //                     audio competing with the JS bundles.
+    //   Phase 2 (25-100%): fetch every .ogg into the browser HTTP cache.
+    //                     Progress = bytes downloaded / total bytes (with a
+    //                     fallback to file-count when Content-Length is
+    //                     missing). Real ms tracking. No lying.
     const bar = document.getElementById("loadBar");
     const pct = document.getElementById("loadPercent");
     const status = document.getElementById("loadStatus");
     if (!bar || !pct || !status) return;
 
-    let target = 6, current = 0, ready = false;
+    // Every audio file shipped with the game.
+    const AUDIO_FILES = [
+        "sporting-inst.ogg", "sporting-voices.ogg",
+        "boxing-match-inst.ogg", "boxing-match-voices.ogg",
+        "boxing-match-wg-inst.ogg", "boxing-match-wg-voices.ogg",
+        "combat-inst.ogg", "combat-voices.ogg",
+        "one-hit-inst.ogg", "one-hit-voices.ogg",
+        "shimmy-inst.ogg", "shimmy-voices.ogg",
+        "silly-billy-inst.ogg", "silly-billy-voices.ogg",
+        "perseverance-inst.ogg", "perseverance-voices-bf.ogg", "perseverance-voices-opp.ogg",
+        "broken-reality-inst.ogg", "broken-reality-voices-bf.ogg", "broken-reality-voices-opp.ogg",
+        "challenge-edd-inst.ogg", "challenge-edd-voices.ogg",
+        "our-broken-constellations-inst.ogg", "our-broken-constellations-voices.ogg",
+        "genocide-inst.ogg", "genocide-voices.ogg",
+        "sansational-inst.ogg", "sansational-voices.ogg",
+        "last-reel-inst.ogg", "last-reel-voices.ogg",
+        "overthrone-inst.ogg", "overthrone-voices.ogg",
+        "ballistic-inst.ogg", "ballistic-voices-opp.ogg", "ballistic-voices-player.ogg",
+    ];
+
+    let target = 4, current = 0, ready = false;
     function setStatus(txt) { status.textContent = txt; }
     function setTarget(value) { target = Math.max(target, Math.min(100, value)); }
     function tick() {
-        // Ease toward target so the bar moves smoothly instead of jumping.
-        current += (target - current) * 0.18;
+        current += (target - current) * 0.22;
         if (current > 99.5 && target >= 100) current = 100;
         bar.style.width = current.toFixed(1) + "%";
         pct.textContent = Math.floor(current) + "%";
@@ -928,59 +948,112 @@ body.mobile .chatLog { max-height: 130px !important; font-size: 12px !important;
     }
     requestAnimationFrame(tick);
 
-    document.addEventListener("DOMContentLoaded", () => { setTarget(28); setStatus("Loading game scripts..."); });
-    window.addEventListener("load", () => { setTarget(70); setStatus("Scripts loaded - waiting for songs to register..."); });
+    document.addEventListener("DOMContentLoaded", () => { setTarget(12); setStatus("Loading game scripts..."); });
+    let scriptsDone = false;
+    window.addEventListener("load", () => {
+        scriptsDone = true;
+        setTarget(25);
+        setStatus("Scripts loaded - preloading audio...");
+        startAudioPreload();
+    });
 
-    // Poll for the engine being ready - state + ui + SONGS must all exist
-    // and at least 5 songs must be registered.
-    let pollCount = 0;
-    let lastReported = -1;
-    const poll = setInterval(() => {
-        pollCount++;
-        if (typeof state === "undefined" || typeof ui === "undefined" || typeof SONGS === "undefined") {
-            // Show what's missing so a real engine failure is visible
-            if (pollCount % 5 === 0) {
-                const missing = [];
-                if (typeof state === "undefined") missing.push("state");
-                if (typeof ui === "undefined") missing.push("ui");
-                if (typeof SONGS === "undefined") missing.push("SONGS");
-                setStatus("Waiting on: " + missing.join(", "));
-            }
-        } else {
-            const songCount = Object.keys(SONGS).length;
-            // Progress reflects how many songs have registered (out of an
-            // expected ~14). Bar climbs from 70% to ~95% as song-mode scripts
-            // run and extend SONGS.
-            const EXPECTED = 14;
-            const songPct = Math.min(1, songCount / EXPECTED);
-            setTarget(70 + songPct * 25);
-            if (songCount !== lastReported) {
-                lastReported = songCount;
-                setStatus(songCount + " songs registered...");
-            }
-            // Open once at least 5 songs are registered AND no new ones have
-            // shown up for 4 ticks (~800ms) - that means the song-mode scripts
-            // have all finished extending SONGS.
-            if (songCount >= 5) {
-                if (!poll._stableSince || songCount !== poll._stableCount) {
-                    poll._stableSince = pollCount;
-                    poll._stableCount = songCount;
-                } else if (pollCount - poll._stableSince >= 4) {
-                    clearInterval(poll);
-                    setTarget(100);
-                    setStatus("Loaded " + songCount + " songs - ready to play.");
-                    ready = true;
+    // === Phase 2: real audio preload with byte-level progress ===
+    let totalBytes = 0;
+    let downloadedBytes = 0;
+    let filesDone = 0;
+    let downloadStart = 0;
+    function fmtBytes(n) {
+        if (n < 1024) return n + " B";
+        if (n < 1048576) return (n / 1024).toFixed(0) + " KB";
+        return (n / 1048576).toFixed(1) + " MB";
+    }
+    function fmtSpeed(bytesPerSec) {
+        if (bytesPerSec < 1024) return bytesPerSec.toFixed(0) + " B/s";
+        if (bytesPerSec < 1048576) return (bytesPerSec / 1024).toFixed(0) + " KB/s";
+        return (bytesPerSec / 1048576).toFixed(1) + " MB/s";
+    }
+    function refresh() {
+        // 25% scripts + 75% audio = 100% total.
+        let pctAudio = 0;
+        if (totalBytes > 0) {
+            pctAudio = downloadedBytes / totalBytes;
+        } else if (AUDIO_FILES.length > 0) {
+            pctAudio = filesDone / AUDIO_FILES.length;
+        }
+        setTarget(25 + Math.min(1, pctAudio) * 75);
+        const elapsed = (performance.now() - downloadStart) / 1000;
+        const speed = elapsed > 0.2 ? downloadedBytes / elapsed : 0;
+        setStatus(
+            filesDone + "/" + AUDIO_FILES.length + " files - " +
+            fmtBytes(downloadedBytes) + (totalBytes ? " / " + fmtBytes(totalBytes) : "") +
+            (speed > 0 ? " - " + fmtSpeed(speed) : "")
+        );
+    }
+    async function fetchOne(path) {
+        try {
+            const res = await fetch(path, { cache: "default" });
+            if (!res.ok) { filesDone++; refresh(); return; }
+            const lenHeader = res.headers.get("content-length");
+            const len = lenHeader ? parseInt(lenHeader, 10) : 0;
+            if (len > 0) totalBytes += len;
+            const reader = res.body && res.body.getReader ? res.body.getReader() : null;
+            if (reader) {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    downloadedBytes += value.length;
+                    refresh();
                 }
+            } else {
+                // Fallback for old browsers - just read the whole thing.
+                const buf = await res.arrayBuffer();
+                downloadedBytes += buf.byteLength;
+                if (!len) totalBytes += buf.byteLength;
             }
+        } catch (e) {
+            // skip on error
         }
-        // Failsafe: after 30 seconds give up and open anyway.
-        if (pollCount >= 150) {
-            clearInterval(poll);
-            setTarget(100);
-            setStatus("Took too long - opening menu anyway.");
+        filesDone++;
+        refresh();
+    }
+    async function startAudioPreload() {
+        downloadStart = performance.now();
+        // 6 parallel - chrome lets you have 6 concurrent fetches per domain
+        // so this saturates bandwidth without queuing.
+        const queue = AUDIO_FILES.slice();
+        const workers = Array.from({ length: 6 }, async () => {
+            while (queue.length) {
+                const p = queue.shift();
+                if (!p) return;
+                await fetchOne(p);
+            }
+        });
+        await Promise.all(workers);
+        // All audio cached. Check the engine is ready too.
+        setTarget(100);
+        setStatus("All " + AUDIO_FILES.length + " audio files cached.");
+        waitForEngine();
+    }
+    function waitForEngine() {
+        if (typeof state !== "undefined" && typeof ui !== "undefined" && typeof SONGS !== "undefined" && Object.keys(SONGS).length >= 5) {
             ready = true;
+            setStatus("Ready - " + Object.keys(SONGS).length + " songs loaded.");
+            return;
         }
-    }, 200);
+        setTimeout(waitForEngine, 100);
+    }
+
+    // Failsafe: if scripts haven't fired window.load after 20 seconds, kick
+    // off audio preload anyway so we're not stuck waiting.
+    setTimeout(() => {
+        if (!scriptsDone) {
+            scriptsDone = true;
+            setStatus("Scripts slow - starting audio preload in parallel.");
+            startAudioPreload();
+        }
+    }, 20000);
+    // Hard ceiling: after 5 minutes give up and open whatever loaded.
+    setTimeout(() => { if (!ready) { ready = true; setTarget(100); setStatus("Time limit reached - opening menu."); } }, 300000);
 })();
 </script>
 <div id="app">
