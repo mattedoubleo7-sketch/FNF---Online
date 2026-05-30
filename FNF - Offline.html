@@ -329,7 +329,23 @@ body.mobile .feature .desc { font-size: 12px !important; }
 body.mobile .heroBrand { gap: 10px !important; }
 body.mobile .heroLogo { width: 56px !important; height: 56px !important; }
 body.mobile .songList { gap: 8px !important; }
-body.mobile .songList .songItem, body.mobile .songList .songRow { padding: 10px !important; font-size: 13px !important; }
+body.mobile .songCard { padding: 12px !important; border-radius: 14px !important; }
+body.mobile .songCard .name { font-size: 18px !important; }
+body.mobile .songCard .meta { font-size: 11px !important; margin-top: 4px !important; gap: 6px !important; flex-wrap: wrap !important; }
+body.mobile .songCard .desc { font-size: 12px !important; margin-top: 6px !important; line-height: 1.4 !important; }
+body.mobile .row { flex-wrap: wrap !important; gap: 8px !important; }
+body.mobile .menuFoot { flex-wrap: wrap !important; gap: 8px !important; }
+body.mobile .toggle { font-size: 12px !important; }
+body.mobile .eyebrow { font-size: 10px !important; }
+body.mobile h2 { font-size: 22px !important; }
+body.mobile h3 { font-size: 16px !important; }
+body.mobile .modal { max-height: calc(100vh - 24px) !important; overflow-y: auto !important; }
+body.mobile .block { padding: 10px !important; }
+body.mobile .binds { gap: 8px !important; }
+body.mobile .actions { gap: 6px !important; flex-wrap: wrap !important; }
+body.mobile .modalFoot { flex-wrap: wrap !important; gap: 8px !important; }
+body.mobile .authFields { gap: 8px !important; }
+body.mobile .authInput { font-size: 14px !important; padding: 8px 10px !important; }
 body.mobile .grid2 { grid-template-columns: 1fr !important; }
 body.mobile .resultGrid { grid-template-columns: repeat(2, 1fr) !important; }
 body.mobile .btn { font-size: 14px !important; padding: 10px 14px !important; min-height: 40px !important; }
@@ -2219,8 +2235,8 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
     if (state.settings.mobile === undefined) state.settings.mobile = false;
     const tc = document.getElementById("touchControls");
     const toggle = document.getElementById("mobileToggle");
-    // Auto-enable Mobile on first visit from a phone/tablet. User toggling
-    // sets fnfMobileChosen so we never override their explicit choice again.
+    // Always-auto-detect: phone -> mobile ON, PC -> mobile OFF, every page load.
+    // User can still toggle off mid-session for the current device.
     function isMobileDevice() {
         try {
             const ua = navigator.userAgent || "";
@@ -2230,14 +2246,10 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
         } catch (e) {}
         return false;
     }
-    try {
-        const userChoseMobile = localStorage.getItem("fnfMobileChosen");
-        if (!userChoseMobile && isMobileDevice() && !state.settings.mobile) {
-            state.settings.mobile = true;
-            try { saveSettings(); } catch (e) {}
-        }
-    } catch (e) {
-        if (isMobileDevice()) state.settings.mobile = true;
+    const _autoMobile = isMobileDevice();
+    if (state.settings.mobile !== _autoMobile) {
+        state.settings.mobile = _autoMobile;
+        try { saveSettings(); } catch (e) {}
     }
     function applyMobile() {
         if (state.settings.mobile) {
@@ -2273,7 +2285,6 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
     }
     if (toggle) toggle.addEventListener("change", () => {
         state.settings.mobile = !!toggle.checked;
-        try { localStorage.setItem("fnfMobileChosen", "1"); } catch (e) {}
         try { saveSettings(); } catch (e) {}
         applyMobile();
     });
