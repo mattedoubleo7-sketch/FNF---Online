@@ -1077,6 +1077,9 @@
     return Math.max(0, Math.min(1, Math.min(inT, outT)));
   }
   function drawSillySpeedLines(t) {
+    // Skip the burst when Performance Mode or Reduce Motion is on — 140 additive
+    // strokes per frame is the single most expensive thing in this mode.
+    if (window.PERFORMANCE_MODE || window.REDUCE_MOTION) return;
     const intensity = speedLinesIntensity(t);
     if (intensity <= 0) return;
     const cx = canvas.width / 2;
