@@ -5,6 +5,9 @@
     images: {},
     cameraTarget: { x: 640, y: 330, zoom: 1.05 },
     cameraCurrent: { x: 640, y: 330, zoom: 1.05 },
+    cameraSong: "",
+    cameraLastSide: "both",
+    cameraLastSideTime: -99,
     dust: [],
     fxCanvas: null,
     fxCtx: null
@@ -33,11 +36,15 @@
   };
 
   function isCombat(){
-    return typeof state !== "undefined" && (state.selectedSong === "combat" || state.selectedSong === "oneHit");
+    return typeof state !== "undefined" && (state.selectedSong === "combat" || state.selectedSong === "oneHit" || state.selectedSong === "shimmy");
   }
 
   function isOneHit(){
     return typeof state !== "undefined" && state.selectedSong === "oneHit";
+  }
+
+  function isShimmy(){
+    return typeof state !== "undefined" && state.selectedSong === "shimmy";
   }
 
   function loadImage(key, src){
@@ -53,6 +60,7 @@
     Object.entries(data.stage).forEach(([key, src]) => loadImage(key, src));
     loadImage("matt", data.sprites.matt.image);
     if(data.sprites.bfSword) loadImage("bfSword", data.sprites.bfSword.image);
+    if(window.SHIMMY_VISUAL_DATA?.shimmer) loadImage("shimmyShimmer", window.SHIMMY_VISUAL_DATA.shimmer.image);
     const dustSpecs = {
       far: { count: 51, speed: 24, scale: 0.48, alpha: 0.13, sway: 5, startBelow: 160 },
       mid: { count: 16, speed: 48, scale: 0.72, alpha: 0.22, sway: 10, startBelow: 170 },
@@ -79,7 +87,7 @@
   }
 
   function combatReady(){
-    return combatState.initialized && Object.values(combatState.images).every(imgReady);
+    return combatState.initialized && Object.entries(combatState.images).every(([key, img]) => key === "shimmyShimmer" && !isShimmy() ? true : imgReady(img));
   }
 
   function drawImage(key, x, y, scale = 1, alpha = 1, flipX = false){
@@ -508,6 +516,18 @@
     return 1 - Math.pow(1 - x, 3);
   }
 
+  function easeInCubic(v){
+    const x = Math.max(0, Math.min(1, v));
+    return x * x * x;
+  }
+
+  function shaderEase(kind, value){
+    const name = String(kind || "linear").toLowerCase();
+    if(name.includes("cubeout")) return easeOutCubic(value);
+    if(name.includes("cubein")) return easeInCubic(value);
+    return Math.max(0, Math.min(1, value));
+  }
+
   function pulseFromStep(step, start, length){
     const age = step - start;
     if(age < 0 || age > length) return 0;
@@ -578,6 +598,146 @@
       chrom: bloom * 10 + speed * 9 + sideSpeed * 7 + warp * 8 + blur * 7,
       active: greyscale + blur + warp + speed + sideSpeed + bloom + bars
     };
+  }
+
+  function shimmyNotBadAmount(t){
+    if(!isShimmy()) return 0;
+    const data = window.SHIMMY_CHART?.notBadKid;
+    if(!data) return 0;
+    const start = Number(data.start || 0);
+    const end = Number(data.end || start + 1.2) + 0.55;
+    if(t < start || t > end) return 0;
+    const fadeIn = Math.max(0, Math.min(1, (t - start) / 0.18));
+    const fadeOut = 1 - Math.max(0, Math.min(1, (t - (end - 0.5)) / 0.5));
+    return Math.min(fadeIn, fadeOut);
+  }
+
+  function shimmyShaderValue(step, name, property, fallback = 0){
+    const events = window.SHIMMY_CHART?.shaderEvents || [];
+    let value = fallback;
+    for(const event of events){
+      if(event.name !== name || event.property !== property) continue;
+      const start = Number(event.step || 0);
+      if(start > step) break;
+      const duration = Math.max(0.001, Number(event.duration || 0));
+      const target = Number(event.value || 0);
+      if(step <= start + duration){
+        const from = Number.isFinite(Number(event.startValue)) ? Number(event.startValue) : value;
+        value = from + (target - from) * shaderEase(event.ease, (step - start) / duration);
+      } else {
+        value = target;
+      }
+    }
+    return value;
+  }
+
+  function shimmyShaderFxState(t){
+    const step = combatSongStep(t);
+    const mirrorZoom = Math.abs(shimmyShaderValue(step, "mirror", "zoom", 1) - 1);
+    const mirrorHudZoom = Math.abs(shimmyShaderValue(step, "mirrorHud", "zoom", 1) - 1);
+    const mirrorOtherZoom = Math.abs(shimmyShaderValue(step, "mirrorOther", "zoom", 1) - 1);
+    const mirrorAngle = Math.max(
+      Math.abs(shimmyShaderValue(step, "mirror", "angle", 0)),
+      Math.abs(shimmyShaderValue(step, "mirrorOther", "angle", 0))
+    ) / 8;
+    const bloomRaw = Math.max(
+      shimmyShaderValue(step, "bloom", "effect", 0),
+      shimmyShaderValue(step, "bloom", "strength", 0)
+    );
+    const notBad = shimmyNotBadAmount(t);
+    const blur = Math.max(0, shimmyShaderValue(step, "blur", "strength", 0));
+    const greyscale = Math.max(0, Math.min(1, shimmyShaderValue(step, "greyscale", "strength", 0)));
+    const speed = Math.max(0, shimmyShaderValue(step, "speed", "effect", 0));
+    const bars = Math.max(0, shimmyShaderValue(step, "bars", "effect", 0));
+    const bloom = bloomRaw / 3;
+    const mirror = Math.max(mirrorZoom * 2.8, mirrorHudZoom * 2.2, mirrorOtherZoom * 2.4, mirrorAngle);
+    return {
+      step,
+      greyscale,
+      blur,
+      speed,
+      bars,
+      bloom,
+      mirror,
+      angle: mirrorAngle * 7,
+      chrom: 1.2 + bloom * 9 + speed * 8 + bars * 5 + mirror * 7 + blur * 7 + notBad * 11,
+      active: greyscale + blur + speed + bars + bloom + mirror + notBad
+    };
+  }
+
+  function shimmyDialogueText(t){
+    if(!isShimmy()) return null;
+    const data = window.SHIMMY_CHART?.notBadKid;
+    if(!data) return null;
+    const events = window.SHIMMY_CHART?.dialogueEvents || [];
+    const textStart = Number(data.textStart || data.start || 0);
+    const end = Number(data.end || textStart + 1.2);
+    if(t < textStart - 0.05 || t > end + 0.65) return null;
+    let text = "";
+    for(const event of events){
+      if(Number(event.time || 0) > t) break;
+      if(event.action === "remove") text = String(data.line || text);
+      else if(event.action === "add") text += String(event.text || "");
+    }
+    if(!text && t >= textStart) text = String(data.line || "");
+    const fadeIn = Math.max(0, Math.min(1, (t - textStart) / 0.18));
+    const fadeOut = t <= end ? 1 : 1 - Math.max(0, Math.min(1, (t - end) / 0.65));
+    return { text, alpha: Math.min(fadeIn, fadeOut) };
+  }
+
+  function drawShimmyDialogue(t){
+    const dialogue = shimmyDialogueText(t);
+    if(!dialogue?.text || dialogue.alpha <= 0.01) return;
+    const alpha = dialogue.alpha;
+    const x = canvas.width * 0.5;
+    const y = canvas.height - 92;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.globalCompositeOperation = "screen";
+    ctx.shadowColor = "rgba(170,215,255,0.9)";
+    ctx.shadowBlur = 28;
+    ctx.fillStyle = "rgba(118,174,255,0.24)";
+    ctx.fillRect(318, y - 42, canvas.width - 636, 76);
+    ctx.restore();
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = "rgba(5,8,20,0.74)";
+    ctx.strokeStyle = "rgba(190,222,255,0.72)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(330, y - 48, canvas.width - 660, 86, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#9fd8ff";
+    ctx.font = "700 15px system-ui, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("MATT", 356, y - 17);
+    ctx.fillStyle = "#ffffff";
+    ctx.shadowColor = "rgba(126,196,255,0.85)";
+    ctx.shadowBlur = 14;
+    ctx.font = "800 31px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(dialogue.text, x, y + 16);
+    ctx.restore();
+  }
+
+  function drawShimmyMattCharacter(x, y, scale, flipX, t, lean = 0){
+    const data = window.SHIMMY_VISUAL_DATA?.shimmer;
+    const image = combatState.images.shimmyShimmer;
+    if(!data?.frames?.length || !imgReady(image) || typeof drawAtlasFrame !== "function") {
+      drawCharacter("matt", "matt", "matt", x, y, scale, flipX, t, lean);
+      return;
+    }
+    const startedAt = Number(window.SHIMMY_CHART?.notBadKid?.start || 0);
+    const elapsed = Math.max(0, t - startedAt);
+    const frame = frameFromList(data.frames, elapsed, data.fps || 18, false);
+    if(!frame) return drawCharacter("matt", "matt", "matt", x, y, scale, flipX, t, lean);
+    const drawScale = Number(data.scale || scale || 0.66);
+    ctx.save();
+    ctx.translate(x + 22, y);
+    ctx.rotate(lean);
+    drawAtlasFrame(image, frame, 0, atlasFootCorrection(frame, drawScale), drawScale, 1, flipX);
+    ctx.restore();
   }
 
   function oneHitSideSpeedAmount(t){
@@ -652,36 +812,39 @@
 
   function drawCombatInsanePostFx(t){
     if(!isCombat() || !state.playing || !Number.isFinite(t)) return;
-    const fx = combatInsaneFxState(t);
+    const fx = isShimmy() ? { step: combatSongStep(t), bloom: 0, speed: 0, burst: 0, bars: 0, mirror: 0, angle: 0, chrom: 1.2 } : combatInsaneFxState(t);
     const oneHitFx = isOneHit() ? oneHitShaderFxState(t) : null;
-    const active = fx.mirror + fx.bloom + fx.speed + fx.burst + (oneHitFx?.active || 0);
-    if(active <= 0.015 && fx.chrom <= 1.21 && (!oneHitFx || oneHitFx.active <= 0.015)) return;
+    const shimmyFx = isShimmy() ? shimmyShaderFxState(t) : null;
+    const active = fx.mirror + fx.bloom + fx.speed + fx.burst + (oneHitFx?.active || 0) + (shimmyFx?.active || 0);
+    if(active <= 0.015 && fx.chrom <= 1.21 && (!oneHitFx || oneHitFx.active <= 0.015) && (!shimmyFx || shimmyFx.active <= 0.015)) return;
     const source = ensureCombatFxCanvas();
     const cx = canvas.width / 2, cy = canvas.height / 2;
 
-    if(oneHitFx && (oneHitFx.greyscale > 0.01 || oneHitFx.blur > 0.01)){
+    const greyscale = Math.max(oneHitFx?.greyscale || 0, shimmyFx?.greyscale || 0);
+    const blur = Math.max(oneHitFx?.blur || 0, shimmyFx?.blur || 0);
+    if(greyscale > 0.01 || blur > 0.01){
       ctx.save();
-      ctx.globalAlpha = Math.min(0.86, 0.2 + oneHitFx.greyscale * 0.58 + oneHitFx.blur * 0.18);
-      ctx.filter = "grayscale(" + oneHitFx.greyscale.toFixed(3) + ") contrast(" + (1 + oneHitFx.greyscale * 0.22).toFixed(3) + ") blur(" + (oneHitFx.blur * 4.5).toFixed(2) + "px)";
+      ctx.globalAlpha = Math.min(0.86, 0.2 + greyscale * 0.58 + blur * 0.18);
+      ctx.filter = "grayscale(" + greyscale.toFixed(3) + ") contrast(" + (1 + greyscale * 0.22).toFixed(3) + ") blur(" + (blur * 4.5).toFixed(2) + "px)";
       ctx.drawImage(source, 0, 0);
       ctx.filter = "none";
       ctx.restore();
     }
 
-    if(fx.mirror > 0.01 || (oneHitFx?.warp || 0) > 0.01){
-      const mirror = Math.max(fx.mirror, (oneHitFx?.warp || 0) * 0.86);
+    if(fx.mirror > 0.01 || (oneHitFx?.warp || 0) > 0.01 || (shimmyFx?.mirror || 0) > 0.01){
+      const mirror = Math.max(fx.mirror, (oneHitFx?.warp || 0) * 0.86, shimmyFx?.mirror || 0);
       ctx.save();
       ctx.globalCompositeOperation = "screen";
       ctx.globalAlpha = Math.min(0.28, 0.05 + mirror * 0.18);
       ctx.translate(cx, cy);
-      ctx.rotate((fx.angle + (oneHitFx?.warp || 0) * Math.sin(t * 8) * 7) * Math.PI / 180 * 0.35);
+      ctx.rotate((fx.angle + (shimmyFx?.angle || 0) + (oneHitFx?.warp || 0) * Math.sin(t * 8) * 7) * Math.PI / 180 * 0.35);
       const scale = 1 + mirror * 0.05;
       ctx.scale(scale, scale);
       ctx.drawImage(source, -cx + Math.sin(t * 12) * mirror * 6, -cy);
       ctx.restore();
     }
 
-    const chrom = Math.max(fx.chrom, oneHitFx?.chrom || 0);
+    const chrom = Math.max(fx.chrom, oneHitFx?.chrom || 0, shimmyFx?.chrom || 0);
     if(chrom > 1.4){
       const offset = Math.min(18, chrom);
       ctx.save();
@@ -695,7 +858,7 @@
       ctx.restore();
     }
 
-    const bloom = Math.max(fx.bloom, oneHitFx?.bloom || 0);
+    const bloom = Math.max(fx.bloom, oneHitFx?.bloom || 0, shimmyFx?.bloom || 0);
     if(bloom > 0.01){
       ctx.save();
       ctx.globalCompositeOperation = "screen";
@@ -709,10 +872,10 @@
       ctx.restore();
     }
 
-    drawCombatSpeedLines(Math.max(fx.speed, fx.burst * 0.7, oneHitFx?.speed || 0), t);
+    drawCombatSpeedLines(Math.max(fx.speed, fx.burst * 0.7, oneHitFx?.speed || 0, shimmyFx?.speed || 0), t);
     drawOneHitSideSpeedLines(oneHitFx?.sideSpeed || 0, t);
 
-    const bars = Math.max(fx.bars, oneHitFx?.bars || 0);
+    const bars = Math.max(fx.bars, oneHitFx?.bars || 0, shimmyFx?.bars || 0);
     if(bars > 0.01){
       ctx.save();
       const h = 22 + bars * 42;
@@ -728,6 +891,22 @@
       ctx.restore();
     }
 
+    const notBadBloom = shimmyNotBadAmount(t);
+    if(notBadBloom > 0.01){
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      const bloomGlow = ctx.createRadialGradient(cx, cy, 70, cx, cy, 760);
+      bloomGlow.addColorStop(0, "rgba(210,240,255," + (0.44 * notBadBloom).toFixed(3) + ")");
+      bloomGlow.addColorStop(0.42, "rgba(128,188,255," + (0.24 * notBadBloom).toFixed(3) + ")");
+      bloomGlow.addColorStop(1, "rgba(10,20,56,0)");
+      ctx.fillStyle = bloomGlow;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.globalAlpha = Math.min(0.34, notBadBloom * 0.28);
+      ctx.fillStyle = "#dff4ff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+    }
+
     ctx.save();
     const vignette = ctx.createRadialGradient(cx, cy, 100, cx, cy, 760);
     vignette.addColorStop(0, "rgba(92,72,180,0)");
@@ -736,6 +915,8 @@
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
+
+    drawShimmyDialogue(t);
   }
 
   function drawCombatFallback(t){
@@ -797,7 +978,8 @@
 
     const mattFeet = rotatePointAround(leftRockCenter - 22, mattRockFeetY + float, leftRockCenter, leftRockPivotY, rockTilt);
     const bfFeet = rotatePointAround(rightRockCenter + 8, bfRockFeetY - float * 0.7, rightRockCenter, rightRockPivotY, rightRockTilt);
-    drawCharacter("matt", "matt", "matt", mattFeet.x, mattFeet.y, 0.66, false, t, rockTilt);
+    if(isShimmy() && shimmyNotBadAmount(t) > 0.01) drawShimmyMattCharacter(mattFeet.x, mattFeet.y, 0.66, false, t, rockTilt);
+    else drawCharacter("matt", "matt", "matt", mattFeet.x, mattFeet.y, 0.66, false, t, rockTilt);
     drawBfSwordCharacter(bfFeet.x, bfFeet.y, 0.6, false, t, rightRockTilt);
     drawCombatDust("near", t, depth);
 
@@ -815,12 +997,30 @@
     if(!state.chart?.notes) return "both";
     const oneHitCamera = oneHitCameraState(t);
     if(oneHitCamera.duet) return "both";
-    let side = "both";
+    if(combatState.cameraSong !== state.selectedSong || t < 0.08){
+      combatState.cameraSong = state.selectedSong;
+      combatState.cameraLastSide = "both";
+      combatState.cameraLastSideTime = -99;
+    }
+    let hasOpp = false;
+    let hasPlayer = false;
     for(const note of state.chart.notes){
       if(note.time > t + 0.09) break;
-      if(note.time >= t - 0.05) side = note.side || side;
+      const activeTap = !isHoldNote(note) && note.time >= t - 0.05;
+      const activeHold = isHoldNote(note) && t >= note.time - 0.05 && holdEndTime(note) >= t - 0.03;
+      if(!activeTap && !activeHold) continue;
+      if(note.side === "opp") hasOpp = true;
+      if(note.side === "player") hasPlayer = true;
     }
-    return side;
+    const side = hasOpp && hasPlayer ? "both" : hasOpp ? "opp" : hasPlayer ? "player" : "";
+    if(side){
+      combatState.cameraLastSide = side;
+      combatState.cameraLastSideTime = t;
+      return side;
+    }
+    const holdTime = isShimmy() ? 1.25 : 0.72;
+    if(combatState.cameraLastSide !== "both" && t - combatState.cameraLastSideTime <= holdTime) return combatState.cameraLastSide;
+    return state.camera.lastSide || combatState.cameraLastSide || "both";
   }
 
   function oneHitCameraState(t){
@@ -882,6 +1082,15 @@
         if(oneHitCamera.duet) {
           target.x = 640 + rockMotion.x * 0.34;
           target.y = 456 + rockMotion.y * 0.3;
+        }
+      }
+      if(isShimmy()){
+        const notBad = shimmyNotBadAmount(t);
+        if(notBad > 0.01){
+          const mattMotion = combatRockCameraMotion(t, "opp");
+          target.x = 332 + mattMotion.x * 0.45;
+          target.y = 456 + mattMotion.y * 0.35;
+          target.zoom = Math.max(target.zoom, 1.9 + notBad * 0.22);
         }
       }
       const lerp = 1 - Math.pow(0.001, Math.max(0, dt || 0.016));

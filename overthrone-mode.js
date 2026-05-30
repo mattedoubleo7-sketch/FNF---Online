@@ -70,6 +70,8 @@
       fxCanvas: null,
       fxCtx: null,
       camera: { x: -162, y: 505, zoom: SOURCE_STAGE_ZOOM },
+      eventCache: { t: NaN, value: null },
+      sansNoteTiming: null,
       lastStatus: "",
       lastLyrics: []
     };
@@ -114,6 +116,8 @@
 
     function loadImage(key, src) {
       const img = new Image();
+      img.decoding = "async";
+      img.loading = "eager";
       img.src = src;
       over.images[key] = img;
     }
@@ -139,6 +143,7 @@
       loadImage("notes", OT.notes.image);
       loadImage("madnessNote", OT.notes.madness.image);
       Object.entries(OT.sprites.sans.images || {}).forEach(([key, src]) => loadImage(`sans:${key}`, src));
+      scheduleOverthronePrewarm();
     }
 
     function imgReady(image) {
@@ -148,6 +153,90 @@
     function coreReady() {
       initAssets();
       return imgReady(over.images.ground) && imgReady(over.images.rest) && imgReady(over.images.notes) && imgReady(over.images["sans:1"]) && imgReady(over.images.bf);
+    }
+
+    function decodeImage(image) {
+      if (!image) return Promise.resolve();
+      if (typeof image.decode === "function") return image.decode().catch(() => {});
+      if (imgReady(image)) return Promise.resolve();
+      return new Promise(resolve => {
+        image.addEventListener("load", resolve, { once: true });
+        image.addEventListener("error", resolve, { once: true });
+      });
+    }
+
+    function warmFrame(task) {
+      const image = over.images[task.imageKey];
+      const frame = task.frame;
+      if (!imgReady(image) || !frame) return;
+      if (!over.warmCanvas) {
+        over.warmCanvas = document.createElement("canvas");
+        over.warmCtx = over.warmCanvas.getContext("2d");
+        if (typeof setRenderQuality === "function") setRenderQuality(over.warmCtx);
+      }
+      const w = Math.max(1, Math.min(384, frame.w || image.naturalWidth));
+      const h = Math.max(1, Math.min(384, frame.h || image.naturalHeight));
+      if (over.warmCanvas.width !== w || over.warmCanvas.height !== h) {
+        over.warmCanvas.width = w;
+        over.warmCanvas.height = h;
+      }
+      over.warmCtx.clearRect(0, 0, w, h);
+      over.warmCtx.drawImage(image, frame.x || 0, frame.y || 0, frame.w || image.naturalWidth, frame.h || image.naturalHeight, 0, 0, w, h);
+    }
+
+    function queueAnimWarmFrames(queue, anim) {
+      const seen = new Set();
+      for (const frame of anim?.frames || []) {
+        const key = `${frame.image || "main"}:${frame.x}:${frame.y}:${frame.w}:${frame.h}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        queue.push({ imageKey: `sans:${frame.image || "1"}`, frame });
+      }
+    }
+
+    function warmOverthroneEffectBuffers() {
+      try {
+        const source = ensureFxCanvas();
+        fxScaled(source, 0.5, "blur(10px) brightness(1.28) saturate(1.8)");
+        fxScaled(source, 0.5, "sepia(1) saturate(7) hue-rotate(310deg)");
+      } catch {}
+    }
+
+    function scheduleOverthronePrewarm() {
+      if (over.prewarmStarted) return;
+      over.prewarmStarted = true;
+      const idle = callback => {
+        if (typeof requestIdleCallback === "function") requestIdleCallback(callback, { timeout: 800 });
+        else setTimeout(() => callback({ timeRemaining: () => 8 }), 16);
+      };
+      setTimeout(() => {
+        const imageKeys = [
+          "notes",
+          "madnessNote",
+          "bf",
+          "gf",
+          "ground",
+          "rest",
+          "back",
+          ...Object.keys(OT.sprites.sans.images || {}).map(key => `sans:${key}`)
+        ];
+        Promise.all(imageKeys.map(key => decodeImage(over.images[key]))).finally(() => {
+          const queue = [];
+          ["hell", "bitch", "it", "laugh"].forEach(name => queueAnimWarmFrames(queue, OT.sprites.sans.animations[name]));
+          ["notes", "madnessNote", "bf"].forEach(key => {
+            const image = over.images[key];
+            if (imgReady(image)) queue.push({ imageKey: key, frame: { x: 0, y: 0, w: image.naturalWidth, h: image.naturalHeight } });
+          });
+          warmOverthroneEffectBuffers();
+          const run = deadline => {
+            const started = performance.now();
+            while (queue.length && (deadline.timeRemaining() > 2 || performance.now() - started < 5)) warmFrame(queue.shift());
+            if (queue.length) idle(run);
+            else over.prewarmDone = true;
+          };
+          idle(run);
+        });
+      }, 0);
     }
 
     function ensureOverthroneAudio() {
@@ -195,6 +284,8 @@
     }
 
     function latestEventState(t) {
+      const cacheT = Math.round(Number(t || 0) * 1000) / 1000;
+      if (over.eventCache.value && over.eventCache.t === cacheT) return over.eventCache.value;
       const zoom = tweenTrack(0.45);
       const vignetteAmount = tweenTrack(0.1);
       const vignetteStrength = tweenTrack(0.1);
@@ -277,7 +368,7 @@
         }
       }
       const latestLyric = lyrics[lyrics.length - 1];
-      return {
+      const value = {
         zoomValue: trackValue(zoom, t),
         vignette: Math.max(trackValue(vignetteAmount, t), trackValue(vignetteStrength, t)),
         saturation: trackValue(saturation, t),
@@ -295,6 +386,8 @@
         lyricSize,
         sansAnim
       };
+      over.eventCache = { t: cacheT, value };
+      return value;
     }
 
     function currentScrollPx(t) {
@@ -581,7 +674,7 @@
     }
 
     function overthroneLaneX(lane) {
-      return 784 + (lane % 4) * 124;
+      return lane < 4 ? 228 + lane * 124 : 784 + (lane % 4) * 124;
     }
 
     function overthroneReceptorY() {
@@ -623,11 +716,11 @@
       drawNoteFrame(skin.end, img, x, tailY, scale, alpha);
     }
 
-    function drawOverthroneReceptor(lane, x, y) {
+    function drawOverthroneReceptor(lane, x, y, alpha = 1) {
       const dir = laneDir(lane);
       const skin = OT.notes.dirs[dir];
       const img = over.images.notes;
-      if (!skin || !imgReady(img)) return arrow(x, y, 48, [Math.PI, Math.PI / 2, -Math.PI / 2, 0][lane % 4], COLORS[lane], "#fff");
+      if (!skin || !imgReady(img)) return arrow(x, y, 48, [Math.PI, Math.PI / 2, -Math.PI / 2, 0][lane % 4], COLORS[lane], "#fff", alpha);
       const fxInfo = state.receptorFx[lane] || { time: -10 };
       const age = performance.now() / 1000 - fxInfo.time;
       let frame = skin.static;
@@ -639,7 +732,7 @@
         frame = frameFromList(skin.press, performance.now() / 1000, 24, true);
         scale = 0.62;
       }
-      drawNoteFrame(frame, img, x, y, scale, 1);
+      drawNoteFrame(frame, img, x, y, scale, alpha);
     }
 
     function drawNormalNote(note, x, y, scale, alpha) {
@@ -673,10 +766,12 @@
       ctx.moveTo(724, 20);
       ctx.lineTo(724, 368);
       ctx.stroke();
-      for (let lane = 4; lane < 8; lane++) {
+      for (let lane = 0; lane < 8; lane++) {
+        const laneAlpha = lane < 4 ? 0.72 * sansOpponentNoteAlpha(t) : 1;
+        if (laneAlpha <= 0.01) continue;
         const x = overthroneLaneX(lane);
-        drawOverthroneReceptor(lane, x, y);
-        ctx.strokeStyle = "rgba(255,72,84,0.08)";
+        drawOverthroneReceptor(lane, x, y, laneAlpha);
+        ctx.strokeStyle = lane < 4 ? `rgba(255,72,84,${(0.06 * laneAlpha).toFixed(3)})` : "rgba(255,72,84,0.08)";
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.moveTo(x, y + 26);
@@ -686,20 +781,50 @@
       ctx.restore();
     }
 
-    // After Sans' "hell" taunt (which has a note-gap), fade his notes back in as they resume.
-    function hellNoteFade(t) {
-      if (over.hellEnd === undefined) {
-        let hellTime = -1;
-        for (const e of OT.events || []) {
-          if (e.name === "Play Animation" && String((e.params || [])[1]) === "hell") { hellTime = Number(e.time || 0); break; }
-        }
-        const anim = OT.sprites.sans.animations.hell;
-        over.hellStart = hellTime;
-        over.hellEnd = hellTime < 0 ? -1 : hellTime + (anim?.frames?.length ? anim.frames.length / (anim.fps || 24) : 2.38);
+    function sansNoteTiming() {
+      if (!over.sansNoteTiming) {
+        const animWindow = name => {
+          let start = -1;
+          for (const e of OT.events || []) {
+            if (e.name === "Play Animation" && String((e.params || [])[1]) === name) { start = Number(e.time || 0); break; }
+          }
+          const anim = OT.sprites.sans.animations[name];
+          const duration = anim?.frames?.length ? anim.frames.length / (anim.fps || 24) : 0;
+          return { start, end: start < 0 ? -1 : start + duration };
+        };
+        const hell = animWindow("hell");
+        const laugh = animWindow("laugh");
+        const bitch = animWindow("bitch");
+        const nextOppNote = (OT.chart.notes || []).find(note => note.side === "opp" && note.time > hell.start + 0.5);
+        const hellRevealStart = hell.start < 0 ? -1 : Math.max(hell.start, Math.min(hell.end, Number(nextOppNote?.time || hell.end) - 0.5));
+        over.sansNoteTiming = {
+          hellRevealStart,
+          hellRevealDuration: 0.45,
+          laughHideStart: laugh.start,
+          laughHideDuration: 0.25,
+          bitchRevealStart: bitch.end,
+          bitchRevealDuration: 0.45
+        };
       }
-      if (over.hellEnd < 0 || t < over.hellStart || t >= over.hellEnd + 0.8) return 1;
-      if (t < over.hellEnd) return 0;
-      return (t - over.hellEnd) / 0.8;
+      return over.sansNoteTiming;
+    }
+
+    function sansOpponentNoteAlpha(t) {
+      const timing = sansNoteTiming();
+      if (timing.hellRevealStart >= 0 && t < timing.hellRevealStart) return 0;
+      let alpha = timing.hellRevealStart < 0 ? 1 : clamp01((t - timing.hellRevealStart) / timing.hellRevealDuration);
+      if (timing.laughHideStart >= 0 && t >= timing.laughHideStart && (timing.bitchRevealStart < 0 || t < timing.bitchRevealStart)) {
+        return 1 - clamp01((t - timing.laughHideStart) / timing.laughHideDuration);
+      }
+      if (timing.bitchRevealStart >= 0 && t >= timing.bitchRevealStart && t < timing.bitchRevealStart + timing.bitchRevealDuration) {
+        alpha = clamp01((t - timing.bitchRevealStart) / timing.bitchRevealDuration);
+      }
+      return alpha;
+    }
+
+    function overthroneNoteHidden(note, t) {
+      if (!note.invisible) return false;
+      return !(note.side === "opp" && sansOpponentNoteAlpha(t) > 0.01);
     }
 
     function overthroneNotes(t) {
@@ -711,7 +836,7 @@
       ctx.save();
       ctx.globalAlpha = Math.max(0.12, Math.min(1, fx.hudAlpha));
       for (const note of state.chart.notes) {
-        if (note.invisible) continue;
+        if (overthroneNoteHidden(note, t)) continue;
         if (note.played && note.hit && (!isHoldNote(note) || note.holdDone)) continue;
         if (note.judged && note.side !== "opp" && (!isHoldNote(note) || note.holdDone || !note.hit)) continue;
         const diff = note.time - t;
@@ -722,7 +847,7 @@
         if (y < -150 && tailY < -150) continue;
         if (y > canvas.height + 150 && tailY > canvas.height + 150) continue;
         const scale = clamp(1 - Math.pow(Math.abs(diff), 0.7) * 0.45, 0.75, 1.12);
-        const alpha = note.side === "opp" ? 0.72 * hellNoteFade(t) : 1;
+        const alpha = note.side === "opp" ? 0.72 * sansOpponentNoteAlpha(t) : 1;
         if (isHoldNote(note)) drawOverthroneSustain(note, x, note.hit ? receptor : y, tailY, alpha * (note.hit ? 0.94 : 1));
         if (note.hit && isHoldNote(note) && t > note.time) continue;
         if (note.specialType === "madness") drawMadnessNote(note, x, y, scale, alpha, t);
@@ -815,7 +940,7 @@
       if (fx.cameraSide) return fx.cameraSide;
       let side = state.camera.lastSide || "both";
       for (const note of state.chart?.notes || []) {
-        if (note.invisible || note.avoid) continue;
+        if (overthroneNoteHidden(note, t) || note.avoid) continue;
         if (note.time > t + 0.08) break;
         const activeHold = isHoldNote(note) && note.hit && !note.holdDone && holdEndTime(note) >= t - 0.02;
         const activeTap = !isHoldNote(note) && t >= note.time - 0.02 && t <= note.time + 0.08;

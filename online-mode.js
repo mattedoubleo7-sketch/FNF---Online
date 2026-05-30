@@ -129,6 +129,14 @@ function importedTracksForSong(songId = state.selectedSong) {
     if (typeof ensureCombatAudio === "function") ensureCombatAudio();
     return [state.audio.combatInst, state.audio.combatVoices];
   }
+  if (chartSource === "oneHit") {
+    if (typeof ensureOneHitAudio === "function") ensureOneHitAudio();
+    return [state.audio.oneHitInst, state.audio.oneHitVoices];
+  }
+  if (chartSource === "shimmy") {
+    if (typeof ensureShimmyAudio === "function") ensureShimmyAudio();
+    return [state.audio.shimmyInst, state.audio.shimmyVoices];
+  }
   if (chartSource === "perseverance") {
     ensurePerseveranceAudio();
     return [state.audio.inst2, state.audio.voices2a, state.audio.voices2b];
@@ -232,6 +240,24 @@ async function preloadSongForMatch(songId, matchId) {
       try { track.load(); } catch {}
     });
     await Promise.all([waitForTrackReady(state.audio.combatInst), waitForTrackReady(state.audio.combatVoices)]);
+  } else if (SONGS[songId]?.chartSource === "oneHit") {
+    if (typeof ensureOneHitAudio === "function") ensureOneHitAudio();
+    [state.audio.oneHitInst, state.audio.oneHitVoices].forEach(track => {
+      if (!track) return;
+      track.pause();
+      try { track.currentTime = 0; } catch {}
+      try { track.load(); } catch {}
+    });
+    await Promise.all([waitForTrackReady(state.audio.oneHitInst), waitForTrackReady(state.audio.oneHitVoices)]);
+  } else if (SONGS[songId]?.chartSource === "shimmy") {
+    if (typeof ensureShimmyAudio === "function") ensureShimmyAudio();
+    [state.audio.shimmyInst, state.audio.shimmyVoices].forEach(track => {
+      if (!track) return;
+      track.pause();
+      try { track.currentTime = 0; } catch {}
+      try { track.load(); } catch {}
+    });
+    await Promise.all([waitForTrackReady(state.audio.shimmyInst), waitForTrackReady(state.audio.shimmyVoices)]);
   } else if (SONGS[songId]?.chartSource === "perseverance") {
     ensurePerseveranceAudio();
     [state.audio.inst2, state.audio.voices2a, state.audio.voices2b].forEach(track => {
@@ -385,6 +411,14 @@ function syncOnlinePlayback(force = false) {
     if (typeof ensureCombatAudio === "function") ensureCombatAudio();
     syncTrackToTime(state.audio.combatInst, targetTime, shouldPlay, syncOptions);
     syncTrackToTime(state.audio.combatVoices, targetTime, shouldPlay, { ...syncOptions, isSecondary: true });
+  } else if (state.currentSong.chartSource === "oneHit") {
+    if (typeof ensureOneHitAudio === "function") ensureOneHitAudio();
+    syncTrackToTime(state.audio.oneHitInst, targetTime, shouldPlay, syncOptions);
+    syncTrackToTime(state.audio.oneHitVoices, targetTime, shouldPlay, { ...syncOptions, isSecondary: true });
+  } else if (state.currentSong.chartSource === "shimmy") {
+    if (typeof ensureShimmyAudio === "function") ensureShimmyAudio();
+    syncTrackToTime(state.audio.shimmyInst, targetTime, shouldPlay, syncOptions);
+    syncTrackToTime(state.audio.shimmyVoices, targetTime, shouldPlay, { ...syncOptions, isSecondary: true });
   } else if (state.currentSong.chartSource === "perseverance") {
     ensurePerseveranceAudio();
     syncTrackToTime(state.audio.inst2, targetTime, shouldPlay, syncOptions);
@@ -1064,6 +1098,36 @@ startSong = function(id = state.selectedSong, options = {}){
     if (!skipReload) {
       state.audio.boxingInst.load();
       state.audio.boxingVoices.load();
+    }
+  } else if (state.currentSong.chartSource === "combat") {
+    if (typeof ensureCombatAudio === "function") ensureCombatAudio();
+    state.audio.combatInst.pause();
+    state.audio.combatVoices.pause();
+    try { state.audio.combatInst.currentTime = 0; } catch {}
+    try { state.audio.combatVoices.currentTime = 0; } catch {}
+    if (!skipReload) {
+      state.audio.combatInst.load();
+      state.audio.combatVoices.load();
+    }
+  } else if (state.currentSong.chartSource === "oneHit") {
+    if (typeof ensureOneHitAudio === "function") ensureOneHitAudio();
+    state.audio.oneHitInst.pause();
+    state.audio.oneHitVoices.pause();
+    try { state.audio.oneHitInst.currentTime = 0; } catch {}
+    try { state.audio.oneHitVoices.currentTime = 0; } catch {}
+    if (!skipReload) {
+      state.audio.oneHitInst.load();
+      state.audio.oneHitVoices.load();
+    }
+  } else if (state.currentSong.chartSource === "shimmy") {
+    if (typeof ensureShimmyAudio === "function") ensureShimmyAudio();
+    state.audio.shimmyInst.pause();
+    state.audio.shimmyVoices.pause();
+    try { state.audio.shimmyInst.currentTime = 0; } catch {}
+    try { state.audio.shimmyVoices.currentTime = 0; } catch {}
+    if (!skipReload) {
+      state.audio.shimmyInst.load();
+      state.audio.shimmyVoices.load();
     }
   } else {
     ensurePerseveranceAudio();

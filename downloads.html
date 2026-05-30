@@ -3,22 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FNF Onliine Downloads</title>
+<title>FNF Onliine - Silly Billy Build</title>
 <link rel="icon" type="image/x-icon" href="assets/icon.ico">
 <style>
 :root {
-  --bg: #040711;
-  --panel: rgba(8, 13, 28, 0.84);
-  --panel2: rgba(13, 21, 44, 0.92);
-  --line: rgba(255,255,255,0.14);
-  --text: #f8fbff;
-  --muted: #a9b9e8;
-  --hot: #ff714f;
-  --pink: #ff4f8e;
-  --cool: #47d9ff;
-  --gold: #ffd36b;
-  --good: #73f6ab;
-  --violet: #8f6bff;
+  --bg: #0a0309;
+  --panel: rgba(20, 5, 14, 0.84);
+  --panel2: rgba(30, 7, 20, 0.92);
+  --line: rgba(255, 130, 175, 0.18);
+  --text: #f9eef3;
+  --muted: #d9b1c1;
+  --pink: #ff3a82;
+  --hot: #ff1f6d;
+  --blood: #c8102e;
+  --cyan: #46c5ff;
+  --proud: #ff5e94;
+  --bone: #efe2c8;
+  --shadow: rgba(0,0,0,0.55);
 }
 * { box-sizing: border-box; }
 html, body {
@@ -27,45 +28,65 @@ html, body {
   color: var(--text);
   font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
   background:
-    radial-gradient(circle at 16% 12%, rgba(71,217,255,0.22), transparent 24%),
-    radial-gradient(circle at 82% 8%, rgba(255,79,142,0.18), transparent 24%),
-    radial-gradient(circle at 58% 96%, rgba(255,211,107,0.14), transparent 28%),
-    linear-gradient(180deg, #081221 0%, #050816 54%, var(--bg) 100%);
+    radial-gradient(circle at 18% 10%, rgba(255, 31, 109, 0.22), transparent 26%),
+    radial-gradient(circle at 84% 14%, rgba(70, 197, 255, 0.13), transparent 26%),
+    radial-gradient(circle at 50% 95%, rgba(200, 16, 46, 0.18), transparent 32%),
+    linear-gradient(180deg, #120410 0%, #08020a 56%, var(--bg) 100%);
 }
 body {
   min-height: 100vh;
   padding: 28px;
   overflow-x: hidden;
 }
+/* Cracked mirror overlay — subtle white shards */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   pointer-events: none;
-  opacity: 0.38;
-  background-image:
-    linear-gradient(rgba(255,255,255,0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
-  background-size: 52px 52px;
-  mask-image: linear-gradient(180deg, transparent, #000 12%, #000 74%, transparent);
+  opacity: 0.18;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 900'><g fill='none' stroke='%23ffffff' stroke-width='1.1' opacity='0.65'><path d='M0,160 L320,300 L560,180 L820,360 L1080,220 L1340,420 L1600,260'/><path d='M0,520 L300,420 L520,640 L820,500 L1040,720 L1320,580 L1600,780'/><path d='M0,820 L260,720 L500,860 L780,740 L1020,880 L1280,760 L1600,860'/><path d='M820,0 L760,200 L880,360 L740,540 L900,700 L780,900'/><path d='M380,0 L420,140 L320,300 L460,440 L320,640 L420,820 L380,900'/><path d='M1200,0 L1180,160 L1280,320 L1160,500 L1280,700 L1180,900'/></g></svg>");
+  background-size: 1400px 800px;
+  background-repeat: repeat;
+  mix-blend-mode: screen;
 }
+/* Distant red glow rotator */
 body::after {
   content: "";
   position: fixed;
   inset: -30%;
   pointer-events: none;
-  opacity: 0.18;
-  background: conic-gradient(from 120deg, transparent, rgba(71,217,255,0.24), transparent, rgba(255,113,79,0.2), transparent);
-  animation: spinWash 22s linear infinite;
+  opacity: 0.22;
+  background: conic-gradient(from 90deg, transparent, rgba(255, 31, 109, 0.32), transparent, rgba(200, 16, 46, 0.28), transparent);
+  animation: spinWash 26s linear infinite;
 }
 @keyframes spinWash { to { transform: rotate(360deg); } }
 @keyframes floatIn {
-  from { opacity: 0; transform: translateY(18px) scale(0.98); }
+  from { opacity: 0; transform: translateY(20px) scale(0.97); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 @keyframes scan {
   from { transform: translateX(-120%); }
   to { transform: translateX(120%); }
+}
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 31, 109, 0.55), 0 18px 36px rgba(0,0,0,0.5); }
+  50%      { box-shadow: 0 0 0 14px rgba(255, 31, 109, 0), 0 18px 36px rgba(0,0,0,0.5); }
+}
+@keyframes glitch {
+  0% { transform: translate(0,0); }
+  20% { transform: translate(-2px, 1px); }
+  40% { transform: translate(1px, -2px); }
+  60% { transform: translate(-1px, -1px); }
+  80% { transform: translate(2px, 1px); }
+  100% { transform: translate(0,0); }
+}
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
 }
 .page {
   position: relative;
@@ -85,12 +106,12 @@ body::after {
   align-items: center;
   gap: 14px;
   padding: 12px 14px;
-  border: 1px solid rgba(255,255,255,0.16);
+  border: 1px solid rgba(255, 31, 109, 0.32);
   border-radius: 24px;
   background:
-    linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.035)),
-    rgba(8, 13, 28, 0.88);
-  box-shadow: 0 18px 44px rgba(0,0,0,0.28);
+    linear-gradient(135deg, rgba(255, 31, 109, 0.14), rgba(70, 197, 255, 0.05)),
+    rgba(20, 5, 14, 0.92);
+  box-shadow: 0 18px 44px rgba(0,0,0,0.4), inset 0 0 22px rgba(255, 31, 109, 0.07);
   animation: floatIn 0.55s ease both;
 }
 .sideUpdate img {
@@ -98,13 +119,13 @@ body::after {
   height: 54px;
   display: block;
   border-radius: 14px;
-  filter: drop-shadow(0 10px 18px rgba(0,0,0,0.42));
+  filter: drop-shadow(0 10px 18px rgba(0,0,0,0.55)) drop-shadow(0 0 8px rgba(255, 31, 109, 0.35));
 }
 .sideUpdate span {
   display: block;
-  color: var(--cool);
+  color: var(--pink);
   font-size: 11px;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
 }
 .sideUpdate strong {
@@ -112,6 +133,8 @@ body::after {
   margin-top: 2px;
   font-size: 22px;
   line-height: 0.96;
+  color: var(--bone);
+  text-shadow: 0 0 12px rgba(255, 31, 109, 0.6);
 }
 .sideUpdate small {
   display: block;
@@ -123,22 +146,22 @@ body::after {
 }
 .hero, .panel, .modeCard {
   border: 1px solid var(--line);
-  box-shadow: 0 24px 72px rgba(0,0,0,0.36);
+  box-shadow: 0 24px 72px rgba(0,0,0,0.5);
 }
 .hero {
   position: relative;
   overflow: hidden;
   padding: clamp(24px, 4vw, 42px);
   display: grid;
-  grid-template-columns: 180px 1fr;
+  grid-template-columns: 200px 1fr;
   gap: 26px;
   align-items: center;
   border-radius: 34px;
   background:
-    linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.035)),
-    radial-gradient(circle at 88% 14%, rgba(255,211,107,0.18), transparent 24%),
-    radial-gradient(circle at 16% 86%, rgba(71,217,255,0.18), transparent 28%),
-    rgba(10, 17, 34, 0.9);
+    linear-gradient(135deg, rgba(255, 31, 109, 0.16), rgba(70, 197, 255, 0.04)),
+    radial-gradient(circle at 84% 10%, rgba(255, 31, 109, 0.22), transparent 26%),
+    radial-gradient(circle at 14% 88%, rgba(70, 197, 255, 0.16), transparent 28%),
+    rgba(14, 4, 12, 0.94);
   animation: floatIn 0.55s ease both;
 }
 .hero::before {
@@ -146,7 +169,7 @@ body::after {
   position: absolute;
   inset: 12px;
   border-radius: 26px;
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid rgba(255, 31, 109, 0.18);
   pointer-events: none;
 }
 .hero::after {
@@ -155,13 +178,13 @@ body::after {
   top: 0;
   bottom: 0;
   width: 40%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
-  animation: scan 4.8s ease-in-out infinite;
+  background: linear-gradient(90deg, transparent, rgba(255, 80, 140, 0.13), transparent);
+  animation: scan 5.4s ease-in-out infinite;
   pointer-events: none;
 }
 .logoWrap {
   position: relative;
-  width: min(170px, 38vw);
+  width: min(180px, 38vw);
   aspect-ratio: 1;
   display: grid;
   place-items: center;
@@ -171,16 +194,17 @@ body::after {
   position: absolute;
   inset: 2px;
   border-radius: 38px;
-  background: conic-gradient(from 210deg, var(--cool), var(--violet), var(--pink), var(--gold), var(--cool));
-  filter: blur(16px);
-  opacity: 0.5;
+  background: conic-gradient(from 200deg, var(--pink), var(--blood), var(--cyan), var(--hot), var(--pink));
+  filter: blur(18px);
+  opacity: 0.55;
+  animation: spinWash 14s linear infinite;
 }
 .hero img {
   position: relative;
   width: 100%;
-  max-width: 160px;
+  max-width: 170px;
   display: block;
-  filter: drop-shadow(0 18px 28px rgba(0,0,0,0.38));
+  filter: drop-shadow(0 18px 28px rgba(0,0,0,0.5)) drop-shadow(0 0 12px rgba(255, 31, 109, 0.45));
 }
 .eyebrow {
   color: var(--muted);
@@ -194,34 +218,55 @@ body::after {
   gap: 9px;
   padding: 8px 12px;
   border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.16);
-  background: rgba(255,255,255,0.07);
-  color: #dce8ff;
+  border: 1px solid rgba(255, 31, 109, 0.32);
+  background: rgba(255, 31, 109, 0.08);
+  color: #ffd8e6;
   font-size: 12px;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 .liveDot {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--good);
-  box-shadow: 0 0 18px var(--good);
+  background: var(--pink);
+  box-shadow: 0 0 18px var(--pink);
+  animation: pulseGlow 1.8s ease-in-out infinite;
+}
+/* Glitch-split title */
+.titleWrap {
+  position: relative;
+  display: inline-block;
 }
 h1 {
+  position: relative;
   margin: 12px 0 12px;
   font-size: clamp(52px, 8vw, 102px);
   line-height: 0.82;
-  letter-spacing: -0.07em;
-  text-shadow: 0 10px 36px rgba(0,0,0,0.38);
+  letter-spacing: -0.06em;
+  color: var(--bone);
+  text-shadow: 0 10px 36px rgba(0,0,0,0.5), 0 0 22px rgba(255, 31, 109, 0.32);
 }
+h1::before, h1::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+h1::before { color: var(--pink); transform: translate(-3px, 0); opacity: 0.7; }
+h1::after  { color: var(--cyan); transform: translate(3px, 0);  opacity: 0.55; }
+h1:hover { animation: glitch 0.35s ease 1; }
 h2 {
   margin: 8px 0 0;
   font-size: clamp(32px, 4vw, 46px);
   line-height: 0.95;
+  color: var(--bone);
+  text-shadow: 0 0 14px rgba(255, 31, 109, 0.35);
 }
 p, li {
-  color: #dfe7ff;
+  color: #f1dde6;
   font-size: 15px;
   line-height: 1.6;
 }
@@ -244,22 +289,26 @@ p, li {
   text-decoration: none;
   color: #fff;
   font-weight: 900;
-  transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease;
+  letter-spacing: 0.05em;
+  transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 16px;
 }
 .btn:hover {
   transform: translateY(-2px);
-  border-color: rgba(255,255,255,0.32);
-  box-shadow: 0 16px 32px rgba(0,0,0,0.24);
+  border-color: rgba(255, 80, 140, 0.45);
+  box-shadow: 0 16px 32px rgba(0,0,0,0.4), 0 0 20px rgba(255, 31, 109, 0.25);
 }
 .primary {
-  color: #07101f;
-  background: linear-gradient(135deg, var(--gold), var(--hot) 78%, var(--pink));
-  box-shadow: 0 14px 34px rgba(255, 113, 79, 0.24);
+  color: #1d0512;
+  background: linear-gradient(135deg, var(--pink), var(--blood) 78%, #6a0512);
+  box-shadow: 0 14px 34px rgba(255, 31, 109, 0.32);
 }
-.secondary { background: rgba(255,255,255,0.075); }
+.secondary { background: rgba(255, 255, 255, 0.07); }
 .ghost {
-  background: linear-gradient(135deg, rgba(71,217,255,0.16), rgba(143,107,255,0.12));
-  color: #ddf8ff;
+  background: linear-gradient(135deg, rgba(70, 197, 255, 0.14), rgba(255, 31, 109, 0.12));
+  color: #e8f6ff;
 }
 .statsRow {
   display: grid;
@@ -280,6 +329,8 @@ p, li {
   font-size: 26px;
   line-height: 1;
   margin-top: 7px;
+  color: var(--bone);
+  text-shadow: 0 0 10px rgba(255, 31, 109, 0.3);
 }
 .statChip span {
   color: var(--muted);
@@ -298,16 +349,16 @@ p, li {
   padding: 26px;
   border-radius: 28px;
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.028)),
-    rgba(8, 13, 28, 0.86);
+    linear-gradient(180deg, rgba(255, 31, 109, 0.07), rgba(255, 31, 109, 0.02)),
+    rgba(14, 4, 12, 0.92);
   transition: transform 0.16s ease, border-color 0.16s ease;
 }
 .modeCard:hover {
   transform: translateY(-3px);
-  border-color: rgba(255,255,255,0.26);
+  border-color: rgba(255, 80, 140, 0.4);
 }
-.modeCard.onlineMode { background-image: radial-gradient(circle at top right, rgba(71,217,255,0.17), transparent 32%), linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.028)); }
-.modeCard.offlineMode { background-image: radial-gradient(circle at top right, rgba(255,211,107,0.17), transparent 32%), linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.028)); }
+.modeCard.onlineMode { background-image: radial-gradient(circle at top right, rgba(70, 197, 255, 0.18), transparent 32%), linear-gradient(180deg, rgba(255, 31, 109, 0.06), rgba(255, 31, 109, 0.02)); }
+.modeCard.offlineMode { background-image: radial-gradient(circle at top right, rgba(255, 31, 109, 0.2), transparent 32%), linear-gradient(180deg, rgba(255, 31, 109, 0.06), rgba(255, 31, 109, 0.02)); }
 .modeCard::after {
   content: "";
   position: absolute;
@@ -315,7 +366,7 @@ p, li {
   width: 220px;
   height: 220px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(255,255,255,0.13), rgba(0,0,0,0));
+  background: radial-gradient(circle, rgba(255, 80, 140, 0.16), rgba(0,0,0,0));
   pointer-events: none;
 }
 .modeHead {
@@ -332,8 +383,8 @@ p, li {
   text-transform: uppercase;
   border: 1px solid var(--line);
 }
-.badge.online { background: rgba(71,217,255,0.12); color: var(--cool); }
-.badge.offline { background: rgba(255,211,107,0.12); color: var(--gold); }
+.badge.online { background: rgba(70, 197, 255, 0.14); color: var(--cyan); }
+.badge.offline { background: rgba(255, 31, 109, 0.14); color: var(--pink); }
 .modeCard h2 {
   margin: 12px 0 8px;
   font-size: 42px;
@@ -355,15 +406,16 @@ p, li {
   position: relative;
   overflow: hidden;
   padding: 17px;
-  background: rgba(7, 12, 26, 0.72);
+  background: rgba(12, 3, 10, 0.78);
 }
 .dlBlock h3 {
   margin: 0 0 8px;
   font-size: 24px;
+  color: var(--bone);
 }
 .panel {
   padding: 26px;
-  box-shadow: 0 24px 72px rgba(0,0,0,0.28);
+  box-shadow: 0 24px 72px rgba(0,0,0,0.4);
 }
 .updatePanel {
   display: grid;
@@ -371,20 +423,20 @@ p, li {
   gap: 22px;
   align-items: stretch;
   background:
-    radial-gradient(circle at 12% 20%, rgba(255,113,79,0.18), transparent 32%),
-    radial-gradient(circle at 88% 24%, rgba(71,217,255,0.16), transparent 30%),
-    rgba(10, 16, 34, 0.9);
+    radial-gradient(circle at 12% 20%, rgba(255, 31, 109, 0.2), transparent 32%),
+    radial-gradient(circle at 88% 24%, rgba(70, 197, 255, 0.16), transparent 30%),
+    rgba(14, 4, 12, 0.92);
 }
 .latestBox {
   padding: 22px;
   border-radius: 24px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(255,255,255,0.055);
+  border: 1px solid rgba(255, 31, 109, 0.24);
+  background: rgba(255, 31, 109, 0.04);
 }
 .latestBox .version {
-  color: var(--gold);
+  color: var(--pink);
   font-size: 13px;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
 }
 .latestBox h2 { font-size: clamp(38px, 5vw, 58px); }
@@ -394,23 +446,24 @@ p, li {
 }
 .logItem {
   display: grid;
-  grid-template-columns: 118px 1fr;
+  grid-template-columns: 132px 1fr;
   gap: 14px;
   padding: 15px;
   border-radius: 20px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.045);
+  border: 1px solid rgba(255, 31, 109, 0.16);
+  background: rgba(255, 31, 109, 0.04);
 }
 .logDate {
-  color: var(--cool);
+  color: var(--pink);
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   font-size: 12px;
 }
 .logTitle {
   font-size: 22px;
   line-height: 1;
   margin-bottom: 6px;
+  color: var(--bone);
 }
 .list, .setlist {
   display: grid;
@@ -422,7 +475,7 @@ p, li {
 .item {
   padding: 14px 16px;
   border-radius: 18px;
-  background: rgba(255,255,255,0.045);
+  background: rgba(255, 31, 109, 0.05);
   border: 1px solid var(--line);
 }
 .setlist {
@@ -431,22 +484,30 @@ p, li {
 .songTile {
   position: relative;
   overflow: hidden;
-  min-height: 126px;
+  min-height: 132px;
   padding: 16px;
   border-radius: 20px;
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 1px solid rgba(255, 31, 109, 0.18);
   background:
-    linear-gradient(145deg, rgba(255,255,255,0.07), rgba(255,255,255,0.025)),
-    radial-gradient(circle at top right, rgba(71,217,255,0.1), transparent 36%);
+    linear-gradient(145deg, rgba(255, 31, 109, 0.08), rgba(255, 31, 109, 0.02)),
+    radial-gradient(circle at top right, rgba(70, 197, 255, 0.1), transparent 36%);
+}
+.songTile.silly {
+  border-color: rgba(255, 31, 109, 0.5);
+  background:
+    linear-gradient(145deg, rgba(255, 31, 109, 0.22), rgba(200, 16, 46, 0.08)),
+    radial-gradient(circle at top right, rgba(70, 197, 255, 0.16), transparent 40%);
+  box-shadow: 0 0 28px rgba(255, 31, 109, 0.18), inset 0 0 30px rgba(255, 31, 109, 0.08);
 }
 .songTile strong {
   display: block;
   font-size: 24px;
   line-height: 1;
   margin-bottom: 9px;
+  color: var(--bone);
 }
 .songTile span {
-  color: #d7e3ff;
+  color: #ecd6e0;
   font-size: 13px;
   line-height: 1.45;
 }
@@ -459,15 +520,16 @@ p, li {
 .tag {
   padding: 6px 9px;
   border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 1px solid rgba(255, 31, 109, 0.2);
   color: var(--muted);
-  background: rgba(255,255,255,0.055);
+  background: rgba(255, 31, 109, 0.06);
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+.tag.hot { background: rgba(255, 31, 109, 0.22); color: #ffd1de; border-color: rgba(255, 31, 109, 0.5); }
 .warn {
-  color: var(--gold);
+  color: var(--pink);
   font-weight: 700;
 }
 .footer {
@@ -476,92 +538,283 @@ p, li {
   text-align: center;
   padding-bottom: 12px;
 }
+/* Tester code panel */
+.testerPanel {
+  position: relative;
+  overflow: hidden;
+  padding: 26px;
+  border-radius: 28px;
+  border: 1px dashed rgba(255, 31, 109, 0.45);
+  background:
+    radial-gradient(circle at 14% 18%, rgba(255, 31, 109, 0.18), transparent 32%),
+    radial-gradient(circle at 88% 80%, rgba(70, 197, 255, 0.12), transparent 36%),
+    rgba(14, 4, 12, 0.95);
+  box-shadow: 0 0 30px rgba(255, 31, 109, 0.18) inset, 0 24px 60px rgba(0,0,0,0.5);
+}
+.testerPanel::before {
+  content: "";
+  position: absolute;
+  top: -1px; left: -1px; right: -1px; bottom: -1px;
+  border-radius: 28px;
+  pointer-events: none;
+  background: linear-gradient(135deg, transparent, rgba(255, 31, 109, 0.2), transparent 60%);
+}
+.testerHead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.testerHead h2 { margin: 0; }
+.testerForm {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  margin-top: 16px;
+  max-width: 520px;
+}
+.testerInput {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 31, 109, 0.35);
+  background: rgba(8, 2, 6, 0.7);
+  color: var(--bone);
+  font-family: "Courier New", monospace;
+  font-size: 17px;
+  letter-spacing: 0.18em;
+  outline: none;
+  transition: border-color 0.14s, box-shadow 0.14s;
+}
+.testerInput:focus {
+  border-color: var(--pink);
+  box-shadow: 0 0 0 3px rgba(255, 31, 109, 0.22);
+}
+.testerInput.bad { animation: shake 0.4s ease; border-color: var(--blood); }
+.testerStatus {
+  margin-top: 12px;
+  font-size: 13px;
+  font-family: Arial, sans-serif;
+  color: var(--muted);
+  min-height: 18px;
+}
+.testerStatus.ok { color: #a3ffcd; }
+.testerStatus.err { color: #ffa3b3; }
+.testerVault {
+  display: none;
+  margin-top: 18px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(70, 197, 255, 0.3);
+  background:
+    linear-gradient(135deg, rgba(70, 197, 255, 0.08), rgba(255, 31, 109, 0.06)),
+    rgba(8, 2, 6, 0.78);
+  animation: floatIn 0.5s ease both;
+}
+.testerVault.show { display: block; }
+.testerVault h3 { margin: 0 0 6px; font-size: 26px; color: var(--bone); }
+.testerVault ul { padding-left: 20px; }
+.testerVault li { font-size: 14px; }
+/* Lock banner — shown only while not unlocked */
+.lockBanner {
+  position: relative;
+  z-index: 2;
+  width: min(1240px, 100%);
+  margin: 0 auto 18px;
+  padding: 18px 22px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 31, 109, 0.55);
+  background:
+    linear-gradient(135deg, rgba(200, 16, 46, 0.32), rgba(255, 31, 109, 0.16)),
+    rgba(20, 5, 14, 0.95);
+  box-shadow: 0 18px 42px rgba(0,0,0,0.5), 0 0 30px rgba(255, 31, 109, 0.25);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 14px;
+  align-items: center;
+  animation: floatIn 0.55s ease both, pulseGlow 2.4s ease-in-out infinite;
+}
+.lockBanner .lockIcon {
+  font-size: 32px;
+  line-height: 1;
+  filter: drop-shadow(0 0 12px rgba(255, 31, 109, 0.6));
+}
+.lockBanner strong {
+  display: block;
+  font-size: 22px;
+  color: var(--bone);
+  letter-spacing: 0.04em;
+}
+.lockBanner small {
+  display: block;
+  color: var(--muted);
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  margin-top: 3px;
+  line-height: 1.35;
+}
+.lockBanner .lockCta {
+  white-space: nowrap;
+  text-decoration: none;
+  font-family: inherit;
+}
+body.unlocked .lockBanner { display: none; }
+/* Gated buttons — disabled until tester unlocks */
+body.notTester .needsTester {
+  position: relative;
+  pointer-events: none;
+  opacity: 0.42;
+  filter: grayscale(0.7);
+  cursor: not-allowed;
+}
+body.notTester .needsTester::after {
+  content: "🔒";
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: var(--blood);
+  color: #fff;
+  border-radius: 999px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,255,255,0.25);
+}
+/* Click-anywhere proxy that re-enables pointer events for the scroll-to-tester behavior */
+body.notTester .needsTesterProxy {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+body.unlocked .needsTesterProxy { display: none; }
+.testerPanel.required {
+  border-color: rgba(255, 31, 109, 0.8);
+  box-shadow: 0 0 50px rgba(255, 31, 109, 0.3), inset 0 0 30px rgba(255, 31, 109, 0.12);
+}
+.dlBlockHost { position: relative; }
 @media (max-width: 980px) {
   body { padding: 14px; }
   .hero, .grid, .downloadGrid, .updatePanel, .statsRow, .setlist { grid-template-columns: 1fr; }
   .logoWrap { width: 132px; }
   .logItem { grid-template-columns: 1fr; }
+  .testerForm { grid-template-columns: 1fr; }
 }
 @media (min-width: 1480px) {
   .sideUpdate {
     position: fixed;
     top: 50%;
     right: 18px;
-    width: 136px;
+    width: 138px;
     margin: 0;
     transform: translateY(-50%);
     grid-template-columns: 1fr;
     justify-items: center;
     text-align: center;
   }
-  .sideUpdate img {
-    width: 68px;
-    height: 68px;
-  }
+  .sideUpdate img { width: 68px; height: 68px; }
 }
 </style>
 </head>
-<body>
+<body class="notTester">
+<div class="lockBanner" id="lockBanner" role="alert">
+  <div class="lockIcon">🔒</div>
+  <div>
+    <strong>Tester Access Required</strong>
+    <small>This build is in closed testing. Enter your tester code below to unlock the Play buttons and the app downloads. If you don't have a code, ask Matt.</small>
+  </div>
+  <a class="btn primary lockCta" href="#testerPanel">Enter Code</a>
+</div>
 <aside class="sideUpdate" aria-label="New update badge">
-  <img src="assets/icon.ico" alt="FNF Onliine app icon">
+  <img src="assets/icon.ico" alt="Silly Billy app icon">
   <div>
     <span>New update</span>
-    <strong>Ballistic</strong>
-    <small>Whitty's alley stage, chart, and split audio are included.</small>
+    <strong>Silly Billy</strong>
+    <small>Test of Time chart, spikes-bf, mobile + console support, speed lines, flashback cutscene.</small>
   </div>
 </aside>
 <div class="page">
   <section class="hero">
-    <div class="logoWrap"><img src="assets/icon.ico" alt="FNF Onliine app icon"></div>
+    <div class="logoWrap"><img src="assets/icon.ico" alt="Silly Billy app icon"></div>
     <div>
       <div class="kicker"><span class="liveDot"></span> Live build updated</div>
-      <h1>FNF Onliine</h1>
-      <p>This is the download portal for the browser and app builds. Browser play is still the easiest choice for friends because it avoids Windows SmartScreen warnings from the unsigned app. The newest build adds Ballistic with Whitty's alley stage, imported chart, real split audio, crazy Whitty, Whitty BF, GF, camera hits, flashes, shakes, and smoke VFX.</p>
+      <div class="titleWrap"><h1 data-text="FNF Onliine">FNF Onliine</h1></div>
+      <p>This is the download portal for the browser and app builds. Browser play is the easiest route for friends because it avoids Windows SmartScreen warnings on the unsigned `.exe`. The newest build is the <strong>Silly Billy</strong> drop — Test of Time chart and instrumental retargeted into the Silly Billy slot, the pixel BF in the pixel area, spikes-bf opponent in the shrink phase, a flashback cutscene on the final stretch, speed lines after "Count Your Seconds!", and full mobile + gamepad support across every song.</p>
       <div class="actions">
-        <a class="btn ghost" href="/play">Play Online In Browser</a>
-        <a class="btn ghost" href="/offline">Play Offline In Browser</a>
+        <a class="btn primary needsTester" href="/play">Play Online In Browser</a>
+        <a class="btn ghost needsTester" href="/offline">Play Offline In Browser</a>
         <a class="btn secondary" href="https://github.com/mattedoubleo7-sketch/FNF---Online">View GitHub</a>
       </div>
     </div>
   </section>
 
+  <section class="testerPanel required" id="testerPanel">
+    <div class="testerHead">
+      <div class="eyebrow">Restricted</div>
+      <h2>Tester Access</h2>
+    </div>
+    <p>This build is in closed testing — a tester code is required to launch the game or download the apps. If you were given one, enter it below.</p>
+    <form class="testerForm" id="testerForm" autocomplete="off">
+      <input class="testerInput" id="testerInput" type="password" placeholder="Enter tester code" spellcheck="false" maxlength="40">
+      <button class="btn primary" type="submit">Unlock</button>
+    </form>
+    <div class="testerStatus" id="testerStatus"></div>
+    <div class="testerVault" id="testerVault" aria-hidden="true">
+      <h3>Tester Vault</h3>
+      <p>Welcome, tester. You can now launch the game and download the desktop apps. These builds may be unstable — report bugs against the latest build only.</p>
+      <ul>
+        <li>Latest Silly Billy build with Test of Time chart, spikes-bf, flashback cutscene, speed lines, and power-50 drain.</li>
+        <li>Mobile + Console toggles in Settings — touch buttons + Xbox/PlayStation/generic gamepad support.</li>
+        <li>Experimental: set <code>window.__sillySpeedLinesDebug = true</code> in DevTools to tweak speed-lines intensity at runtime.</li>
+        <li>Override the gamepad mapping with <code>localStorage.fnfConsoleMap</code> = JSON map of <code>{buttonIndex:lane}</code>.</li>
+      </ul>
+    </div>
+  </section>
+
   <section class="statsRow">
-    <div class="statChip"><span>Newest song</span><strong>Ballistic</strong></div>
-    <div class="statChip"><span>Browser modes</span><strong>Online + Offline</strong></div>
+    <div class="statChip"><span>Newest song</span><strong>Silly Billy</strong></div>
+    <div class="statChip"><span>Now supports</span><strong>Mobile + Gamepad</strong></div>
     <div class="statChip"><span>App builds</span><strong>Refreshed</strong></div>
     <div class="statChip"><span>Best route</span><strong>Browser</strong></div>
   </section>
 
   <section class="panel updatePanel">
     <div class="latestBox">
-      <div class="version">Update log - 2026.05.24</div>
-      <h2>Ballistic Drop</h2>
-      <p>The current build adds Ballistic with the Whitty alley stage, imported hard chart, split instrumental and vocal tracks, animated Whitty/BF/GF sprites, and song-specific camera/VFX events.</p>
+      <div class="version">Update log - 2026.05.29</div>
+      <h2>Silly Billy Drop</h2>
+      <p>Silly Billy now plays the Test of Time chart and instrumental against the original Silly Billy vocals. The shrink phase, pixel area, flashback cutscene, and life-drain escalation are all wired up. Mobile touch controls and console / gamepad support were added to every song.</p>
       <div class="actions">
-        <a class="btn primary" href="/play">Jump Into Online</a>
-        <a class="btn secondary" href="/offline">Try Offline</a>
+        <a class="btn primary needsTester" href="/play">Jump Into Online</a>
+        <a class="btn secondary needsTester" href="/offline">Try Offline</a>
       </div>
     </div>
     <div class="logList">
       <div class="logItem">
         <div class="logDate">Latest</div>
-        <div><div class="logTitle">Ballistic imported</div><p>Added Whitty's alley assets, crazy Whitty, Whitty BF, GF, the Ballistic chart, split OGG audio, flashes, shakes, smoke, and synced online playback support.</p></div>
+        <div><div class="logTitle">Silly Billy retarget</div><p>Test of Time chart + Inst.ogg now run inside the Silly Billy slot against Silly Billy's own vocals. Lyric timing, shrink/unshrink, mirror break, and the SO_STAY cutscene were all re-anchored to the new chart.</p></div>
       </div>
       <div class="logItem">
-        <div class="logDate">UI</div>
-        <div><div class="logTitle">New side UI and app icon</div><p>Added the icon badge on the side of the screen and wired the new `.ico` into the download page and Windows build configs.</p></div>
+        <div class="logDate">Pixel Area</div>
+        <div><div class="logTitle">Pixel BF + camera push</div><p>The pixel BF sprite was added to the pixel phase with proper alt-anim support. The camera now zooms in on the duo (background scales with them, no more per-note position jump).</p></div>
       </div>
       <div class="logItem">
-        <div class="logDate">Combat</div>
-        <div><div class="logTitle">Combat insane-mode VFX</div><p>Added Combat-only mirror pulses, bloom flashes, chromatic offsets, speed streaks, bars, and vignette without changing mechanics or audio timing.</p></div>
+        <div class="logDate">Opponent</div>
+        <div><div class="logTitle">spikes-bf opponent</div><p>The shrunken phase opponent is now a darkened spikes-bf. Idle reads as a darkened small Silly Billy, sing poses become the spiked form, and hold notes keep the sing pose active.</p></div>
       </div>
       <div class="logItem">
-        <div class="logDate">Gameplay</div>
-        <div><div class="logTitle">Combat scroll refresh</div><p>Combat is back to original BPM and chart timing, with faster visual scroll instead so it feels sharper without desyncing the song.</p></div>
+        <div class="logDate">Cutscene</div>
+        <div><div class="logTitle">Flashback during SO_STAY</div><p>The last ~16 seconds of the SO_STAY video are now swapped to a muted flashback cutscene (H.264 transcoded so it plays inside Chromium).</p></div>
+      </div>
+      <div class="logItem">
+        <div class="logDate">VFX</div>
+        <div><div class="logTitle">Speed lines + flashbang + power-50</div><p>After "Count Your Seconds!" a 10-second anime-style speed-lines burst plays. The mirror break triggers a 0.5s flashbang. The last 10 seconds drop into "power 50" drain.</p></div>
+      </div>
+      <div class="logItem">
+        <div class="logDate">Controls</div>
+        <div><div class="logTitle">Mobile + console support</div><p>Settings now has a Mobile toggle (4-lane on-screen buttons) and a Console toggle (Xbox / PlayStation / generic gamepads — D-pad and face buttons both map to the 4 lanes). Touch, keyboard, and gamepad all work simultaneously.</p></div>
       </div>
       <div class="logItem">
         <div class="logDate">Builds</div>
-        <div><div class="logTitle">Online and offline published</div><p>New Windows installers were rebuilt and uploaded to the GitHub releases. The hosted browser pages are also serving the newest Combat script.</p></div>
+        <div><div class="logTitle">Online and offline rebuilt</div><p>Both Windows installers were refreshed with the Silly Billy assets, mobile/console support, and the new icon.</p></div>
       </div>
     </div>
   </section>
@@ -582,14 +835,14 @@ p, li {
           <h3>Play In Browser</h3>
           <p>Recommended for friends. No install, no SmartScreen warning, and the hosted browser build gets the newest updates first.</p>
           <div class="actions">
-            <a class="btn ghost" href="/play">Open Browser Game</a>
+            <a class="btn ghost needsTester" href="/play">Open Browser Game</a>
           </div>
         </div>
         <div class="dlBlock">
           <h3>Online App</h3>
           <p>Packaged desktop app for online play. It has the current release files and connects to the hosted online game.</p>
           <div class="actions">
-            <a class="btn primary" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/ONLINE/FNF-Browser-Jam-1.0.0-portable.exe?cache=20260429j">Download Online App</a>
+            <a class="btn primary needsTester" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/ONLINE/FNF-Browser-Jam-1.0.0-portable.exe?cache=20260529s">Download Online App</a>
           </div>
         </div>
         <div class="dlBlock">
@@ -621,14 +874,14 @@ p, li {
           <h3>Play In Browser</h3>
           <p>Open the offline browser build right from the site if you want local play with no install and no room server.</p>
           <div class="actions">
-            <a class="btn ghost" href="/offline">Open Offline Browser Game</a>
+            <a class="btn ghost needsTester" href="/offline">Open Offline Browser Game</a>
           </div>
         </div>
         <div class="dlBlock">
           <h3>Offline App</h3>
           <p>Packaged offline download with the current local-play build and bundled assets.</p>
           <div class="actions">
-            <a class="btn primary" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/fnf/FNF-Browser-Jam-offline-1.0.0-portable.exe?cache=20260429j">Download Offline App</a>
+            <a class="btn primary needsTester" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/fnf/FNF-Browser-Jam-offline-1.0.0-portable.exe?cache=20260529s">Download Offline App</a>
           </div>
         </div>
         <div class="dlBlock">
@@ -649,6 +902,8 @@ p, li {
       <li class="item"><strong>Best choice:</strong> send friends the hosted page and tell them to click <strong>Play Online In Browser</strong>.</li>
       <li class="item"><strong>Online:</strong> use this if friends are playing from different houses or different PCs.</li>
       <li class="item"><strong>Offline:</strong> use this if you just want local play with no server, or if two players are sharing one computer.</li>
+      <li class="item"><strong>Mobile:</strong> open the browser version on a phone, then turn on Mobile in Settings — touch buttons appear for all 4 lanes.</li>
+      <li class="item"><strong>Console:</strong> plug a controller in, turn on Console in Settings — D-pad and face buttons both fire the 4 lanes.</li>
       <li class="item"><strong>App:</strong> desktop apps are refreshed, but they are unsigned, so Windows may still show a warning.</li>
       <li class="item"><strong>JS:</strong> use this if you want the source files or want to self-host the build yourself.</li>
     </ul>
@@ -658,10 +913,11 @@ p, li {
     <div class="eyebrow">Current Setlist</div>
     <h2>What is in the live build?</h2>
     <div class="setlist">
-      <div class="songTile"><strong>Ballistic</strong><span>Whitty alley import with the hard chart, real split audio, crazy Whitty sprites, camera hits, flashes, shakes, smoke, and full-stage VFX.</span><div class="tagRow"><span class="tag">New</span><span class="tag">Whitty</span></div></div>
+      <div class="songTile silly"><strong>Silly Billy</strong><span>Test of Time chart + instrumental against Silly Billy vocals. Pixel BF, shrink phase, mirror break flashbang, flashback cutscene, speed lines, power-50 drain on the last 10s.</span><div class="tagRow"><span class="tag hot">NEW</span><span class="tag">Test of Time</span><span class="tag">VFX</span></div></div>
+      <div class="songTile"><strong>Ballistic</strong><span>Whitty alley import with the hard chart, real split audio, crazy Whitty sprites, camera hits, flashes, shakes, smoke, and full-stage VFX.</span><div class="tagRow"><span class="tag">Whitty</span><span class="tag">VFX</span></div></div>
       <div class="songTile"><strong>Sporting</strong><span>Original VS Matt hard chart with 1.5x scroll and boxing ring layout.</span><div class="tagRow"><span class="tag">Matt</span><span class="tag">Hard</span></div></div>
       <div class="songTile"><strong>Boxing Match</strong><span>Real chart, paid boxer sprites, and boxing mechanics.</span><div class="tagRow"><span class="tag">Mechanics</span><span class="tag">Boxing</span></div></div>
-      <div class="songTile"><strong>Combat</strong><span>Wii Funkin hard chart, sword BF, rock stage, faster scroll, and insane-mode style VFX.</span><div class="tagRow"><span class="tag">New</span><span class="tag">VFX</span></div></div>
+      <div class="songTile"><strong>Combat</strong><span>Wii Funkin hard chart, sword BF, rock stage, faster scroll, and insane-mode style VFX.</span><div class="tagRow"><span class="tag">VFX</span></div></div>
       <div class="songTile"><strong>Perseverance</strong><span>Dustin stage swap with dodge gameplay and blaster sequence.</span><div class="tagRow"><span class="tag">Dodge</span><span class="tag">Sans</span></div></div>
       <div class="songTile"><strong>Broken Reality</strong><span>Cutscenes, swaps, drain, attack prompts, scroll flips, and hall VFX.</span><div class="tagRow"><span class="tag">Dustin</span><span class="tag">Mechanics</span></div></div>
       <div class="songTile"><strong>Challenge Edd</strong><span>Imported backyard layout with updated placement work.</span><div class="tagRow"><span class="tag">Edd</span><span class="tag">Stage</span></div></div>
@@ -672,7 +928,113 @@ p, li {
     </div>
   </section>
 
-  <div class="footer">FNF Onliine download portal - browser recommended, app builds refreshed</div>
+  <div class="footer">FNF Onliine download portal - Silly Billy build - browser recommended, app builds refreshed</div>
 </div>
+
+<script>
+(function () {
+  // Tester gate. The code is required to launch the game or download the apps.
+  // This is a soft gate — the page is public — but server.js also checks the
+  // fnfTester cookie before serving /play and /offline, so direct URL hits
+  // bounce back to here.
+  const EXPECTED_CODE = "9s2143sf21";
+  const STORAGE_KEY = "fnfTesterUnlocked_v1";
+  const COOKIE_NAME = "fnfTester";
+
+  const form = document.getElementById("testerForm");
+  const input = document.getElementById("testerInput");
+  const status = document.getElementById("testerStatus");
+  const vault = document.getElementById("testerVault");
+  const panel = document.getElementById("testerPanel");
+  const banner = document.getElementById("lockBanner");
+  if (!form || !input || !status || !vault || !panel) return;
+
+  function setCookie() {
+    // 30-day cookie, site-wide, so /play and /offline pass the server gate.
+    try {
+      document.cookie = COOKIE_NAME + "=ok; Path=/; Max-Age=" + (60 * 60 * 24 * 30) + "; SameSite=Lax";
+    } catch (e) {}
+  }
+  function hasCookie() {
+    return /(?:^|;\s*)fnfTester=ok(?:;|$)/.test(document.cookie || "");
+  }
+
+  function unlock(reason) {
+    document.body.classList.remove("notTester");
+    document.body.classList.add("unlocked");
+    panel.classList.remove("required");
+    vault.classList.add("show");
+    vault.setAttribute("aria-hidden", "false");
+    setCookie();
+    try { localStorage.setItem(STORAGE_KEY, "1"); } catch (e) {}
+    if (reason === "remembered") {
+      status.textContent = "Tester access remembered on this browser. Play buttons are unlocked.";
+    } else if (reason === "verified") {
+      status.textContent = "Tester verified. Play buttons are unlocked — go have fun.";
+    } else {
+      status.textContent = "Tester access active.";
+    }
+    status.className = "testerStatus ok";
+    input.value = "";
+  }
+
+  // Restore prior unlock from either localStorage or cookie (whichever survived).
+  try {
+    if (localStorage.getItem(STORAGE_KEY) === "1" || hasCookie()) {
+      unlock("remembered");
+    }
+  } catch (e) {
+    if (hasCookie()) unlock("remembered");
+  }
+
+  // If the server redirected here because someone hit /play without the cookie,
+  // surface that as an error message and scroll the panel into view.
+  try {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("tester") === "required" && !document.body.classList.contains("unlocked")) {
+      status.textContent = "Tester code required to launch the game. Enter your code below.";
+      status.className = "testerStatus err";
+      setTimeout(() => panel.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+    }
+  } catch (e) {}
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    const value = (input.value || "").trim();
+    if (value === EXPECTED_CODE) {
+      unlock("verified");
+    } else {
+      input.classList.remove("bad");
+      void input.offsetWidth; // restart animation
+      input.classList.add("bad");
+      status.textContent = "That code didn't work. Check with whoever invited you.";
+      status.className = "testerStatus err";
+    }
+  });
+
+  // Konami-style: type the code anywhere on the page (not while typing in the input).
+  let buffer = "";
+  document.addEventListener("keydown", function (e) {
+    if (e.target === input) return;
+    if (e.key && e.key.length === 1) {
+      buffer = (buffer + e.key).slice(-40);
+      if (buffer.toLowerCase().endsWith(EXPECTED_CODE.toLowerCase())) unlock("verified");
+    }
+  });
+
+  // While locked, clicks on .needsTester buttons scroll up to the tester panel
+  // instead of navigating to /play (which would server-redirect them back anyway).
+  document.addEventListener("click", function (e) {
+    if (!document.body.classList.contains("notTester")) return;
+    const btn = e.target && e.target.closest ? e.target.closest(".needsTester") : null;
+    if (!btn) return;
+    e.preventDefault();
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(() => { try { input.focus(); } catch (err) {} }, 320);
+    status.textContent = "Enter your tester code first.";
+    status.className = "testerStatus err";
+  });
+})();
+</script>
 </body>
 </html>
