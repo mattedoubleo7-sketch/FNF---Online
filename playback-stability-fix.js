@@ -60,6 +60,15 @@
     }
 
     function syncTone(chartMs, trackMs = 0) {
+      // In online matches network jitter sits at 50-150ms even on a healthy
+      // connection, so the old 22ms / 55ms thresholds tripped DESYNC on every
+      // synced match. Loosen the bands when we know we're in an online match.
+      const online = (typeof state !== "undefined" && state.mode === "online");
+      if (online) {
+        if (chartMs <= 80 && trackMs <= 120) return "good";
+        if (chartMs <= 220 && trackMs <= 320) return "warn";
+        return "bad";
+      }
       if (chartMs <= 22 && trackMs <= 38) return "good";
       if (chartMs <= 55 && trackMs <= 90) return "warn";
       return "bad";

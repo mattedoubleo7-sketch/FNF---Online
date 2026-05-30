@@ -626,6 +626,10 @@ body.mobile .menuStickyBar { padding: 10px 12px !important; grid-template-column
 body.mobile .selectedTrackActions { gap: 6px !important; }
 body.mobile .playBig { padding: 12px 16px !important; font-size: 14px !important; flex: 1 !important; }
 
+/* Sync checker debug overlay — hidden from end users (thresholds were dev-tuned
+   for solo play; online jitter trips DESYNC even on a healthy match). */
+#syncChecker { display: none !important; }
+
 /* === Loading screen === */
 #loadingScreen {
     position: fixed; inset: 0; z-index: 99999;
