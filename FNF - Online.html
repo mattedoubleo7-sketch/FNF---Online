@@ -2885,17 +2885,26 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
     }
     requestAnimationFrame(fpsTick);
 
-    // --- Mute Voices: tweak all <audio>/Audio() vocals tracks ---
+    // --- Mute Voices: only touch tracks when ON (avoid writing muted=false
+    //     in a loop, which could race with the game's own audio init). ---
     function applyMuteVoices() {
         window.MUTE_VOICES = !!S.muteVoices;
         if (!state.audio) return;
+        const mute = !!S.muteVoices;
         for (const k of Object.keys(state.audio)) {
             const a = state.audio[k];
-            if (a && /voices|vocals/i.test(k) && typeof a.muted === "boolean") a.muted = !!S.muteVoices;
+            if (!a || typeof a.muted !== "boolean") continue;
+            if (!/voices|vocals/i.test(k)) continue;
+            // Only push state when ON (or when explicitly toggled off via the
+            // change handler below — that path passes through here too).
+            if (mute && !a.muted) a.muted = true;
+            else if (!mute && a.muted && a.__fnfMutedByVoicesSetting) { a.muted = false; a.__fnfMutedByVoicesSetting = false; }
+            if (mute) a.__fnfMutedByVoicesSetting = true;
         }
     }
-    // Periodically re-apply in case new tracks get created mid-session
-    setInterval(applyMuteVoices, 1500);
+    // Re-apply only when the setting is on (catches mid-session-loaded tracks
+    // without ever overwriting tracks the game manages itself).
+    setInterval(() => { if (S.muteVoices) applyMuteVoices(); }, 1500);
 
     // --- Reduce Motion: gate via window flag; song modes can check ---
     function applyReduceMotion() { window.REDUCE_MOTION = !!S.reduceMotion; }

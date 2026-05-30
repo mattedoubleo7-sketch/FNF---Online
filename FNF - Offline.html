@@ -2786,12 +2786,17 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
     function applyMuteVoices() {
         window.MUTE_VOICES = !!S.muteVoices;
         if (!state.audio) return;
+        const mute = !!S.muteVoices;
         for (const k of Object.keys(state.audio)) {
             const a = state.audio[k];
-            if (a && /voices|vocals/i.test(k) && typeof a.muted === "boolean") a.muted = !!S.muteVoices;
+            if (!a || typeof a.muted !== "boolean") continue;
+            if (!/voices|vocals/i.test(k)) continue;
+            if (mute && !a.muted) a.muted = true;
+            else if (!mute && a.muted && a.__fnfMutedByVoicesSetting) { a.muted = false; a.__fnfMutedByVoicesSetting = false; }
+            if (mute) a.__fnfMutedByVoicesSetting = true;
         }
     }
-    setInterval(applyMuteVoices, 1500);
+    setInterval(() => { if (S.muteVoices) applyMuteVoices(); }, 1500);
 
     function applyReduceMotion() { window.REDUCE_MOTION = !!S.reduceMotion; }
 
