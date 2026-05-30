@@ -292,8 +292,8 @@ body.mobile #canvas, body.mobile canvas {
     image-rendering: optimizeSpeed;
     image-rendering: pixelated;
 }
-/* HUD sized to match the letterbox so chips line up with the playfield */
-body.mobile .hud, body.mobile .overlay {
+/* In-game HUD sized to match the letterbox so chips line up with the playfield */
+body.mobile .hud {
     position: absolute !important;
     left: 50% !important;
     top: 50% !important;
@@ -304,6 +304,47 @@ body.mobile .hud, body.mobile .overlay {
     pointer-events: none !important;
     font-size: 10px !important;
 }
+/* Menus / settings / results / auth overlays — full viewport, scrollable,
+   stack everything vertically. DO NOT size to letterbox (would make them
+   tiny and unreadable) and DO NOT kill pointer-events (would break clicks). */
+body.mobile .overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    transform: none !important;
+    padding: 12px !important;
+    gap: 12px !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+}
+body.mobile .overlay.show { pointer-events: auto !important; }
+body.mobile .hero, body.mobile .songs, body.mobile .modal, body.mobile .results {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: none !important;
+    padding: 14px !important;
+    border-radius: 16px !important;
+    margin: 0 !important;
+}
+body.mobile .hero h1 { font-size: clamp(28px, 8vw, 42px) !important; }
+body.mobile .hero p { font-size: 13px !important; }
+body.mobile .features { grid-template-columns: 1fr !important; gap: 8px !important; margin-top: 12px !important; }
+body.mobile .feature { padding: 10px !important; }
+body.mobile .feature .name { font-size: 14px !important; }
+body.mobile .feature .desc { font-size: 12px !important; }
+body.mobile .heroBrand { gap: 10px !important; }
+body.mobile .heroLogo { width: 56px !important; height: 56px !important; }
+body.mobile .songList { gap: 8px !important; }
+body.mobile .songList .songItem, body.mobile .songList .songRow { padding: 10px !important; font-size: 13px !important; }
+body.mobile .grid2 { grid-template-columns: 1fr !important; }
+body.mobile .resultGrid { grid-template-columns: repeat(2, 1fr) !important; }
+body.mobile .btn { font-size: 14px !important; padding: 10px 14px !important; min-height: 40px !important; }
+body.mobile .onlineCard { padding: 10px !important; }
+body.mobile .onlineRow { flex-wrap: wrap !important; gap: 6px !important; }
+body.mobile .onlineInput { flex: 1 1 100px !important; }
 /* Hide everything except the health bar to keep the playfield uncluttered */
 body.mobile .top .now,
 body.mobile .top .stats,
@@ -348,7 +389,11 @@ body.mobile .touchBtn { height: 64px !important; font-size: 26px !important; bor
 #portraitNag h2 { margin: 0; font-size: 28px; color: #ffd166; letter-spacing: 0.04em; }
 #portraitNag p { margin: 0; font-size: 13px; max-width: 320px; line-height: 1.45; color: #d7dff8; font-family: Arial, sans-serif; }
 #portraitNag .perfTip { margin-top: 6px; padding: 8px 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); border-radius: 10px; color: #b9c7ff; font-size: 11px; font-family: Arial, sans-serif; max-width: 320px; }
-@media (orientation: portrait) { body.mobile #portraitNag { display: flex !important; } }
+/* Portrait nag only when gameplay is actually running (no menu/settings/auth/results overlay open) */
+@media (orientation: portrait) {
+    body.mobile #portraitNag { display: flex !important; }
+    body.mobile:has(.overlay.show) #portraitNag { display: none !important; }
+}
 </style>
 </head>
 <body>
@@ -2090,6 +2135,29 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
     if (state.settings.mobile === undefined) state.settings.mobile = false;
     const tc = document.getElementById("touchControls");
     const toggle = document.getElementById("mobileToggle");
+    // Auto-detect mobile on first visit (user-agent + touch + small width).
+    // Once the user clicks the toggle, we set fnfMobileChosen and never
+    // auto-override their choice again.
+    function isMobileDevice() {
+        try {
+            const ua = navigator.userAgent || "";
+            if (/Mobi|Android|iPhone|iPad|iPod|BlackBerry|Opera Mini|IEMobile|Silk/i.test(ua)) return true;
+            // iPad on iOS 13+ reports as desktop Safari but has touch
+            if ((navigator.maxTouchPoints || 0) > 1 && /Macintosh/i.test(ua)) return true;
+            // Coarse pointer (touchscreen) + small viewport
+            if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches && window.innerWidth < 1024) return true;
+        } catch (e) {}
+        return false;
+    }
+    try {
+        const userChoseMobile = localStorage.getItem("fnfMobileChosen");
+        if (!userChoseMobile && isMobileDevice() && !state.settings.mobile) {
+            state.settings.mobile = true;
+            try { saveSettings(); } catch (e) {}
+        }
+    } catch (e) {
+        if (isMobileDevice()) state.settings.mobile = true;
+    }
     function applyMobile() {
         if (state.settings.mobile) {
             tc.classList.add("show");
@@ -2127,6 +2195,7 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
     }
     if (toggle) toggle.addEventListener("change", () => {
         state.settings.mobile = !!toggle.checked;
+        try { localStorage.setItem("fnfMobileChosen", "1"); } catch (e) {}
         try { saveSettings(); } catch (e) {}
         applyMobile();
     });
