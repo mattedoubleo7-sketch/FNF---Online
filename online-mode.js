@@ -364,17 +364,33 @@ function syncTrackToTime(track, targetTime, shouldPlay, options = {}) {
   if (!track) return;
   const duration = Number.isFinite(track.duration) && track.duration > 0 ? track.duration : null;
   const desiredTime = Math.max(0, duration == null ? targetTime : Math.min(targetTime, Math.max(0, duration - 0.05)));
-  const tolerance = shouldPlay
-    ? Number(options.isSecondary ? (options.secondaryPlayTolerance || 0.12) : (options.playTolerance || 0.045))
-    : Number(options.isSecondary ? (options.secondaryPauseTolerance || 0.06) : (options.pauseTolerance || 0.02));
-  if (Math.abs((track.currentTime || 0) - desiredTime) > tolerance) {
-    try { track.currentTime = desiredTime; } catch {}
-  }
+  // Smarter sync ladder:
+  //   |drift| > 0.5s  -> hard jump (audible but unavoidable - too far gone)
+  //   0.06s < drift   -> playbackRate tweak (smoothly catches up over a few sec)
+  //   |drift| <= 0.06 -> rate = 1.0 (in sync, leave alone)
+  // The old code did currentTime = desiredTime for any drift > 0.045s, which
+  // caused constant audible skips because the network jitter is normally
+  // 50-150ms of drift.
+  const currentTrackTime = track.currentTime || 0;
+  const drift = currentTrackTime - desiredTime; // +ve = track is ahead, -ve = track is behind
+  const driftAbs = Math.abs(drift);
+
   if (shouldPlay) {
-    // Resume the AudioContext on every play attempt - some browsers suspend it
-    // intermittently and play() fails silently when that happens.
     if (state.audio && state.audio.ctx && state.audio.ctx.state === "suspended") {
       try { state.audio.ctx.resume(); } catch {}
+    }
+    if (driftAbs > 0.5) {
+      // Way out of sync - hard jump is the only option.
+      try { track.currentTime = desiredTime; } catch {}
+      try { track.playbackRate = 1.0; } catch {}
+    } else if (driftAbs > 0.06) {
+      // Modest drift - nudge with playbackRate. drift=+0.2 means we're 200ms
+      // ahead -> slow down briefly. drift=-0.2 means we're behind -> speed up.
+      // Clamp to [0.92, 1.08] so the change is small and barely audible.
+      const rate = Math.max(0.92, Math.min(1.08, 1.0 - drift * 0.5));
+      try { track.playbackRate = rate; } catch {}
+    } else {
+      try { track.playbackRate = 1.0; } catch {}
     }
     if (track.paused && !track.__onlineStarting && (duration == null || desiredTime < duration - 0.05)) {
       track.__onlineStarting = true;
@@ -383,17 +399,15 @@ function syncTrackToTime(track, targetTime, shouldPlay, options = {}) {
         if (playAttempt && typeof playAttempt.then === "function") {
           playAttempt.then(() => {
             track.__onlineStarting = false;
+            // After first play, re-align if we drifted past 0.5s in the gap.
             const freshTarget = expectedOnlineSongTime();
             if (freshTarget == null) return;
-            const freshDuration = Number.isFinite(track.duration) && track.duration > 0 ? track.duration : null;
-            const freshDesired = Math.max(0, freshDuration == null ? freshTarget : Math.min(freshTarget, Math.max(0, freshDuration - 0.05)));
-            const freshTolerance = options.isSecondary ? 0.12 : 0.02;
-            if (Math.abs((track.currentTime || 0) - freshDesired) > freshTolerance) {
-              try { track.currentTime = freshDesired; } catch {}
+            const freshDrift = Math.abs((track.currentTime || 0) - freshTarget);
+            if (freshDrift > 0.5) {
+              try { track.currentTime = freshTarget; } catch {}
             }
           }).catch(err => {
             track.__onlineStarting = false;
-            // Surface the autoplay rejection so we can see it in DevTools.
             try { console.warn("[online] track.play() rejected", { name: err && err.name, msg: err && err.message }); } catch {}
           });
         } else {
@@ -406,6 +420,7 @@ function syncTrackToTime(track, targetTime, shouldPlay, options = {}) {
     }
   } else {
     track.__onlineStarting = false;
+    try { track.playbackRate = 1.0; } catch {}
     if (!track.paused) track.pause();
   }
 }

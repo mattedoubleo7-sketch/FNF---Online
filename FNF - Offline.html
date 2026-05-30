@@ -751,7 +751,29 @@ body.loaded #loadingScreen { opacity: 0; visibility: hidden; pointer-events: non
     const pct = document.getElementById("loadPercent");
     const status = document.getElementById("loadStatus");
     if (!bar || !pct || !status) return;
-    let target = 4, current = 0, ready = false;
+    const AUDIO_FILES = [
+        "sporting-inst.ogg", "sporting-voices.ogg",
+        "boxing-match-inst.ogg", "boxing-match-voices.ogg",
+        "boxing-match-wg-inst.ogg", "boxing-match-wg-voices.ogg",
+        "combat-inst.ogg", "combat-voices.ogg",
+        "one-hit-inst.ogg", "one-hit-voices.ogg",
+        "shimmy-inst.ogg", "shimmy-voices.ogg",
+        "silly-billy-inst.ogg", "silly-billy-voices.ogg",
+        "perseverance-inst.ogg", "perseverance-voices-bf.ogg", "perseverance-voices-opp.ogg",
+        "broken-reality-inst.ogg", "broken-reality-voices-bf.ogg", "broken-reality-voices-opp.ogg",
+        "challenge-edd-inst.ogg", "challenge-edd-voices.ogg",
+        "our-broken-constellations-inst.ogg", "our-broken-constellations-voices.ogg",
+        "genocide-inst.ogg", "genocide-voices.ogg",
+        "sansational-inst.ogg", "sansational-voices.ogg",
+        "last-reel-inst.ogg", "last-reel-voices.ogg",
+        "overthrone-inst.ogg", "overthrone-voices.ogg",
+        "ballistic-inst.ogg", "ballistic-voices-opp.ogg", "ballistic-voices-player.ogg",
+    ];
+    const IMAGE_FILES = ["assets/icon.ico"];
+    const TOTAL_FILES = AUDIO_FILES.length + IMAGE_FILES.length;
+
+    let target = 1, current = 0, ready = false;
+    let filesLoaded = 0;
     function setStatus(txt) { status.textContent = txt; }
     function setTarget(value) { target = Math.max(target, Math.min(100, value)); }
     function tick() {
@@ -767,38 +789,36 @@ body.loaded #loadingScreen { opacity: 0; visibility: hidden; pointer-events: non
         requestAnimationFrame(tick);
     }
     requestAnimationFrame(tick);
+    document.addEventListener("DOMContentLoaded", () => { setStatus("Preloading assets..."); });
 
-    document.addEventListener("DOMContentLoaded", () => { setTarget(15); setStatus("DOM ready — loading scripts..."); });
-    window.addEventListener("load", () => { setTarget(70); setStatus("Page loaded — preparing audio..."); });
-
-    function preloadAudio(src, weight) {
-        return new Promise(resolve => {
-            const a = new Audio();
-            a.preload = "auto";
-            a.src = src;
-            const finish = () => { setTarget(target + weight); resolve(); };
-            const onReady = () => { a.removeEventListener("canplaythrough", onReady); a.removeEventListener("error", onReady); finish(); };
-            a.addEventListener("canplaythrough", onReady);
-            a.addEventListener("error", onReady);
-            setTimeout(finish, 6000);
-        });
+    function refreshProgress() {
+        const pctDone = (filesLoaded / TOTAL_FILES) * 90;
+        setTarget(pctDone);
     }
-    function preloadImage(src, weight) {
-        return new Promise(resolve => {
-            const img = new Image();
-            const finish = () => { setTarget(target + weight); resolve(); };
-            img.onload = finish;
-            img.onerror = finish;
-            img.src = src;
-            setTimeout(finish, 4000);
-        });
+    function fetchOne(path) {
+        return fetch(path, { cache: "default" })
+            .then(r => r.ok ? r.arrayBuffer() : null)
+            .catch(() => null)
+            .then(() => {
+                filesLoaded++;
+                refreshProgress();
+                setStatus(filesLoaded + " / " + TOTAL_FILES + " — " + path);
+            });
     }
-    Promise.all([
-        preloadImage("assets/icon.ico", 4),
-        preloadAudio("sporting-inst.ogg", 6),
-        preloadAudio("sporting-voices.ogg", 4)
-    ]).then(() => {
-        setStatus("Waiting for game scripts to initialize...");
+    async function pump(queue, parallel) {
+        const workers = Array.from({ length: parallel }, async () => {
+            while (queue.length) {
+                const p = queue.shift();
+                if (!p) return;
+                await fetchOne(p);
+            }
+        });
+        await Promise.all(workers);
+    }
+    const allFiles = AUDIO_FILES.concat(IMAGE_FILES);
+    pump(allFiles.slice(), 4).then(() => {
+        setStatus("All assets cached — waiting for engine...");
+        setTarget(92);
     });
 
     let pollCount = 0;
@@ -809,15 +829,15 @@ body.loaded #loadingScreen { opacity: 0; visibility: hidden; pointer-events: non
             if (songCount >= 5) {
                 clearInterval(poll);
                 setTarget(100);
-                setStatus(`Loaded ${songCount} songs - ready to play.`);
+                setStatus("Loaded " + songCount + " songs — ready to play.");
                 ready = true;
                 return;
             }
         }
-        if (pollCount >= 60) {
+        if (pollCount >= 300) {
             clearInterval(poll);
             setTarget(100);
-            setStatus("Took too long - opening menu anyway.");
+            setStatus("Engine took too long — opening menu.");
             ready = true;
         }
     }, 200);

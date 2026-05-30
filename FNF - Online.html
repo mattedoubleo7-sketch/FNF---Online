@@ -894,16 +894,42 @@ body.mobile .chatLog { max-height: 130px !important; font-size: 12px !important;
 </div>
 <script>
 (function () {
-    // Loading screen progress controller. Targets:
-    // - DOMContentLoaded             (10% baseline)
-    // - window.load                  (60% — sync resources finished)
-    // - explicit preload of icon + first-song audio (90%)
-    // - the in-page game scripts having defined `state` + `ui`  (100%)
+    // Loading screen: actually fetches every song audio file into the browser
+    // HTTP cache before letting the user in. Once cached, the in-game
+    // `new Audio(src)` reads from cache instantly - no mid-match download
+    // stalls and assets are guaranteed present.
     const bar = document.getElementById("loadBar");
     const pct = document.getElementById("loadPercent");
     const status = document.getElementById("loadStatus");
     if (!bar || !pct || !status) return;
-    let target = 4, current = 0, ready = false;
+
+    // All song audio shipped with the game. Anything new added here gets
+    // preloaded too - keep this list in sync with the .ogg files in /.
+    const AUDIO_FILES = [
+        "sporting-inst.ogg", "sporting-voices.ogg",
+        "boxing-match-inst.ogg", "boxing-match-voices.ogg",
+        "boxing-match-wg-inst.ogg", "boxing-match-wg-voices.ogg",
+        "combat-inst.ogg", "combat-voices.ogg",
+        "one-hit-inst.ogg", "one-hit-voices.ogg",
+        "shimmy-inst.ogg", "shimmy-voices.ogg",
+        "silly-billy-inst.ogg", "silly-billy-voices.ogg",
+        "perseverance-inst.ogg", "perseverance-voices-bf.ogg", "perseverance-voices-opp.ogg",
+        "broken-reality-inst.ogg", "broken-reality-voices-bf.ogg", "broken-reality-voices-opp.ogg",
+        "challenge-edd-inst.ogg", "challenge-edd-voices.ogg",
+        "our-broken-constellations-inst.ogg", "our-broken-constellations-voices.ogg",
+        "genocide-inst.ogg", "genocide-voices.ogg",
+        "sansational-inst.ogg", "sansational-voices.ogg",
+        "last-reel-inst.ogg", "last-reel-voices.ogg",
+        "overthrone-inst.ogg", "overthrone-voices.ogg",
+        "ballistic-inst.ogg", "ballistic-voices-opp.ogg", "ballistic-voices-player.ogg",
+    ];
+    // Key images that the engine uses early. Sprites lazy-load fine on demand
+    // so we only preload the icon here.
+    const IMAGE_FILES = ["assets/icon.ico"];
+    const TOTAL_FILES = AUDIO_FILES.length + IMAGE_FILES.length;
+
+    let target = 1, current = 0, ready = false;
+    let filesLoaded = 0;
     function setStatus(txt) { status.textContent = txt; }
     function setTarget(value) { target = Math.max(target, Math.min(100, value)); }
     function tick() {
@@ -912,7 +938,6 @@ body.mobile .chatLog { max-height: 130px !important; font-size: 12px !important;
         bar.style.width = current.toFixed(1) + "%";
         pct.textContent = Math.floor(current) + "%";
         if (ready && current >= 99.5) {
-            // Final reveal
             document.body.classList.add("loaded");
             setStatus("Ready");
             return;
@@ -920,44 +945,44 @@ body.mobile .chatLog { max-height: 130px !important; font-size: 12px !important;
         requestAnimationFrame(tick);
     }
     requestAnimationFrame(tick);
+    document.addEventListener("DOMContentLoaded", () => { setStatus("Preloading assets..."); });
 
-    document.addEventListener("DOMContentLoaded", () => { setTarget(15); setStatus("DOM ready — loading scripts..."); });
-    window.addEventListener("load", () => { setTarget(70); setStatus("Page loaded — preparing audio..."); });
-
-    // Real preload of the icon + a couple of audio files so the bar reflects
-    // actual bytes off the network, not just timing checkpoints.
-    function preloadAudio(src, weight) {
-        return new Promise(resolve => {
-            const a = new Audio();
-            a.preload = "auto";
-            a.src = src;
-            const finish = () => { setTarget(target + weight); resolve(); };
-            const onReady = () => { a.removeEventListener("canplaythrough", onReady); a.removeEventListener("error", onReady); finish(); };
-            a.addEventListener("canplaythrough", onReady);
-            a.addEventListener("error", onReady);
-            // Hard timeout so a slow asset can't pin the bar at <100% forever
-            setTimeout(finish, 6000);
-        });
+    // Fetch each .ogg into the HTTP cache. Limited concurrency so we don't
+    // saturate the connection on mobile or get throttled by the host.
+    function refreshProgress() {
+        // 90% of the bar is asset preload; last 10% is "wait for game scripts".
+        const pctDone = (filesLoaded / TOTAL_FILES) * 90;
+        setTarget(pctDone);
     }
-    function preloadImage(src, weight) {
-        return new Promise(resolve => {
-            const img = new Image();
-            const finish = () => { setTarget(target + weight); resolve(); };
-            img.onload = finish;
-            img.onerror = finish;
-            img.src = src;
-            setTimeout(finish, 4000);
-        });
+    function fetchOne(path) {
+        return fetch(path, { cache: "default" })
+            .then(r => r.ok ? r.arrayBuffer() : null)
+            .catch(() => null)
+            .then(() => {
+                filesLoaded++;
+                refreshProgress();
+                setStatus(filesLoaded + " / " + TOTAL_FILES + " — " + path);
+            });
     }
-    Promise.all([
-        preloadImage("assets/icon.ico", 4),
-        preloadAudio("sporting-inst.ogg", 6),
-        preloadAudio("sporting-voices.ogg", 4)
-    ]).then(() => {
-        setStatus("Waiting for game scripts to initialize...");
+    async function pump(queue, parallel) {
+        const workers = Array.from({ length: parallel }, async () => {
+            while (queue.length) {
+                const p = queue.shift();
+                if (!p) return;
+                await fetchOne(p);
+            }
+        });
+        await Promise.all(workers);
+    }
+    const allFiles = AUDIO_FILES.concat(IMAGE_FILES);
+    // 4 parallel fetches. Higher saturates mobile; lower is too slow on PC.
+    pump(allFiles.slice(), 4).then(() => {
+        setStatus("All assets cached — waiting for engine...");
+        setTarget(92);
     });
 
-    // Poll for the engine being ready - state + ui must exist + SONGS populated.
+    // Poll for the engine being ready - state + ui + SONGS must all exist
+    // and at least 5 songs must be registered.
     let pollCount = 0;
     const poll = setInterval(() => {
         pollCount++;
@@ -966,16 +991,18 @@ body.mobile .chatLog { max-height: 130px !important; font-size: 12px !important;
             if (songCount >= 5) {
                 clearInterval(poll);
                 setTarget(100);
-                setStatus(`Loaded ${songCount} songs - ready to play.`);
+                setStatus("Loaded " + songCount + " songs — ready to play.");
                 ready = true;
                 return;
             }
         }
-        // After 12 seconds (60 ticks × 200ms) give up waiting and let the user in
-        if (pollCount >= 60) {
+        // Failsafe: after 60 seconds give up waiting and open anyway. Long
+        // enough to let slow connections finish; short enough that a broken
+        // engine doesn't permanently lock the user out.
+        if (pollCount >= 300) {
             clearInterval(poll);
             setTarget(100);
-            setStatus("Took too long - opening menu anyway.");
+            setStatus("Engine took too long — opening menu.");
             ready = true;
         }
     }, 200);
@@ -2833,7 +2860,7 @@ ui.versusToggle.onchange = () => { state.mode = ui.versusToggle.checked ? "versu
 window.addEventListener("keydown", keydown); window.addEventListener("keyup", keyup);
 renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo Battle"; requestAnimationFrame(window.frame || frame);
 </script>
-<script src="online-mode.js?v=20260530d"></script>
+<script src="online-mode.js?v=20260530e"></script>
 <script src="boxing-fight-mode.js?v=20260322-stage6"></script>
 <script src="combat-mode.js?v=20260524f"></script>
 <script src="ballistic-mode.js?v=20260524i"></script>
