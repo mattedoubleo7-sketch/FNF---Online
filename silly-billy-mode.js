@@ -1262,7 +1262,13 @@
     if (!state.playing || !state.chart) return;
     const t = songTime();
     const side = lane < 4 ? "opp" : "player";
-    if (side === "opp" && state.mode !== "versus") return;
+    // Match the rule the engine + other modes use: solo controls only player,
+    // versus controls both sides, online controls whichever side this client
+    // is assigned (host -> player, guest -> opp).
+    const controlsSide = typeof localControlsSide === "function"
+      ? localControlsSide(side)
+      : side === "player" || state.mode === "versus";
+    if (!controlsSide) return;
     let best = null;
     let bestDiff = Infinity;
     for (const note of state.chart.notes) {
