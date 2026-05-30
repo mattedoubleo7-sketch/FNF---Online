@@ -255,6 +255,76 @@ body.fullViewport #app { width: 100vw; height: 100vh; aspect-ratio: auto; border
 .touchBtn { flex: 1; min-width: 0; height: 95px; max-width: 180px; border: 3px solid var(--c, #fff); background: rgba(0,0,0,0.55); color: var(--c, #fff); font-size: 44px; line-height: 1; border-radius: 14px; pointer-events: auto; touch-action: none; user-select: none; cursor: pointer; transition: transform .05s, background .1s, color .1s; font-weight: 900; padding: 0; }
 .touchBtn:active, .touchBtn.pressed { background: var(--c, #fff); color: #000; transform: scale(0.94); }
 @media (max-width: 700px) { .touchBtn { height: 78px; font-size: 38px; } }
+/* Mobile mode — letterbox the 16:9 canvas to fit phone screens, shrink HUD,
+   re-size touch buttons. Toggled by Settings > Mobile (sets body.mobile). */
+html.mobile, body.mobile { background: #000; overflow: hidden; }
+body.mobile { padding: 0; margin: 0; }
+body.mobile #app {
+    width: 100vw;
+    height: 100vh;
+    min-height: 0;
+    aspect-ratio: auto;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0;
+}
+body.mobile canvas {
+    width: min(100vw, calc(100vh * 16 / 9));
+    height: min(100vh, calc(100vw * 9 / 16));
+    display: block;
+}
+body.mobile .hud, body.mobile .overlay {
+    width: min(100vw, calc(100vh * 16 / 9));
+    height: min(100vh, calc(100vw * 9 / 16));
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    inset: auto;
+    pointer-events: none;
+    font-size: 11px;
+}
+body.mobile .top, body.mobile .bottom { left: 4px; right: 4px; gap: 4px; }
+body.mobile .top { top: 4px; }
+body.mobile .bottom { bottom: 4px; }
+body.mobile .now, body.mobile .health, body.mobile .stats, body.mobile .status {
+    min-width: 0; padding: 6px 8px;
+}
+body.mobile .now { min-width: 100px; }
+body.mobile .now .title { font-size: 13px; margin-top: 2px; }
+body.mobile .now .sub { font-size: 10px; margin-top: 2px; }
+body.mobile .health { flex: 1 1 100px; max-width: none; }
+body.mobile .health .bar { height: 12px; }
+body.mobile .stats { padding: 4px; gap: 4px; margin-left: auto; }
+body.mobile .mini { min-width: 0; padding: 4px 6px; }
+body.mobile .mini .value { font-size: 14px; margin-top: 2px; }
+body.mobile .mini .label, body.mobile .mini .sub { font-size: 9px; }
+body.mobile .status { min-width: 0; max-width: 200px; padding: 6px 8px; }
+body.mobile #statusText { font-size: 14px; }
+body.mobile #statusSub { font-size: 10px; margin-top: 2px; }
+body.mobile .help { gap: 4px; }
+body.mobile .pill { padding: 4px 8px; font-size: 10px; }
+body.mobile #touchControls { bottom: 6px; left: 6px; right: 6px; gap: 8px; }
+body.mobile .touchBtn { height: 64px; font-size: 26px; border-width: 2px; max-width: none; border-radius: 10px; }
+body.mobile #judgments { width: 100%; height: 100%; }
+/* Portrait nag overlay — gameplay needs landscape on phones */
+#portraitNag {
+    display: none;
+    position: fixed; inset: 0; z-index: 9999;
+    background: rgba(0,0,0,0.95);
+    color: #fff;
+    text-align: center;
+    flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 14px; padding: 24px;
+    font-family: Impact, Haettenschweiler, sans-serif;
+}
+#portraitNag .ic { font-size: 64px; animation: rotateHint 2.4s ease-in-out infinite; transform-origin: center; display: inline-block; }
+@keyframes rotateHint { 0%, 100% { transform: rotate(-12deg); } 50% { transform: rotate(78deg); } }
+#portraitNag h2 { margin: 0; font-size: 30px; color: #ffd166; letter-spacing: 0.04em; }
+#portraitNag p { margin: 0; font-size: 15px; max-width: 320px; line-height: 1.4; color: #d7dff8; font-family: Arial, sans-serif; }
+@media (orientation: portrait) { body.mobile #portraitNag { display: flex; } }
 </style>
 </head>
 <body>
@@ -2080,6 +2150,11 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
     <button class="touchBtn" data-lane="6" style="--c:#67ff9a">&#9650;</button>
     <button class="touchBtn" data-lane="7" style="--c:#ff5870">&#9658;</button>
 </div>
+<div id="portraitNag" aria-hidden="true">
+    <span class="ic">📱</span>
+    <h2>Rotate to landscape</h2>
+    <p>FNF Onliine is designed for a wide screen. Turn your phone sideways to see the game properly.</p>
+</div>
 <script>
 (function() {
     if (typeof state === "undefined" || typeof ui === "undefined") return;
@@ -2088,8 +2163,15 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
     const tc = document.getElementById("touchControls");
     const toggle = document.getElementById("mobileToggle");
     function applyMobile() {
-        if (state.settings.mobile) tc.classList.add("show");
-        else tc.classList.remove("show");
+        if (state.settings.mobile) {
+            tc.classList.add("show");
+            document.body.classList.add("mobile");
+            document.documentElement.classList.add("mobile");
+        } else {
+            tc.classList.remove("show");
+            document.body.classList.remove("mobile");
+            document.documentElement.classList.remove("mobile");
+        }
         if (toggle) toggle.checked = !!state.settings.mobile;
     }
     if (toggle) toggle.addEventListener("change", () => {

@@ -427,7 +427,20 @@
     return sillyLanePoint(lane, t).y;
   }
 
+  // Online HTML loads online-mode.js, which creates state.network. The Offline
+  // HTML doesn't. We use that to gate the "easier in online" tweaks below.
+  function isOnlineHtml() {
+    try { return typeof state !== "undefined" && !!state.network; } catch (e) { return false; }
+  }
+
   function sillyLaneAlpha(lane, t) {
+    const online = isOnlineHtml();
+    // Online mode: remove the opponent arrows on the mirror entirely (less
+    // visual noise), and keep player arrows fully visible the whole song.
+    if (online) {
+      if (lane < 4) return 0;
+      return 1;
+    }
     let alpha = lane < 4 ? 0.5 : 1;
     // Notes on the mirror (behind Silly Billy) vanish once the window cracks.
     if (lane < 4 && phaseAt(t).mirrorBroken) alpha = 0;
