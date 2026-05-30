@@ -625,9 +625,204 @@ body.mobile .songCardName { font-size: 17px !important; }
 body.mobile .menuStickyBar { padding: 10px 12px !important; grid-template-columns: 1fr !important; }
 body.mobile .selectedTrackActions { gap: 6px !important; }
 body.mobile .playBig { padding: 12px 16px !important; font-size: 14px !important; flex: 1 !important; }
+
+/* === Loading screen === */
+#loadingScreen {
+    position: fixed; inset: 0; z-index: 99999;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 22px;
+    padding: 24px;
+    background:
+        radial-gradient(circle at 18% 20%, rgba(255, 31, 109, 0.18), transparent 38%),
+        radial-gradient(circle at 84% 80%, rgba(70, 197, 255, 0.14), transparent 36%),
+        linear-gradient(180deg, #120410 0%, #08020a 56%, #0a0309 100%);
+    transition: opacity 0.5s ease, visibility 0s linear 0.5s;
+}
+body.loaded #loadingScreen { opacity: 0; visibility: hidden; pointer-events: none; }
+#loadingScreen .loadLogo {
+    width: 110px; height: 110px;
+    border-radius: 24px;
+    image-rendering: auto;
+    filter: drop-shadow(0 12px 28px rgba(0,0,0,0.5)) drop-shadow(0 0 22px rgba(255, 31, 109, 0.5));
+    animation: loadLogoPulse 2.2s ease-in-out infinite;
+}
+@keyframes loadLogoPulse {
+    0%, 100% { transform: scale(1); filter: drop-shadow(0 12px 28px rgba(0,0,0,0.5)) drop-shadow(0 0 18px rgba(255, 31, 109, 0.4)); }
+    50%      { transform: scale(1.06); filter: drop-shadow(0 12px 28px rgba(0,0,0,0.5)) drop-shadow(0 0 32px rgba(255, 31, 109, 0.7)); }
+}
+#loadingScreen .loadTitle {
+    font-family: Impact, Haettenschweiler, sans-serif;
+    font-size: clamp(40px, 7vw, 64px);
+    line-height: 0.92;
+    color: #f9eef3;
+    letter-spacing: -0.04em;
+    margin: 0;
+    text-shadow: 0 0 22px rgba(255, 31, 109, 0.4);
+    text-align: center;
+}
+#loadingScreen .loadTag {
+    font-family: Impact, Haettenschweiler, sans-serif;
+    font-size: 13px;
+    color: #ff3a82;
+    text-transform: uppercase;
+    letter-spacing: 0.28em;
+    margin: -8px 0 0;
+}
+#loadingScreen .loadBarWrap {
+    width: min(420px, 90vw);
+    height: 14px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255, 31, 109, 0.3);
+    overflow: hidden;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.55);
+}
+#loadingScreen .loadBar {
+    width: 0%;
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #ff3a82, #ff7b54 70%, #ffd166);
+    box-shadow: 0 0 18px rgba(255, 31, 109, 0.55);
+    transition: width 0.18s ease-out;
+    position: relative;
+}
+#loadingScreen .loadBar::after {
+    content: "";
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.45), transparent);
+    background-size: 60px 100%;
+    background-repeat: no-repeat;
+    background-position: -60px 0;
+    animation: loadShine 1.6s linear infinite;
+}
+@keyframes loadShine {
+    from { background-position: -60px 0; }
+    to   { background-position: 100% 0; }
+}
+#loadingScreen .loadMeta {
+    display: flex; gap: 18px; align-items: center;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 12px;
+    color: #d9b1c1;
+    letter-spacing: 0.06em;
+}
+#loadingScreen .loadPercent {
+    color: #f9eef3;
+    font-weight: 900;
+    font-size: 18px;
+    font-family: Impact, Haettenschweiler, sans-serif;
+    letter-spacing: 0.06em;
+}
+#loadingScreen .loadStatus {
+    color: #b9c7ff;
+    font-size: 12px;
+    font-family: Arial, sans-serif;
+    min-height: 16px;
+    text-align: center;
+    max-width: 80vw;
+}
+#loadingScreen .loadHint {
+    margin-top: 16px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255, 31, 109, 0.3);
+    color: #ecd6e0;
+    font-size: 11px;
+    font-family: Arial, sans-serif;
+    letter-spacing: 0.04em;
+}
 </style>
 </head>
 <body>
+<div id="loadingScreen" role="status" aria-live="polite">
+    <img class="loadLogo" src="assets/icon.ico" alt="">
+    <div class="loadTag">Loading</div>
+    <h1 class="loadTitle">FNF Onliine</h1>
+    <div class="loadBarWrap"><div class="loadBar" id="loadBar"></div></div>
+    <div class="loadMeta"><span class="loadPercent" id="loadPercent">0%</span></div>
+    <div class="loadStatus" id="loadStatus">Booting up...</div>
+    <div class="loadHint">Loading every song, sprite, and sound. This only happens once per session.</div>
+</div>
+<script>
+(function () {
+    const bar = document.getElementById("loadBar");
+    const pct = document.getElementById("loadPercent");
+    const status = document.getElementById("loadStatus");
+    if (!bar || !pct || !status) return;
+    let target = 4, current = 0, ready = false;
+    function setStatus(txt) { status.textContent = txt; }
+    function setTarget(value) { target = Math.max(target, Math.min(100, value)); }
+    function tick() {
+        current += (target - current) * 0.18;
+        if (current > 99.5 && target >= 100) current = 100;
+        bar.style.width = current.toFixed(1) + "%";
+        pct.textContent = Math.floor(current) + "%";
+        if (ready && current >= 99.5) {
+            document.body.classList.add("loaded");
+            setStatus("Ready");
+            return;
+        }
+        requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+
+    document.addEventListener("DOMContentLoaded", () => { setTarget(15); setStatus("DOM ready — loading scripts..."); });
+    window.addEventListener("load", () => { setTarget(70); setStatus("Page loaded — preparing audio..."); });
+
+    function preloadAudio(src, weight) {
+        return new Promise(resolve => {
+            const a = new Audio();
+            a.preload = "auto";
+            a.src = src;
+            const finish = () => { setTarget(target + weight); resolve(); };
+            const onReady = () => { a.removeEventListener("canplaythrough", onReady); a.removeEventListener("error", onReady); finish(); };
+            a.addEventListener("canplaythrough", onReady);
+            a.addEventListener("error", onReady);
+            setTimeout(finish, 6000);
+        });
+    }
+    function preloadImage(src, weight) {
+        return new Promise(resolve => {
+            const img = new Image();
+            const finish = () => { setTarget(target + weight); resolve(); };
+            img.onload = finish;
+            img.onerror = finish;
+            img.src = src;
+            setTimeout(finish, 4000);
+        });
+    }
+    Promise.all([
+        preloadImage("assets/icon.ico", 4),
+        preloadAudio("sporting-inst.ogg", 6),
+        preloadAudio("sporting-voices.ogg", 4)
+    ]).then(() => {
+        setStatus("Waiting for game scripts to initialize...");
+    });
+
+    let pollCount = 0;
+    const poll = setInterval(() => {
+        pollCount++;
+        if (typeof state !== "undefined" && typeof ui !== "undefined" && typeof SONGS !== "undefined") {
+            const songCount = Object.keys(SONGS).length;
+            if (songCount >= 5) {
+                clearInterval(poll);
+                setTarget(100);
+                setStatus(`Loaded ${songCount} songs - ready to play.`);
+                ready = true;
+                return;
+            }
+        }
+        if (pollCount >= 60) {
+            clearInterval(poll);
+            setTarget(100);
+            setStatus("Took too long - opening menu anyway.");
+            ready = true;
+        }
+    }, 200);
+})();
+</script>
 <div id="app">
     <canvas id="canvas" width="1280" height="720"></canvas>
     <div class="hud">
