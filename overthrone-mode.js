@@ -852,7 +852,8 @@
         if (y < -150 && tailY < -150) continue;
         if (y > canvas.height + 150 && tailY > canvas.height + 150) continue;
         const scale = clamp(1 - Math.pow(Math.abs(diff), 0.7) * 0.45, 0.75, 1.12);
-        const alpha = note.side === "opp" ? 0.72 * sansOpponentNoteAlpha(t) : 1;
+        // Online matches: opponent notes get full alpha (no sansOpponentNoteAlpha fade)
+        const alpha = isOnlineMatch ? 1 : (note.side === "opp" ? 0.72 * sansOpponentNoteAlpha(t) : 1);
         if (isHoldNote(note)) drawOverthroneSustain(note, x, note.hit ? receptor : y, tailY, alpha * (note.hit ? 0.94 : 1));
         if (note.hit && isHoldNote(note) && t > note.time) continue;
         if (note.specialType === "madness") drawMadnessNote(note, x, y, scale, alpha, t);

@@ -408,6 +408,9 @@
   }
 
   function sillyLanePoint(lane, t) {
+    // Online matches: use the standard 8-lane playfield positions so both
+    // players see all notes in the normal place (not on the mirror).
+    if (isOnlineMatch()) return { x: laneX(lane), y: receptorY(), onMirror: false };
     if (lane < 4) {
       const transform = transformFor(t);
       return {
@@ -434,12 +437,9 @@
   }
 
   function sillyLaneAlpha(lane, t) {
-    // Online matches: opponent arrows on the mirror hidden, player arrows
-    // stay fully visible the whole song (no fade during cutscene).
-    if (isOnlineMatch()) {
-      if (lane < 4) return 0;
-      return 1;
-    }
+    // Online matches: every note stays fully visible the whole song
+    // (both opponent and player, no cutscene fade, no mirror hide).
+    if (isOnlineMatch()) return 1;
     let alpha = lane < 4 ? 0.5 : 1;
     // Notes on the mirror (behind Silly Billy) vanish once the window cracks.
     if (lane < 4 && phaseAt(t).mirrorBroken) alpha = 0;
@@ -1453,11 +1453,20 @@
   handleMisses = handleSillyMisses;
   updateCamera = updateSillyCamera;
   receptors = function(t) {
-    if (state.selectedSong === "sillyBilly") return drawSillyReceptors(t, "player");
+    if (state.selectedSong === "sillyBilly") {
+      // Online matches draw all 8 lanes through the standard playfield so
+      // both players see their notes; solo only draws player lanes (opp goes
+      // on the mirror via drawSillyStage).
+      const filter = isOnlineMatch() ? "all" : "player";
+      return drawSillyReceptors(t, filter);
+    }
     return baseReceptors(t);
   };
   notes = function(t) {
-    if (state.selectedSong === "sillyBilly") return drawSillyNotes(t, "player");
+    if (state.selectedSong === "sillyBilly") {
+      const filter = isOnlineMatch() ? "all" : "player";
+      return drawSillyNotes(t, filter);
+    }
     return baseNotes(t);
   };
 
