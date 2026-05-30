@@ -2408,7 +2408,10 @@ function notes(t){
         const tailY = receptorY() + (holdEndTime(n) - t) * scroll;
         if(y < -120 && tailY < -120) continue;
         if(y > canvas.height + 120 && tailY > canvas.height + 120) continue;
-        const lane = n.lane, x = laneX(lane), rawScale = clamp(1 - Math.pow(Math.abs(diff), 0.7) * .45, .75, 1.12), scale = rawScale, alpha = n.side === "opp" ? .84 : 1;
+        // In online mode every note stays at full alpha (no per-song fade or
+        // hide effects) so both players can always see the chart.
+        const isOnlineMatch = state.mode === "online";
+        const lane = n.lane, x = laneX(lane), rawScale = clamp(1 - Math.pow(Math.abs(diff), 0.7) * .45, .75, 1.12), scale = rawScale, alpha = isOnlineMatch ? 1 : (n.side === "opp" ? .84 : 1);
         if(state.selectedSong === "perseverance" && perseveranceSpritesReady() && isHoldNote(n)){
             drawPerseveranceSustain(n, x, n.hit ? receptorY() : y, tailY, alpha * (n.hit ? 0.94 : 1));
         }

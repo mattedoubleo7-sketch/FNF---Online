@@ -137,6 +137,10 @@ function importedTracksForSong(songId = state.selectedSong) {
     if (typeof ensureShimmyAudio === "function") ensureShimmyAudio();
     return [state.audio.shimmyInst, state.audio.shimmyVoices];
   }
+  if (chartSource === "sillyBilly") {
+    if (typeof window.ensureSillyBillyAudio === "function") window.ensureSillyBillyAudio();
+    return [state.audio.sillyBillyInst, state.audio.sillyBillyVoices].filter(Boolean);
+  }
   if (chartSource === "perseverance") {
     ensurePerseveranceAudio();
     return [state.audio.inst2, state.audio.voices2a, state.audio.voices2b];
