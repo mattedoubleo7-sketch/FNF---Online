@@ -635,6 +635,132 @@ body.mobile .songCardName { font-size: 17px !important; }
 body.mobile .menuStickyBar { padding: 10px 12px !important; grid-template-columns: 1fr !important; }
 body.mobile .selectedTrackActions { gap: 6px !important; }
 body.mobile .playBig { padding: 12px 16px !important; font-size: 14px !important; flex: 1 !important; }
+
+/* === Online features: presence badge, chat panel, emote bar, emote popups === */
+.onlinePresence {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(126, 243, 166, 0.36);
+    background: rgba(126, 243, 166, 0.08);
+    color: #c5f4d6;
+    font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.14em;
+    margin-right: 10px;
+}
+.onlinePresence::before {
+    content: ""; width: 8px; height: 8px; border-radius: 50%;
+    background: #7ef3a6;
+    box-shadow: 0 0 12px #7ef3a6;
+    animation: presencePulse 1.6s ease-in-out infinite;
+}
+@keyframes presencePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+.onlinePresence.offline { color: #ffb0b8; border-color: rgba(255, 120, 130, 0.4); background: rgba(255, 120, 130, 0.08); }
+.onlinePresence.offline::before { background: #ff6e70; box-shadow: 0 0 12px #ff6e70; animation: none; }
+/* Room chat panel — appears below the online card when in a room */
+.chatPanel {
+    display: none;
+    margin-top: 14px;
+    padding: 12px;
+    border: 1px solid rgba(255, 31, 109, 0.24);
+    border-radius: 16px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
+        rgba(14, 4, 12, 0.8);
+}
+.chatPanel.show { display: block; }
+.chatHead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.chatHead h4 { margin: 0; font-size: 14px; font-weight: 900; letter-spacing: 0.06em; }
+.chatLog {
+    max-height: 180px; overflow-y: auto;
+    padding: 8px; border-radius: 12px;
+    background: rgba(0, 0, 0, 0.32);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: 13px;
+    line-height: 1.4;
+    display: flex; flex-direction: column; gap: 4px;
+}
+.chatLog .msg { padding: 4px 6px; border-radius: 8px; word-break: break-word; }
+.chatLog .msg.me { background: rgba(70, 197, 255, 0.1); align-self: flex-end; max-width: 80%; }
+.chatLog .msg.them { background: rgba(255, 31, 109, 0.1); align-self: flex-start; max-width: 80%; }
+.chatLog .msg.sys { background: rgba(255, 255, 255, 0.04); color: #b8c4e0; font-style: italic; font-size: 12px; align-self: center; max-width: 90%; text-align: center; }
+.chatLog .msg .name { font-weight: 700; opacity: 0.9; margin-right: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+.chatForm { display: flex; gap: 8px; margin-top: 8px; }
+.chatInput {
+    flex: 1; min-width: 0;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.05);
+    color: #fff;
+    font: inherit; font-size: 13px;
+}
+.chatInput:focus { outline: none; border-color: rgba(255, 31, 109, 0.5); }
+.chatSendBtn {
+    padding: 8px 14px; border-radius: 10px; border: 0;
+    background: linear-gradient(135deg, #ff3a82, #c8102e);
+    color: #fff; font-weight: 800; cursor: pointer; font-family: inherit;
+}
+/* In-game emote bar (visible only during online matches) */
+#emoteBar {
+    position: fixed;
+    bottom: 16px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 900;
+    display: none; gap: 6px;
+    padding: 6px 8px;
+    border-radius: 999px;
+    background: rgba(20, 5, 14, 0.78);
+    border: 1px solid rgba(255, 31, 109, 0.4);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
+}
+#emoteBar.show { display: flex; }
+.emoteBtn {
+    width: 36px; height: 36px;
+    border: 0; border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #fff;
+    font-size: 18px; cursor: pointer;
+    transition: background 0.1s, transform 0.1s;
+    line-height: 1;
+}
+.emoteBtn:hover, .emoteBtn:active { background: rgba(255, 31, 109, 0.25); transform: translateY(-2px); }
+/* Emote popups that bubble up from the player's side */
+.emotePop {
+    position: absolute;
+    bottom: 220px;
+    font-size: 56px;
+    animation: emoteBubble 1.6s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+    pointer-events: none;
+    z-index: 950;
+    filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.55));
+}
+@keyframes emoteBubble {
+    0%   { transform: translateY(20px) scale(0.5); opacity: 0; }
+    18%  { transform: translateY(0) scale(1.18); opacity: 1; }
+    30%  { transform: translateY(-8px) scale(1); }
+    100% { transform: translateY(-140px) scale(0.85); opacity: 0; }
+}
+.emotePop.me   { right: 18%; color: #46c5ff; }
+.emotePop.them { left: 18%;  color: #ff3a82; }
+/* Rematch button on results screen */
+.rematchBtn {
+    background: linear-gradient(135deg, #ffd166, #ff7b54) !important;
+    color: #1d0512 !important;
+}
+.rematchBtn.armed {
+    background: linear-gradient(135deg, #7ef3a6, #46c5ff) !important;
+    color: #0a1320 !important;
+    animation: presencePulse 1.2s ease-in-out infinite;
+}
+.rematchHint {
+    font-size: 12px; color: #d7dff8;
+    margin-top: 6px; min-height: 16px;
+}
+body.mobile #emoteBar { bottom: 80px !important; transform: translateX(-50%) scale(0.9) !important; }
+body.mobile .chatLog { max-height: 130px !important; font-size: 12px !important; }
 </style>
 </head>
 <body>
@@ -680,6 +806,7 @@ body.mobile .playBig { padding: 12px 16px !important; font-size: 14px !important
                 </div>
             </div>
             <div class="menuTopActions">
+                <span class="onlinePresence offline" id="onlinePresence" title="Server connection">— online</span>
                 <button class="iconBtn" id="settingsBtn" title="Controls / Settings" aria-label="Settings">⚙</button>
                 <button class="iconBtn" id="onlineAuthBtn" title="Online Account" aria-label="Online">⚡</button>
             </div>
@@ -718,6 +845,14 @@ body.mobile .playBig { padding: 12px 16px !important; font-size: 14px !important
                 <button class="btn secondary onlineBtn" id="onlineLogoutBtn">Log Out</button>
             </div>
             <div class="onlineHint" id="onlineHint">Create an account to host or join online rooms.</div>
+        </div>
+        <div class="chatPanel" id="chatPanel" aria-label="Room chat">
+            <div class="chatHead"><h4>💬 Room Chat</h4><span id="chatStatus" style="font-size:11px;color:#a9b9d9;">— in room only —</span></div>
+            <div class="chatLog" id="chatLog"></div>
+            <form class="chatForm" id="chatForm" autocomplete="off">
+                <input class="chatInput" id="chatInput" placeholder="Say something..." maxlength="200">
+                <button class="chatSendBtn" type="submit">Send</button>
+            </form>
         </div>
         <span id="difficulty" style="display:none;"></span>
     </div>
@@ -792,7 +927,8 @@ body.mobile .playBig { padding: 12px 16px !important; font-size: 14px !important
                 <div class="rStat"><div class="eyebrow">Max Combo</div><div class="value" id="rCombo">0</div></div>
                 <div class="rStat"><div class="eyebrow">Judgments</div><div class="value" id="rJudge">0 / 0 / 0 / 0</div></div>
             </div>
-            <div class="resultsFoot" style="margin-top:20px; justify-content:flex-end;"><button class="btn secondary" id="menuBtn">Back To Menu</button><button class="btn primary" id="replayBtn">Replay</button></div>
+            <div class="rematchHint" id="rematchHint"></div>
+            <div class="resultsFoot" style="margin-top:14px; justify-content:flex-end; flex-wrap:wrap; gap:8px;"><button class="btn secondary" id="menuBtn">Back To Menu</button><button class="btn rematchBtn" id="rematchBtn" style="display:none;">🔁 Rematch</button><button class="btn primary" id="replayBtn">Replay</button></div>
         </div>
     </div>
 </div>
@@ -2500,6 +2636,17 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
     <button class="touchBtn" data-lane="6" style="--c:#67ff9a">&#9650;</button>
     <button class="touchBtn" data-lane="7" style="--c:#ff5870">&#9658;</button>
 </div>
+<div id="emoteBar" aria-label="Emote reactions">
+    <button class="emoteBtn" data-emote="fire" title="Fire">🔥</button>
+    <button class="emoteBtn" data-emote="skull" title="Skull">💀</button>
+    <button class="emoteBtn" data-emote="laugh" title="Laugh">😂</button>
+    <button class="emoteBtn" data-emote="clap" title="Clap">👏</button>
+    <button class="emoteBtn" data-emote="gg" title="GG">🎮</button>
+    <button class="emoteBtn" data-emote="heart" title="Heart">❤️</button>
+    <button class="emoteBtn" data-emote="cry" title="Cry">😭</button>
+    <button class="emoteBtn" data-emote="sick" title="Sick">😎</button>
+    <button class="emoteBtn" data-emote="mid" title="Mid">😐</button>
+</div>
 <div id="portraitNag" aria-hidden="true">
     <span class="ic">📱</span>
     <h2>Rotate to landscape</h2>
@@ -2768,6 +2915,155 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
     applyFpsCounter();
     applyReduceMotion();
     applyMuteVoices();
+})();
+
+(function () {
+    // === Online presence + Chat + Emotes + Quick Rematch ===
+    if (typeof state === "undefined") return;
+
+    // --- Presence badge in the menu top bar ---
+    const presenceEl = document.getElementById("onlinePresence");
+    function updatePresenceFromConnection() {
+        if (!presenceEl) return;
+        const connected = state.network && state.network.connected;
+        if (!connected) {
+            presenceEl.classList.add("offline");
+            presenceEl.textContent = "Offline";
+        }
+    }
+    window.handleOnlineStats = function (payload) {
+        if (!presenceEl) return;
+        const total = Number(payload?.total || 0);
+        const inMatch = Number(payload?.inMatch || 0);
+        presenceEl.classList.remove("offline");
+        presenceEl.textContent = total === 1 ? "1 online" : (total + " online");
+        if (inMatch > 0) presenceEl.title = `${total} online • ${inMatch} in match`;
+        else presenceEl.title = `${total} player${total === 1 ? "" : "s"} online`;
+    };
+    // Watch the socket-connection field; show offline when not connected
+    setInterval(updatePresenceFromConnection, 1200);
+
+    // --- Room Chat ---
+    const chatPanel = document.getElementById("chatPanel");
+    const chatLog = document.getElementById("chatLog");
+    const chatForm = document.getElementById("chatForm");
+    const chatInput = document.getElementById("chatInput");
+    const chatStatus = document.getElementById("chatStatus");
+    function appendChat(kind, name, text) {
+        if (!chatLog) return;
+        const div = document.createElement("div");
+        div.className = "msg " + kind;
+        if (kind === "sys") div.textContent = text;
+        else div.innerHTML = (name ? `<span class="name">${escapeHTML(name)}</span>` : "") + escapeHTML(text);
+        chatLog.appendChild(div);
+        // Trim to last 200 messages so it never grows unbounded
+        while (chatLog.children.length > 200) chatLog.firstChild.remove();
+        chatLog.scrollTop = chatLog.scrollHeight;
+    }
+    function escapeHTML(s) {
+        return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+    }
+    function showChatPanelIfInRoom() {
+        const inRoom = !!(state.network && state.network.roomId);
+        if (chatPanel) chatPanel.classList.toggle("show", inRoom);
+        if (chatStatus) chatStatus.textContent = inRoom ? `room ${state.network.roomId}` : "— in room only —";
+    }
+    setInterval(showChatPanelIfInRoom, 700);
+    window.handleIncomingChat = function (msg) {
+        if (!msg || !msg.text) return;
+        const sock = state.network && state.network.socket;
+        const isMe = sock && msg.id === sock.id;
+        appendChat(isMe ? "me" : "them", msg.name || "Player", msg.text);
+    };
+    if (chatForm) {
+        chatForm.addEventListener("submit", e => {
+            e.preventDefault();
+            const text = (chatInput && chatInput.value || "").trim();
+            if (!text) return;
+            if (typeof window.sendChat === "function" && window.sendChat(text)) {
+                chatInput.value = "";
+            } else {
+                appendChat("sys", "", "Join or host a room to chat.");
+            }
+        });
+    }
+
+    // --- Emote bar (during online matches) + popups ---
+    const emoteBar = document.getElementById("emoteBar");
+    function inOnlineMatch() {
+        return state.mode === "online" && state.playing && state.network && state.network.roomId;
+    }
+    function applyEmoteBarVisibility() {
+        if (!emoteBar) return;
+        emoteBar.classList.toggle("show", !!inOnlineMatch());
+    }
+    setInterval(applyEmoteBarVisibility, 600);
+
+    const EMOTE_GLYPHS = {
+        fire: "🔥", skull: "💀", laugh: "😂", clap: "👏", gg: "🎮",
+        heart: "❤️", cry: "😭", sick: "😎", mid: "😐"
+    };
+    function spawnEmotePopup(id, mine) {
+        const glyph = EMOTE_GLYPHS[id] || "✨";
+        const app = document.getElementById("app");
+        if (!app) return;
+        const pop = document.createElement("div");
+        pop.className = "emotePop " + (mine ? "me" : "them");
+        pop.textContent = glyph;
+        // Random horizontal jitter so spam doesn't perfectly stack
+        const jitter = (Math.sin(performance.now() * 0.013) * 0.5 + 0.5) * 60 - 30;
+        pop.style.setProperty(mine ? "right" : "left", (18 + jitter / 4) + "%");
+        app.appendChild(pop);
+        setTimeout(() => pop.remove(), 1700);
+    }
+    window.handleIncomingEmote = function (msg) {
+        if (!msg || !msg.id) return;
+        spawnEmotePopup(msg.id, false);
+    };
+    if (emoteBar) {
+        emoteBar.addEventListener("click", e => {
+            const btn = e.target && e.target.closest && e.target.closest(".emoteBtn");
+            if (!btn) return;
+            const id = btn.dataset.emote;
+            if (!id) return;
+            if (typeof window.sendEmote === "function" && window.sendEmote(id)) {
+                spawnEmotePopup(id, true); // optimistic local feedback
+            }
+        });
+    }
+
+    // --- Quick Rematch on results screen ---
+    const rematchBtn = document.getElementById("rematchBtn");
+    const rematchHint = document.getElementById("rematchHint");
+    function showRematchIfOnline() {
+        if (!rematchBtn) return;
+        const visible = !!(state.network && state.network.roomId);
+        rematchBtn.style.display = visible ? "inline-flex" : "none";
+        if (!visible && rematchHint) rematchHint.textContent = "";
+    }
+    setInterval(showRematchIfOnline, 700);
+    if (rematchBtn) {
+        rematchBtn.addEventListener("click", () => {
+            if (typeof window.sendRematch === "function") window.sendRematch();
+            rematchBtn.classList.add("armed");
+            rematchBtn.textContent = "🔁 Waiting on other player...";
+            if (rematchHint) rematchHint.textContent = "Both players must hit Rematch within 8 seconds.";
+        });
+    }
+    window.handleRematchState = function (payload) {
+        if (!rematchBtn || !rematchHint) return;
+        const meRole = state.network && state.network.role;
+        const meReady = meRole === "host" ? !!payload?.host : meRole === "guest" ? !!payload?.guest : false;
+        const otherReady = meRole === "host" ? !!payload?.guest : !!payload?.host;
+        if (meReady && otherReady) {
+            rematchBtn.textContent = "🔁 Loading...";
+            rematchHint.textContent = "Both ready — preparing next match.";
+        } else if (otherReady && !meReady) {
+            rematchBtn.classList.add("armed");
+            rematchBtn.textContent = "🔁 Other player wants Rematch — click to accept";
+            rematchHint.textContent = "Other player is waiting on you.";
+        }
+    };
 })();
 </script>
 </body>

@@ -751,8 +751,40 @@ async function ensureOnlineSocket() {
   });
   socket.on("game:judgment", payload => applyRemoteJudgment(payload));
   socket.on("game:dodge", payload => applyRemoteDodge(payload));
+  // === New online features: chat, emotes, online count, rematch ===
+  socket.on("chat:msg", payload => {
+    if (typeof window.handleIncomingChat === "function") window.handleIncomingChat(payload);
+  });
+  socket.on("emote:msg", payload => {
+    if (typeof window.handleIncomingEmote === "function") window.handleIncomingEmote(payload);
+  });
+  socket.on("stats:online", payload => {
+    if (typeof window.handleOnlineStats === "function") window.handleOnlineStats(payload);
+  });
+  socket.on("room:rematch:state", payload => {
+    if (typeof window.handleRematchState === "function") window.handleRematchState(payload);
+  });
   return socket;
 }
+// === Public emitters for the UI to call ===
+window.sendChat = function (text) {
+  const sock = state.network && state.network.socket;
+  if (!sock || !state.network.roomId) return false;
+  sock.emit("chat:send", { text: String(text || "").slice(0, 200) });
+  return true;
+};
+window.sendEmote = function (id) {
+  const sock = state.network && state.network.socket;
+  if (!sock || !state.network.roomId) return false;
+  sock.emit("emote:send", { id });
+  return true;
+};
+window.sendRematch = function () {
+  const sock = state.network && state.network.socket;
+  if (!sock || !state.network.roomId) return false;
+  sock.emit("room:rematch");
+  return true;
+};
 async function hostOnlineRoom() {
   const socket = await ensureOnlineSocket();
   if (!socket) return;

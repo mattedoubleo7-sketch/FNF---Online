@@ -76,6 +76,15 @@ function broadcastRoom(io, room) {
   if (room.guestId) io.to(room.guestId).emit("room:update", snapshotFor(room, room.guestId));
 }
 
+// === Online presence: server fanouts the live socket count to all clients ===
+function broadcastOnlineCount(io) {
+  try {
+    const total = io.engine?.clientsCount || io.sockets?.sockets?.size || 0;
+    const inMatch = Array.from(rooms.values()).filter(r => r.hostId && r.guestId).length;
+    io.emit("stats:online", { total, inMatch, rooms: rooms.size });
+  } catch (e) {}
+}
+
 function refreshMatchmakingQueue(io) {
   for (let index = matchmakingQueue.length - 1; index >= 0; index--) {
     const socketId = matchmakingQueue[index];
@@ -410,10 +419,90 @@ function createGameServer({ port = Number(process.env.PORT) || 3000, host = proc
       socket.to(room.id).emit("game:dodge", payload);
     });
 
+    // === In-room chat ===
+    // Rate-limited per socket: max 1 msg/sec, max 4 msgs/3s burst.
+    // Sanitized: max 200 chars, control chars stripped.
+    socket.on("chat:send", payload => {
+      const room = rooms.get(socket.data.roomId || "");
+      if (!room) return;
+      const now = Date.now();
+      const bucket = socket.data.chatBucket = socket.data.chatBucket || [];
+      while (bucket.length && now - bucket[0] > 3000) bucket.shift();
+      if (bucket.length >= 4) return; // burst limit
+      if (socket.data.lastChatAt && now - socket.data.lastChatAt < 700) return;
+      bucket.push(now);
+      socket.data.lastChatAt = now;
+      let text = String(payload?.text || "").replace(/[\x00-\x1f\x7f]/g, "").trim();
+      if (!text) return;
+      if (text.length > 200) text = text.slice(0, 200);
+      const msg = {
+        id: socket.id,
+        name: (socket.data.user && socket.data.user.username) || (socket.data.user && socket.data.user.name) || socket.data.user?.id || "Player",
+        role: socket.data.role || null,
+        text,
+        at: now
+      };
+      io.to(room.id).emit("chat:msg", msg);
+    });
+
+    // === Emote reactions (during gameplay) ===
+    // Tiny payload, very high rate-limit (10/sec burst). Emotes are validated
+    // against a small allow-list; clients render the matching popup.
+    const EMOTE_ALLOW = new Set(["fire","skull","laugh","clap","gg","heart","cry","sick","mid"]);
+    socket.on("emote:send", payload => {
+      const room = rooms.get(socket.data.roomId || "");
+      if (!room) return;
+      const now = Date.now();
+      const bucket = socket.data.emoteBucket = socket.data.emoteBucket || [];
+      while (bucket.length && now - bucket[0] > 1000) bucket.shift();
+      if (bucket.length >= 10) return;
+      bucket.push(now);
+      const id = String(payload?.id || "").toLowerCase();
+      if (!EMOTE_ALLOW.has(id)) return;
+      socket.to(room.id).emit("emote:msg", {
+        from: socket.id,
+        role: socket.data.role || null,
+        id,
+        at: now
+      });
+    });
+
+    // === Quick rematch ===
+    // Both players must rematch within 8s; second toggle starts a new prepare.
+    socket.on("room:rematch", () => {
+      const room = rooms.get(socket.data.roomId || "");
+      if (!room) return;
+      const role = socket.data.role;
+      if (role !== "host" && role !== "guest") return;
+      const now = Date.now();
+      if (role === "host") room.rematchHostAt = now;
+      if (role === "guest") room.rematchGuestAt = now;
+      io.to(room.id).emit("room:rematch:state", {
+        host: !!(room.rematchHostAt && now - room.rematchHostAt < 8000),
+        guest: !!(room.rematchGuestAt && now - room.rematchGuestAt < 8000)
+      });
+      const hostOk = room.rematchHostAt && now - room.rematchHostAt < 8000;
+      const guestOk = room.rematchGuestAt && now - room.rematchGuestAt < 8000;
+      if (hostOk && guestOk) {
+        room.rematchHostAt = 0;
+        room.rematchGuestAt = 0;
+        room.hostReady = true;
+        room.guestReady = true;
+        broadcastRoom(io, room);
+        // Same code path the normal game:ready takes once both sides are ready
+        try { beginPrepare(io, room); } catch (e) {}
+      }
+    });
+
     socket.on("disconnect", () => {
       removeFromMatchmaking(io, socket, false);
       leaveRoom(io, socket);
+      broadcastOnlineCount(io);
     });
+
+    // === Online presence ===
+    // Each new connection broadcasts the updated player count to everyone.
+    broadcastOnlineCount(io);
   });
 
   return new Promise(resolve => {
