@@ -371,6 +371,11 @@ function syncTrackToTime(track, targetTime, shouldPlay, options = {}) {
     try { track.currentTime = desiredTime; } catch {}
   }
   if (shouldPlay) {
+    // Resume the AudioContext on every play attempt - some browsers suspend it
+    // intermittently and play() fails silently when that happens.
+    if (state.audio && state.audio.ctx && state.audio.ctx.state === "suspended") {
+      try { state.audio.ctx.resume(); } catch {}
+    }
     if (track.paused && !track.__onlineStarting && (duration == null || desiredTime < duration - 0.05)) {
       track.__onlineStarting = true;
       try {
@@ -386,14 +391,17 @@ function syncTrackToTime(track, targetTime, shouldPlay, options = {}) {
             if (Math.abs((track.currentTime || 0) - freshDesired) > freshTolerance) {
               try { track.currentTime = freshDesired; } catch {}
             }
-          }).catch(() => {
+          }).catch(err => {
             track.__onlineStarting = false;
+            // Surface the autoplay rejection so we can see it in DevTools.
+            try { console.warn("[online] track.play() rejected", { name: err && err.name, msg: err && err.message }); } catch {}
           });
         } else {
           track.__onlineStarting = false;
         }
-      } catch {
+      } catch (err) {
         track.__onlineStarting = false;
+        try { console.warn("[online] track.play() threw", err); } catch {}
       }
     }
   } else {
