@@ -1069,19 +1069,23 @@
       return;
     }
 
-    ctx.fillStyle = "#050612";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Wii Funkin's unknownnew stage has no extra base-color fill or floor
+    // wash - the unknownBG image IS the background. Match that.
     const depth = combatDepth(t);
+    // Sky-fill the area outside the unknownBG image so transparent-canvas
+    // edges look like the WF stage (the camera in WF can pan further than
+    // the bg image, which extends to dark sides; FlxG.bgColor default 0xff000000).
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     drawImageParallax("unknownBG", -410 + depth.far, -210 + depth.farY, 1.68 * depth.scale.far, 1, false, 0, 0.3);
     drawCombatDust("far", t, depth);
     if(isOneHit() && t >= ONE_HIT_MOVING_ROCK_START){
       drawOneHitBackgroundRockField(t, depth);
     } else {
-      drawImageParallax("back4", worldX(23) + depth.mid, worldY(150) - 4 + depth.midY, worldScale(2.05) * depth.scale.mid, 0.98, false, 0.4, 0.4);
-      drawImageParallax("back5", worldX(-458.4) + depth.near, worldY(253.6) + 4 + depth.nearY, worldScale(2.45) * depth.scale.near, 0.95, false, 0.6, 0.6);
+      drawImageParallax("back4", worldX(23) + depth.mid, worldY(150) - 4 + depth.midY, worldScale(2.05) * depth.scale.mid, 1, false, 0.4, 0.4);
+      drawImageParallax("back5", worldX(-458.4) + depth.near, worldY(253.6) + 4 + depth.nearY, worldScale(2.45) * depth.scale.near, 1, false, 0.6, 0.6);
     }
     drawCombatDust("mid", t, depth);
-    drawCombatDepthWash(depth);
 
     const float = Math.sin(t * 1.5) * 2;
     const platformScale = worldScale(1) * (1 + (depth.scale.platform - 1) * 0.35);
@@ -1111,15 +1115,7 @@
     else drawCharacter("matt", "matt", "matt", mattFeet.x, mattFeet.y, 0.66, false, t, rockTilt);
     drawBfSwordCharacter(bfFeet.x, bfFeet.y, 0.6, false, t, rightRockTilt);
     drawCombatDust("near", t, depth);
-
-    ctx.save();
-    ctx.globalCompositeOperation = "screen";
-    const glow = ctx.createRadialGradient(canvas.width * 0.5, 220, 80, canvas.width * 0.5, 220, 760);
-    glow.addColorStop(0, "rgba(131,90,255,0.16)");
-    glow.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.restore();
+    // (Wii Funkin's unknownnew has no top-of-screen purple glow; removed.)
   }
 
   function activeCombatSide(t){
