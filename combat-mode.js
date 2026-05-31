@@ -320,14 +320,15 @@
     const bob = Math.sin(t * Math.PI * 2 * 1.5) * 1.8;
     const plainSprite = spriteName === "matt";
     const anchorFeet = spriteName === "matt";
-    // Matt sing poses lift slightly off the rock so the body reads above
-    // the feet instead of sinking into the platform. Idle stays put.
+    // Matt sing poses lift off the rock so the body reads above the feet
+    // line instead of looking like it's sinking into the platform. Idle
+    // stays exactly where it was originally.
     let mattSingLift = 0;
     if (spriteName === "matt") {
       const pose = state.poses?.[characterKey];
       const poseAge = performance.now() / 1000 - (pose?.time || -10);
       const isSinging = poseAge < 0.42 && Number.isFinite(pose?.lane);
-      if (isSinging) mattSingLift = -20 * scale; // 20px up at scale 1
+      if (isSinging) mattSingLift = -50 * scale; // bigger lift, was -20
     }
     const drawX = anchorFeet ? mattHorizontalAnchorCorrection(frame, scale) : dx * hit;
     const drawY = (anchorFeet ? atlasFootCorrection(frame, scale) : bob + dy * hit) + mattSingLift;
