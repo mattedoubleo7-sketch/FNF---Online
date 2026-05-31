@@ -1106,8 +1106,13 @@
     const bfRockFeetY = worldY(924) + 132;
     drawImageRotated("platform", leftPlatformX, leftPlatformY, platformScale, rockTilt);
     drawImageRotated("platform", rightPlatformX, rightPlatformY, platformScale, rightRockTilt, 1, true);
-    drawImageParallax("split", worldX(0) + depth.near * 0.32, worldY(-500), worldScale(2.42), 0.88, false, 1.3, 1.3);
-    drawImageParallax("split", worldX(2212.8) + depth.near * 0.32, worldY(-500), worldScale(2.42), 0.88, true, 1.3, 1.3);
+    // 8split side cliffs - pushed outward and shrunk so they frame the scene
+    // from a distance instead of crowding right up against matt and bf. The
+    // unscaled 427x700 sprite was rendering at the platform Z so it visually
+    // sat on the same plane as the characters; reduced scale + outward shift
+    // makes them read as background framing.
+    drawImageParallax("split", worldX(0) + depth.near * 0.32 - 180, worldY(-500), worldScale(1.85), 0.72, false, 1.3, 1.3);
+    drawImageParallax("split", worldX(2212.8) + depth.near * 0.32 + 180, worldY(-500), worldScale(1.85), 0.72, true, 1.3, 1.3);
 
     const mattFeet = rotatePointAround(leftRockCenter - 22, mattRockFeetY + float, leftRockCenter, leftRockPivotY, rockTilt);
     const bfFeet = rotatePointAround(rightRockCenter + 8, bfRockFeetY - float * 0.7, rightRockCenter, rightRockPivotY, rightRockTilt);
