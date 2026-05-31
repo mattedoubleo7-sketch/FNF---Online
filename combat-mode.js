@@ -285,12 +285,20 @@
   //   down  offset(209,-336)  fx=0    fy=-11  vis_w=539  vis_h=380  rot=yes
   //   up    offset(171,-238)  fx=0    fy=0    vis_w=557  vis_h=479  rot=yes
   //   right offset(161,-302)  fx=-75  fy=-5   vis_w=627  vis_h=412  rot=yes
+  // Anchored by FEET (not body). Foot anchor keeps the visible bottom (matt's
+  // feet for idle, sword-tip approximation for sings) at the rock surface,
+  // and these per-anim deltas nudge each sing pose slightly UP so the body
+  // sits where you expect rather than dropping below the rock.
+  //   dx: horizontal shift from idle's screen position (small, to keep matt's
+  //        body roughly centred on the rock as the sword swings around him)
+  //   dy: NEGATIVE = up. Sings lift slightly so the body reads as "above feet"
+  //        instead of "dropped into the rock".
   const MATT_DRAW_DELTAS = {
-    idle:  { dx:    0,  dy:   0 },
-    left:  { dx:  201,  dy: 129 },
-    down:  { dx:  -52,  dy:  34 },
-    up:    { dx:  -15,  dy:  57 },
-    right: { dx:  -61,  dy:  39 },
+    idle:  { dx:   0,  dy:   0 },
+    left:  { dx:  35,  dy: -28 },
+    down:  { dx: -15,  dy: -18 },
+    up:    { dx:  -8,  dy: -22 },
+    right: { dx: -25,  dy: -20 },
   };
   function mattAnimDelta(characterKey){
     const pose = state.poses?.[characterKey];
@@ -311,19 +319,14 @@
     const dy = lane === 2 ? -13 : lane === 1 ? 10 : 0;
     const bob = Math.sin(t * Math.PI * 2 * 1.5) * 1.8;
     const plainSprite = spriteName === "matt";
-    // Matt is positioned ENTIRELY by the per-anim WF deltas - no foot anchor
-    // or horizontal centering on top, since those fought the deltas in the
-    // last attempt. Idle delta is (0, 0) so idle still lands at the rock
-    // exactly the same as before. Sings shift by the computed WF offsets.
-    let drawX, drawY;
-    if (spriteName === "matt") {
-      const animDelta = mattAnimDelta(characterKey);
-      drawX = animDelta.dx * scale;
-      drawY = animDelta.dy * scale;
-    } else {
-      drawX = dx * hit;
-      drawY = bob + dy * hit;
-    }
+    const anchorFeet = spriteName === "matt";
+    // Foot anchor keeps matt's feet planted on the rock; horizontal
+    // centering keeps him aligned with the rock pivot. The per-anim delta
+    // then nudges each sing pose up/sideways a small amount so the body
+    // reads cleanly instead of dropping into the rock.
+    const animDelta = spriteName === "matt" ? mattAnimDelta(characterKey) : { dx: 0, dy: 0 };
+    const drawX = (anchorFeet ? mattHorizontalAnchorCorrection(frame, scale) : dx * hit) + animDelta.dx * scale;
+    const drawY = (anchorFeet ? atlasFootCorrection(frame, scale) : bob + dy * hit) + animDelta.dy * scale;
     ctx.save();
     if(!plainSprite){
       ctx.shadowColor = "rgba(118,180,255,0.46)";
