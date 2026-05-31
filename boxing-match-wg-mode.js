@@ -578,7 +578,68 @@
 
     function drawFlyPhase(t, step){
       const pan = wgPan();
-      drawCover("spaceEmpty", -pan * 8, -14, 1.18);
+
+      // Wii Funkin mirror.zoom oscillates on a 32-step cycle during the fly
+      // intro (0.95 -> 1 -> 0.9 -> 1 -> ...). Mimic that with a background
+      // zoom pulse + slight rotation drift so the camera feels like it's
+      // rushing forward instead of sitting still.
+      const cycle = (step % 32) / 32;
+      const bgPulse = 1 + Math.sin(cycle * Math.PI * 2) * 0.04;
+      drawCover("spaceEmpty", -pan * 8, -14, 1.18 * bgPulse);
+
+      // Greyscale-fade-in at the very start of the intro (matches WF's
+      // greyscale shader tweening from 1.0 to 0 over the first beats).
+      const introSteps = Math.max(1, DATA.meta.phaseSteps.hudIn || 288);
+      const greyMix = clamp01(1 - step / Math.min(introSteps, 96));
+      if (greyMix > 0.01) {
+        ctx.save();
+        ctx.globalCompositeOperation = "saturation";
+        ctx.fillStyle = "rgba(128,128,128," + (greyMix * 0.9).toFixed(3) + ")";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+      }
+
+      // Radial hyperspace - 80 streaks emanating from screen centre, scrolling
+      // outward to sell "flying forward at speed". Matches the WF SpeedEffect
+      // shader visually (white-ish radial lines) without the per-pixel cost.
+      if (!window.PERFORMANCE_MODE && !window.REDUCE_MOTION) {
+        const cx = canvas.width / 2;
+        const cy = canvas.height * 0.46;
+        const maxR = Math.hypot(canvas.width * 0.6, canvas.height * 0.55);
+        const minR = maxR * 0.18;
+        const span = maxR - minR;
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        ctx.lineCap = "round";
+        const N = 80;
+        for (let i = 0; i < N; i++) {
+          const seed = i * 12.9898;
+          const r1 = Math.abs((Math.sin(seed) * 43758.5453) % 1);
+          const r2 = Math.abs((Math.sin(seed * 1.7 + 4.3) * 24634.6345) % 1);
+          const r3 = Math.abs((Math.sin(seed * 0.9 + 1.1) * 16345.123) % 1);
+          const r4 = Math.abs((Math.sin(seed * 2.3 + 7.7) * 9532.43) % 1);
+          const angle = r1 * Math.PI * 2;
+          const speedPx = 420 + r2 * 700;
+          const length = 80 + r3 * 140;
+          const phaseR = r4 * span;
+          const offset = ((t * speedPx) + phaseR) % span;
+          const r0 = minR + offset;
+          const rEnd = Math.min(maxR + length, r0 + length);
+          const cos = Math.cos(angle), sin = Math.sin(angle);
+          const x0 = cx + cos * r0, y0 = cy + sin * r0;
+          const x1 = cx + cos * rEnd, y1 = cy + sin * rEnd;
+          const radialBoost = Math.min(1, (r0 - minR) / span + 0.2);
+          const alpha = 0.55 * radialBoost;
+          ctx.strokeStyle = "rgba(220,235,255," + alpha.toFixed(3) + ")";
+          ctx.lineWidth = 1.2 + r2 * 2.2;
+          ctx.beginPath();
+          ctx.moveTo(x0, y0);
+          ctx.lineTo(x1, y1);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
       const lean = Math.sin(t * 1.25) * 0.032;
       const flyBob = Math.sin(t * 1.55) * 6;
       const mattX = 842 + Math.sin(t * 0.52) * 6;
