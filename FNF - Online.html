@@ -2330,10 +2330,14 @@ function judge(side, kind, lane, char){
     if(kind === "miss") stats.combo = 0; else { stats.combo++; stats.maxCombo = Math.max(stats.maxCombo, stats.combo); stats.score += gain + stats.combo * 12; if(!isImportedSong(state.currentSong)) voice(state.audio.ctx.currentTime, side, lane % 4, kind === "perfect" ? 1.15 : .95, char); }
     stats.points += points; stats.judged++; stats.judgments[kind]++;
     if(side === "player"){
+        // Mobile gets softer penalties because touch input adds unavoidable
+        // latency - a miss the player didn't actually make shouldn't be a
+        // game-ender. Bonuses are the same; only the punishments are tuned.
+        const mob = !!(state.settings && state.settings.mobile);
         if(kind === "perfect") state.health = clamp(state.health + .028, 0, 1);
         if(kind === "good") state.health = clamp(state.health + .016, 0, 1);
-        if(kind === "bad") state.health = clamp(state.health - .018, 0, 1);
-        if(kind === "miss") state.health = clamp(state.health - .11, 0, 1);
+        if(kind === "bad") state.health = clamp(state.health - (mob ? .010 : .018), 0, 1);
+        if(kind === "miss") state.health = clamp(state.health - (mob ? .055 : .11), 0, 1);
     }
     if(kind !== "miss"){
         state.receptorFx[lane] = { time: performance.now() / 1000, lane };
@@ -2346,26 +2350,42 @@ function judge(side, kind, lane, char){
     }
     feed(side, label, color); pose(char, lane % 4, kind === "miss" ? "miss" : "hit");
 }
+// Hit windows: on mobile, touch hardware + render throttle adds ~80ms of
+// unavoidable latency. Widening the windows by that much means perfect hits
+// stay perfect instead of registering as bad/miss.
+function inputLatencyComp() { return (state.settings && state.settings.mobile) ? 0.085 : 0; }
+function hitWinPerfect() { return 0.045 + inputLatencyComp(); }
+function hitWinGood()    { return 0.09  + inputLatencyComp(); }
+function hitWinBad()     { return 0.155 + inputLatencyComp(); }
+function missWin()       { return 0.16  + inputLatencyComp(); }
 function handlePress(lane){
     if(!state.playing || !state.chart) return;
     const t = songTime(); const side = lane < 4 ? "opp" : "player";
-    if(side === "opp" && state.mode !== "versus") return;
+    if(side === "opp" && state.mode !== "versus" && state.mode !== "online") return;
     let best = null, bestDiff = Infinity;
+    const badWin = hitWinBad();
     for(const n of state.chart.notes){
         if(n.judged || n.side !== side || n.lane !== lane) continue;
         const d = Math.abs(n.time - t); if(d < bestDiff){ bestDiff = d; best = n; }
         if(n.time - t > .2) break;
     }
-    if(!best || bestDiff > .155) return;
+    if(!best || bestDiff > badWin) return;
     best.judged = true; best.played = true; best.hit = true;
     if(isHoldNote(best)){
         best.holdActive = true;
         best.holdDone = false;
         best.played = false;
     }
-    if(bestDiff <= .045) judge(side, "perfect", lane, best.character); else if(bestDiff <= .09) judge(side, "good", lane, best.character); else judge(side, "bad", lane, best.character);
+    if(bestDiff <= hitWinPerfect()) judge(side, "perfect", lane, best.character);
+    else if(bestDiff <= hitWinGood()) judge(side, "good", lane, best.character);
+    else judge(side, "bad", lane, best.character);
 }
 function handleMisses(t){
+    // Lag spike grace: the previous frame stalled >150ms. Skip miss judgments
+    // this frame so notes that scrolled past during the stutter don't all
+    // register as miss in one cascade.
+    if (window.__lagSpikeGrace) return;
+    const missCutoff = missWin();
     for(const n of state.chart.notes){
         if(n.judged) continue;
         if(n.side === "opp" && state.mode === "solo" && t >= n.time){
@@ -2379,7 +2399,7 @@ function handleMisses(t){
             pose(n.character, n.lane % 4, "hit");
             continue;
         }
-        if(t > n.time + .16){ n.judged = true; n.played = true; judge(n.side, "miss", n.lane, n.character); }
+        if(t > n.time + missCutoff){ n.judged = true; n.played = true; judge(n.side, "miss", n.lane, n.character); }
     }
 }
 function updateHoldNotes(t){
@@ -2803,6 +2823,10 @@ function drawHitGlows(){
 }
 function frame(now){
     const dt = (now - state.lastFrame) / 1000; state.lastFrame = now; const preview = now / 1000; setRenderQuality(ctx); ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Lag-spike grace: if the previous frame took >150ms (a real stutter), skip
+    // miss judgments for THIS frame so notes that scrolled past during the
+    // stutter aren't auto-missed before the player has a chance to hit them.
+    window.__lagSpikeGrace = dt > 0.15;
     // screen shake
     const shakeAge = now / 1000 - state.shake.time;
     if(shakeAge < 0.15 && shakeAge >= 0){
