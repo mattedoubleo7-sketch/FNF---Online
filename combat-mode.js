@@ -1221,10 +1221,19 @@
           target.zoom = Math.max(target.zoom, 1.9 + notBad * 0.22);
         }
       }
-      const lerp = 1 - Math.pow(0.001, Math.max(0, dt || 0.016));
-      combatState.cameraCurrent.x += (target.x - combatState.cameraCurrent.x) * lerp;
-      combatState.cameraCurrent.y += (target.y - combatState.cameraCurrent.y) * lerp;
-      combatState.cameraCurrent.zoom += (target.zoom - combatState.cameraCurrent.zoom) * lerp;
+      // Camera smoothing - exponential lerp parameterised so per-frame catch-up
+      // is a fixed FRACTION of the remaining distance per unit time, framerate
+      // independent. Higher base = slower / smoother. Was 0.001 (very snappy,
+      // ~10% catch-up per 60fps frame). New rates:
+      //   pos  -> ~4% per frame  (smooth glide between opp/player/both targets)
+      //   zoom -> ~3% per frame  (zoom changes feel less jarring than pans
+      //                            so we soften them more)
+      const dtClamped = Math.max(0, dt || 0.016);
+      const posLerp = 1 - Math.pow(0.08, dtClamped);
+      const zoomLerp = 1 - Math.pow(0.12, dtClamped);
+      combatState.cameraCurrent.x += (target.x - combatState.cameraCurrent.x) * posLerp;
+      combatState.cameraCurrent.y += (target.y - combatState.cameraCurrent.y) * posLerp;
+      combatState.cameraCurrent.zoom += (target.zoom - combatState.cameraCurrent.zoom) * zoomLerp;
       state.camera.focusX = combatState.cameraCurrent.x;
       state.camera.focusY = combatState.cameraCurrent.y;
       state.camera.zoom = combatState.cameraCurrent.zoom;
