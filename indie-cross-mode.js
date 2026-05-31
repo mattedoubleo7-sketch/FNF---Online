@@ -1630,6 +1630,10 @@
           note.played = true;
           continue;
         }
+        if (note.side === "opp" && state.mode === "solo") {
+          if (typeof sustainTick === "function") sustainTick(note, t);
+          continue;
+        }
         if (!controlsSide(note.side)) continue;
         if (t > Number(note.time || 0) + 0.09 && !state.keysDown[note.lane]) {
           note.holdDone = true;
@@ -1637,6 +1641,8 @@
           judge(note.side, "miss", note.lane, note.character);
           emitImportedJudgment(note, "miss", 0.16);
           if (note.specialType === "orangeBone") damageLocal(0.08, true);
+        } else if (typeof sustainTick === "function") {
+          sustainTick(note, t);
         }
       }
     };

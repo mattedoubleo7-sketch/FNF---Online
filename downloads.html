@@ -728,8 +728,8 @@ body.unlocked .needsTesterProxy { display: none; }
   <img src="assets/icon.ico" alt="Silly Billy app icon">
   <div>
     <span>New update</span>
-    <strong>Silly Billy</strong>
-    <small>Test of Time chart, spikes-bf, mobile + console support, speed lines, flashback cutscene.</small>
+    <strong>Hold notes</strong>
+    <small>Universal hold-note behavior, original hold skins, and Combat polish.</small>
   </div>
 </aside>
 <div class="page">
@@ -738,7 +738,7 @@ body.unlocked .needsTesterProxy { display: none; }
     <div>
       <div class="kicker"><span class="liveDot"></span> Live build updated</div>
       <div class="titleWrap"><h1 data-text="FNF Onliine">FNF Onliine</h1></div>
-      <p>This is the download portal for the browser and app builds. Browser play is the easiest route for friends because it avoids Windows SmartScreen warnings on the unsigned `.exe`. The newest build is the <strong>Silly Billy</strong> drop — Test of Time chart and instrumental retargeted into the Silly Billy slot, the pixel BF in the pixel area, spikes-bf opponent in the shrink phase, a flashback cutscene on the final stretch, speed lines after "Count Your Seconds!", and full mobile + gamepad support across every song.</p>
+      <p>This is the download portal for the browser and app builds. Browser play is the easiest route for friends because it avoids Windows SmartScreen warnings on the unsigned `.exe`. The newest build adds <strong>universal hold-note behavior</strong> on top of the Combat / Wii Funkin polish: hold notes now keep receptors and singers active across the game while every song keeps its own hold-note skin.</p>
       <div class="actions">
         <a class="btn primary needsTester" href="/play">Play Online In Browser</a>
         <a class="btn ghost needsTester" href="/offline">Play Offline In Browser</a>
@@ -762,7 +762,8 @@ body.unlocked .needsTesterProxy { display: none; }
       <h3>Tester Vault</h3>
       <p>Welcome, tester. You can now launch the game and download the desktop apps. These builds may be unstable — report bugs against the latest build only.</p>
       <ul>
-        <li>Latest Silly Billy build with Test of Time chart, spikes-bf, flashback cutscene, speed lines, and power-50 drain.</li>
+        <li>Latest hold-note pass: all songs use the fixed sustain behavior while keeping their own hold-note skins.</li>
+        <li>Silly Billy build with Test of Time chart, spikes-bf, flashback cutscene, speed lines, and power-50 drain.</li>
         <li>Mobile + Console toggles in Settings — touch buttons + Xbox/PlayStation/generic gamepad support.</li>
         <li>Experimental: set <code>window.__sillySpeedLinesDebug = true</code> in DevTools to tweak speed-lines intensity at runtime.</li>
         <li>Override the gamepad mapping with <code>localStorage.fnfConsoleMap</code> = JSON map of <code>{buttonIndex:lane}</code>.</li>
@@ -773,15 +774,15 @@ body.unlocked .needsTesterProxy { display: none; }
   <section class="statsRow">
     <div class="statChip"><span>Newest song</span><strong>Silly Billy</strong></div>
     <div class="statChip"><span>Now supports</span><strong>Mobile + Gamepad</strong></div>
-    <div class="statChip"><span>App builds</span><strong>Refreshed</strong></div>
+    <div class="statChip"><span>Latest polish</span><strong>Hold Notes</strong></div>
     <div class="statChip"><span>Best route</span><strong>Browser</strong></div>
   </section>
 
   <section class="panel updatePanel">
     <div class="latestBox">
-      <div class="version">Update log - 2026.05.29</div>
-      <h2>Silly Billy Drop</h2>
-      <p>Silly Billy now plays the Test of Time chart and instrumental against the original Silly Billy vocals. The shrink phase, pixel area, flashback cutscene, and life-drain escalation are all wired up. Mobile touch controls and console / gamepad support were added to every song.</p>
+      <div class="version">Update log - 2026.05.31</div>
+      <h2>Universal Hold Notes</h2>
+      <p>Hold notes now work consistently across the full setlist: sustained notes keep the receptor lit, keep the singer in the held pose, score sustain ticks, and still use each song's existing hold-note skin.</p>
       <div class="actions">
         <a class="btn primary needsTester" href="/play">Jump Into Online</a>
         <a class="btn secondary needsTester" href="/offline">Try Offline</a>
@@ -790,6 +791,10 @@ body.unlocked .needsTesterProxy { display: none; }
     <div class="logList">
       <div class="logItem">
         <div class="logDate">Latest</div>
+        <div><div class="logTitle">Universal hold-note behavior</div><p>Sustains now run through one shared hold system for every song. One Hit and Shimmy keep the old Challenge Edd hold-note skin, Perseverance keeps its default/pixel sustain skins, and each chart keeps its own visuals.</p></div>
+      </div>
+      <div class="logItem">
+        <div class="logDate">Previous</div>
         <div><div class="logTitle">Silly Billy retarget</div><p>Test of Time chart + Inst.ogg now run inside the Silly Billy slot against Silly Billy's own vocals. Lyric timing, shrink/unshrink, mirror break, and the SO_STAY cutscene were all re-anchored to the new chart.</p></div>
       </div>
       <div class="logItem">
@@ -846,7 +851,7 @@ body.unlocked .needsTesterProxy { display: none; }
           <h3>Online App</h3>
           <p>Packaged desktop app for online play. It has the current release files and connects to the hosted online game.</p>
           <div class="actions">
-            <a class="btn primary needsTester" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/ONLINE/FNF-Browser-Jam-1.0.0-portable.exe?cache=20260529s">Download Online App</a>
+            <a class="btn primary needsTester" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/ONLINE/FNF-Browser-Jam-1.0.0-portable.exe?cache=20260531d">Download Online App</a>
           </div>
         </div>
         <div class="dlBlock">
@@ -885,7 +890,7 @@ body.unlocked .needsTesterProxy { display: none; }
           <h3>Offline App</h3>
           <p>Packaged offline download with the current local-play build and bundled assets.</p>
           <div class="actions">
-            <a class="btn primary needsTester" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/fnf/FNF-Browser-Jam-offline-1.0.0-portable.exe?cache=20260529s">Download Offline App</a>
+            <a class="btn primary needsTester" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/fnf/FNF-Browser-Jam-offline-1.0.0-portable.exe?cache=20260531d">Download Offline App</a>
           </div>
         </div>
         <div class="dlBlock">
@@ -921,7 +926,8 @@ body.unlocked .needsTesterProxy { display: none; }
       <div class="songTile"><strong>Ballistic</strong><span>Whitty alley import with the hard chart, real split audio, crazy Whitty sprites, camera hits, flashes, shakes, smoke, and full-stage VFX.</span><div class="tagRow"><span class="tag">Whitty</span><span class="tag">VFX</span></div></div>
       <div class="songTile"><strong>Sporting</strong><span>Original VS Matt hard chart with 1.5x scroll and boxing ring layout.</span><div class="tagRow"><span class="tag">Matt</span><span class="tag">Hard</span></div></div>
       <div class="songTile"><strong>Boxing Match</strong><span>Real chart, paid boxer sprites, and boxing mechanics.</span><div class="tagRow"><span class="tag">Mechanics</span><span class="tag">Boxing</span></div></div>
-      <div class="songTile"><strong>Combat</strong><span>Wii Funkin hard chart, sword BF, rock stage, faster scroll, and insane-mode style VFX.</span><div class="tagRow"><span class="tag">VFX</span></div></div>
+      <div class="songTile"><strong>Combat</strong><span>Wii Funkin hard chart, sword BF, rock stage, faster scroll, Wiik Z positioning, and insane-mode style VFX.</span><div class="tagRow"><span class="tag">VFX</span><span class="tag">Wiik Z</span></div></div>
+      <div class="songTile"><strong>One Hit</strong><span>Wii Funkin import with the original hard chart, Combat's rock stage, shader bursts, moving rock space section, and Challenge Edd hold-note skin.</span><div class="tagRow"><span class="tag">Wii Funkin</span><span class="tag">Hold Notes</span></div></div>
       <div class="songTile"><strong>Shimmy</strong><span>Wii Funkin import — original hard chart, real split audio, Combat's 3D stage, modchart shader pulses, and the "Not bad, kid" dialogue bloom.</span><div class="tagRow"><span class="tag hot">NEW</span><span class="tag">Wii Funkin</span><span class="tag">Modchart</span></div></div>
       <div class="songTile"><strong>Perseverance</strong><span>Dustin stage swap with dodge gameplay and blaster sequence.</span><div class="tagRow"><span class="tag">Dodge</span><span class="tag">Sans</span></div></div>
       <div class="songTile"><strong>Broken Reality</strong><span>Cutscenes, swaps, drain, attack prompts, scroll flips, and hall VFX.</span><div class="tagRow"><span class="tag">Dustin</span><span class="tag">Mechanics</span></div></div>
@@ -933,7 +939,7 @@ body.unlocked .needsTesterProxy { display: none; }
     </div>
   </section>
 
-  <div class="footer">FNF Onliine download portal - Silly Billy build - browser recommended, app builds refreshed</div>
+  <div class="footer">FNF Onliine download portal - universal hold-note build - browser recommended, app builds refreshed</div>
 </div>
 
 <script>

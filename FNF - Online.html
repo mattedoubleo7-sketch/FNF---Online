@@ -1342,8 +1342,8 @@ const SONGS = {
     sporting:{ title:"Sporting", subtitle:"Original hard chart with 1.5x scroll", diff:"Hard (Original Chart)", tempo:300, root:45, scale:[0,2,3,5,7,8,10], prog:[0,5,3,7], scroll:920, seed:29, introBeats:0, outroBeats:4, palette:["#0f1422","#1b2f46","#314f74","#0b0e16","#4de3ff","#ff9d42"], blurb:"Imported from the original VS Matt Sporting hard chart with the real instrumental and vocals at normal speed on the boxing ring stage.", chartSource:"sporting"},
     boxingMatch:{ title:"Boxing Match", subtitle:"Original VS Matt chart", diff:"Normal (Original Chart)", tempo:339, root:45, scale:[0,2,3,5,7,8,10], prog:[0,5,3,7], scroll:760, seed:31, introBeats:0, outroBeats:4, palette:["#0f1422","#1b2f46","#314f74","#0b0e16","#4de3ff","#ff9d42"], blurb:"Imported from the original VS Matt Boxing Match chart with the real instrumental and vocals on the boxing ring, while keeping the Sporting noteskins.", chartSource:"boxingMatch"},
     combat:{ title:"Combat", subtitle:"Wii Funkin hard chart", diff:"Hard (Original Chart)", tempo:150, root:45, scale:[0,2,3,5,7,8,10], prog:[0,5,3,7], scroll:1125, seed:41, introBeats:0, outroBeats:4, palette:["#0b1021","#202a58","#6573d0","#090b13","#dfe4ff","#8fb8ff"], blurb:"Imported from Wii Funkin with the original Combat hard chart, real instrumental, vocals, and faster scroll.", chartSource:"combat"},
-    oneHit:{ title:"One Hit", subtitle:"Wii Funkin hard chart", diff:"Hard (Original Chart)", tempo:342, root:45, scale:[0,2,3,5,7,8,10], prog:[0,5,3,7], scroll:1125, seed:43, introBeats:0, outroBeats:4, palette:["#080916","#251b4c","#745bba","#08070d","#f2ecff","#ffb86b"], blurb:"Imported from Wii Funkin with the original One Hit hard chart, real instrumental, vocals, Combat's 3D stage, and One Hit's extra shader bursts.", chartSource:"oneHit"},
-    shimmy:{ title:"Shimmy", subtitle:"Wii Funkin hard chart", diff:"Hard (Original Chart)", tempo:167, root:45, scale:[0,2,3,5,7,8,10], prog:[0,5,3,7], scroll:1125, seed:45, introBeats:0, outroBeats:4, palette:["#071124","#1f315b","#74a0ff","#070913","#eaf3ff","#8bd6ff"], blurb:"Imported from Wii Funkin with the original Shimmy hard chart, real instrumental, vocals, Combat's 3D stage, modchart shader pulses, and the Not bad, kid dialogue bloom.", chartSource:"shimmy"},
+    oneHit:{ title:"One Hit", subtitle:"Wii Funkin hard chart", diff:"Hard (Original Chart)", tempo:342, root:45, scale:[0,2,3,5,7,8,10], prog:[0,5,3,7], scroll:1125, seed:43, introBeats:0, outroBeats:4, palette:["#080916","#251b4c","#745bba","#08070d","#f2ecff","#ffb86b"], blurb:"Imported from Wii Funkin with the original One Hit hard chart, real instrumental, vocals, Combat's 3D stage, One Hit's extra shader bursts, and Challenge Edd hold-note skin.", chartSource:"oneHit"},
+    shimmy:{ title:"Shimmy", subtitle:"Wii Funkin hard chart", diff:"Hard (Original Chart)", tempo:167, root:45, scale:[0,2,3,5,7,8,10], prog:[0,5,3,7], scroll:1125, seed:45, introBeats:0, outroBeats:4, palette:["#071124","#1f315b","#74a0ff","#070913","#eaf3ff","#8bd6ff"], blurb:"Imported from Wii Funkin with the original Shimmy hard chart, real instrumental, vocals, Combat's 3D stage, modchart shader pulses, Challenge Edd hold-note skin, and the Not bad, kid dialogue bloom.", chartSource:"shimmy"},
     perseverance:{ title:"Perseverance", subtitle:"Friday Night Dustin hard chart", diff:"Hard (Original Chart)", tempo:120, root:41, scale:[0,2,3,5,7,8,10], prog:[0,5,3,6], scroll:810, seed:33, introBeats:0, outroBeats:4, palette:["#06080d","#182332","#34455b","#0b0d12","#cfe7ff","#7fb7ff"], blurb:"Imported from Friday Night Dustin with the original hard chart, ruins exit stage art, Sans sprites, pixel section, and gaster blaster dodge mechanic.", chartSource:"perseverance"},
     brokenReality:{ title:"Broken Reality", subtitle:"Friday Night Dustin hard chart", diff:"Hard (Original Chart)", tempo:120, root:40, scale:[0,2,3,5,7,8,10], prog:[0,5,3,6], scroll:780, seed:37, introBeats:0, outroBeats:4, palette:["#04050a","#16162a","#2f3251","#08090f","#f2d6ff","#ff5a5a"], blurb:"Imported from Friday Night Dustin with the original hard chart, cutscene videos, hall stage, drain, attack prompt, scroll flips, and red-phase Papyrus swap.", chartSource:"brokenReality"},
 };
@@ -1557,12 +1557,14 @@ function sportingCrowdFrame(t){
 }
 function sportingPose(kind, t){
     if(kind === "gf") return { anim:"dance", elapsed:t * 1.2, fps:12, loop:true };
-    const pose = state.poses[kind === "boyfriend" ? "player" : kind];
-    const dir = sportingLaneKey(pose.lane || 0);
-    const age = performance.now() / 1000 - pose.time;
+    const charKey = kind === "boyfriend" ? "player" : kind;
+    const pose = state.poses[charKey];
+    const held = activeHoldNoteForCharacter(charKey, t);
+    const dir = sportingLaneKey((held ? held.lane : pose.lane) || 0);
+    const age = held ? Math.max(0, t - held.time) : performance.now() / 1000 - pose.time;
     const def = kind === "boyfriend" ? window.SPORTING_SPRITES.boyfriend : window.SPORTING_SPRITES.matt;
     const missAnim = dir + "Miss";
-    const anim = pose.kind === "miss" && def.animations[missAnim] && def.animations[missAnim].length ? missAnim : dir;
+    const anim = !held && pose.kind === "miss" && def.animations[missAnim] && def.animations[missAnim].length ? missAnim : dir;
     const frames = def.animations[anim];
     const animFps = kind === "matt" ? 22 : 24;
     if(age >= 0 && age < sportingAnimDuration(frames, animFps)){
@@ -1906,15 +1908,36 @@ function drawAtlasStretchVertical(image, frame, x, y, width, height, alpha=1){
 }
 function isHoldNote(note){ return (note.sLen || 0) > 0.05; }
 function holdEndTime(note){ return note.time + Math.max(0, note.sLen || 0); }
-function perseveranceHeldNote(char, t){
+function activeHoldNoteForCharacter(char, t){
     if(!state.chart) return null;
     for(const n of state.chart.notes){
+        if(n.time > t + 0.08) break;
         if(!n.holdActive || n.holdDone || !isHoldNote(n) || n.character !== char) continue;
-        if(t < n.time || t > holdEndTime(n)) continue;
+        if(t < n.time - 0.02 || t > holdEndTime(n) + 0.02) continue;
         if(n.side === "player" && t > n.time + 0.09 && !state.keysDown[n.lane]) continue;
+        if(n.side === "opp" && state.mode !== "solo" && t > n.time + 0.09 && !state.keysDown[n.lane]) continue;
         return n;
     }
     return null;
+}
+function holdTickInterval(){
+    const bpm = Number(state.chart?.bpm || state.currentSong?.tempo || 150) || 150;
+    return Math.max(0.045, Math.min(0.12, 60 / Math.max(1, bpm) / 4));
+}
+function sustainTick(note, t){
+    const interval = holdTickInterval();
+    if(note._lastHoldTick != null && t - note._lastHoldTick < interval) return;
+    note._lastHoldTick = t;
+    state.receptorFx[note.lane] = { time: performance.now() / 1000, lane: note.lane };
+    pose(note.character, note.lane % 4, "hit");
+    const stats = note.side === "player" ? state.stats.player : state.stats.opp;
+    if(stats) stats.score += 6;
+    if(note.side === "player"){
+        state.health = clamp(state.health + 0.002, 0, 1);
+    }
+}
+function perseveranceHeldNote(char, t){
+    return activeHoldNoteForCharacter(char, t);
 }
 function drawPerseveranceSustain(note, x, topY, tailY, alpha=1){
     if(!isHoldNote(note) || tailY <= topY + 12) return;
@@ -2375,6 +2398,7 @@ function handlePress(lane){
         best.holdActive = true;
         best.holdDone = false;
         best.played = false;
+        best._lastHoldTick = t;
     }
     if(bestDiff <= hitWinPerfect()) judge(side, "perfect", lane, best.character);
     else if(bestDiff <= hitWinGood()) judge(side, "good", lane, best.character);
@@ -2394,6 +2418,7 @@ function handleMisses(t){
                 n.holdActive = true;
                 n.holdDone = false;
                 n.played = false;
+                n._lastHoldTick = t;
             }
             if(!isImportedSong(state.currentSong)) voice(state.audio.ctx.currentTime, "opp", n.lane % 4, .95, n.character);
             pose(n.character, n.lane % 4, "hit");
@@ -2412,11 +2437,16 @@ function updateHoldNotes(t){
             n.played = true;
             continue;
         }
-        if(n.side === "opp") continue;
+        if(n.side === "opp" && state.mode === "solo"){
+            sustainTick(n, t);
+            continue;
+        }
         if(t > n.time + 0.09 && !state.keysDown[n.lane]){
             n.holdDone = true;
             n.played = true;
             judge(n.side, "miss", n.lane, n.character);
+        } else {
+            sustainTick(n, t);
         }
     }
 }
@@ -2536,7 +2566,7 @@ function bg(song, t){
 }
 function speaker(x,y,accent){ ctx.save(); ctx.translate(x,y); ctx.fillStyle = "rgba(8,10,18,0.9)"; ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.roundRect(-84,-124,168,248,22); ctx.fill(); ctx.stroke(); [-58,22].forEach(off => { ctx.fillStyle = "#111725"; ctx.beginPath(); ctx.arc(0,off,42,0,Math.PI*2); ctx.fill(); ctx.strokeStyle = accent + "44"; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(0,off,28,0,Math.PI*2); ctx.stroke(); }); ctx.restore(); }
 function actor(x,y,c,t){
-    const p = state.poses[c.id], dt = performance.now() / 1000 - p.time, hitRaw = dt < .2 ? 1 - dt / .2 : 0, hit = hitRaw * hitRaw, bop = Math.sin(t * 6 + c.phase) * 5, dx = p.lane === 0 ? -10 : p.lane === 3 ? 10 : 0, dy = p.lane === 2 ? -18 : p.lane === 1 ? 14 : 0;
+    const p = state.poses[c.id], held = activeHoldNoteForCharacter(c.id, t), lane = held ? held.lane % 4 : p.lane, dt = performance.now() / 1000 - p.time, hitRaw = held ? 0.72 : dt < .2 ? 1 - dt / .2 : 0, hit = hitRaw * hitRaw, bop = Math.sin(t * 6 + c.phase) * 5, dx = lane === 0 ? -10 : lane === 3 ? 10 : 0, dy = lane === 2 ? -18 : lane === 1 ? 14 : 0;
     ctx.save(); ctx.translate(x + dx * hit, y + bop - dy * hit); ctx.scale(c.scale, c.scale);
     ctx.fillStyle = "rgba(0,0,0,0.26)"; ctx.beginPath(); ctx.ellipse(0,72,54,16,0,0,Math.PI*2); ctx.fill();
     ctx.fillStyle = c.body; ctx.beginPath(); ctx.roundRect(-28,-8,56,74,20); ctx.fill();
@@ -2912,7 +2942,7 @@ function startSong(id=state.selectedSong){
         state.nextStepTime = state.songStart;
         state.playing = true;
     }
-    state.feeds.player.time = -10; state.feeds.opp.time = -10; Object.values(state.poses).forEach(p => { p.time = -10; p.kind = "hit"; }); state.receptorFx.forEach(fx => fx.time = -10); state.perseverance = { canDodge:false, prompt:false, dodging:false, dodged:false, resolved:false, dodgeStart:-10, flashTime:-10, gfAlpha:0 }; state.camera = { zoom: 1, focusX: canvas.width / 2, focusY: canvas.height * 0.45, sideTime: 0, lastSide: "both", highwayX: 0, highwayY: 0 }; ui.p1Box.style.display = state.mode === "versus" ? "block" : "none"; ui.songTitle.textContent = state.currentSong.title; ui.songSub.textContent = state.currentSong.subtitle; ui.statusText.textContent = "Get ready"; ui.statusSub.textContent = state.currentSong.chartSource === "sporting" ? "Sporting is using the original hard chart, real vocals, and 1.5x scroll on the boxing ring." : state.currentSong.chartSource === "boxingMatch" ? "Boxing Match is using the imported VS Matt chart with the real instrumental and vocals on the boxing ring." : state.currentSong.chartSource === "combat" ? "Combat is using the original Wii Funkin hard chart with the real instrumental and vocals." : state.currentSong.chartSource === "oneHit" ? "One Hit is using the original Wii Funkin hard chart with Combat's stage and the extra shader bursts from the modchart." : state.currentSong.chartSource === "shimmy" ? "Shimmy is using the original Wii Funkin hard chart with Combat's 3D stage, shader pulses, and Matt's Not bad, kid line." : state.currentSong.chartSource === "perseverance" ? "Perseverance is using the original hard chart, split vocals, pixel section, and dodge mechanic." : "Song starts on the next phrase. Hit right-side notes in solo, or both lanes in versus."; ui.timer.textContent = `0:00 / ${formatTime(state.chart.totalTime)}`; ui.menu.classList.remove("show"); ui.settings.classList.remove("show"); ui.resultsWrap.classList.remove("show");
+    state.feeds.player.time = -10; state.feeds.opp.time = -10; Object.values(state.poses).forEach(p => { p.time = -10; p.kind = "hit"; }); state.receptorFx.forEach(fx => fx.time = -10); state.perseverance = { canDodge:false, prompt:false, dodging:false, dodged:false, resolved:false, dodgeStart:-10, flashTime:-10, gfAlpha:0 }; state.camera = { zoom: 1, focusX: canvas.width / 2, focusY: canvas.height * 0.45, sideTime: 0, lastSide: "both", highwayX: 0, highwayY: 0 }; ui.p1Box.style.display = state.mode === "versus" ? "block" : "none"; ui.songTitle.textContent = state.currentSong.title; ui.songSub.textContent = state.currentSong.subtitle; ui.statusText.textContent = "Get ready"; ui.statusSub.textContent = state.currentSong.chartSource === "sporting" ? "Sporting is using the original hard chart, real vocals, and 1.5x scroll on the boxing ring." : state.currentSong.chartSource === "boxingMatch" ? "Boxing Match is using the imported VS Matt chart with the real instrumental and vocals on the boxing ring." : state.currentSong.chartSource === "combat" ? "Combat is using the original Wii Funkin hard chart with the real instrumental and vocals." : state.currentSong.chartSource === "oneHit" ? "One Hit is using the original Wii Funkin hard chart with Combat's stage, the extra shader bursts from the modchart, and Challenge Edd hold-note skin." : state.currentSong.chartSource === "shimmy" ? "Shimmy is using the original Wii Funkin hard chart with Combat's 3D stage, shader pulses, Challenge Edd hold-note skin, and Matt's Not bad, kid line." : state.currentSong.chartSource === "perseverance" ? "Perseverance is using the original hard chart, split vocals, pixel section, and dodge mechanic." : "Song starts on the next phrase. Hit right-side notes in solo, or both lanes in versus."; ui.timer.textContent = `0:00 / ${formatTime(state.chart.totalTime)}`; ui.menu.classList.remove("show"); ui.settings.classList.remove("show"); ui.resultsWrap.classList.remove("show");
 }
 function keydown(e){
     const key = e.key.toLowerCase();
@@ -2934,13 +2964,7 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 </script>
 <script src="online-mode.js?v=20260530e"></script>
 <script src="boxing-fight-mode.js?v=20260322-stage6"></script>
-<script>
-// Matt sing pose lift (pixels at scale 1, negative = up).
-// Tweak this number to move matt's sing animations up/down on the rock.
-// Examples: -50 = up by 50, 0 = no lift (foot anchor only), 30 = down 30.
-window.MATT_SING_LIFT = -50;
-</script>
-<script src="combat-mode.js?v=20260530o"></script>
+<script src="combat-mode.js?v=20260531d"></script>
 <script src="ballistic-mode.js?v=20260524i"></script>
 <script src="boxing-match-wg-mode.js?v=20260515a"></script>
 <script src="broken-reality-mode.js"></script>
@@ -2949,7 +2973,7 @@ window.MATT_SING_LIFT = -50;
 <script src="challenge-edd-mode.js"></script>
 <script src="fallen-stars-mode.js"></script>
 <script src="genocide-mode.js?v=genocide-v10"></script>
-<script src="indie-cross-mode.js?v=indiecross-v18"></script>
+<script src="indie-cross-mode.js?v=indiecross-v19"></script>
 <script src="overthrone-mode.js?v=20260530c"></script>
 <script src="silly-billy-mode.js?v=20260530j"></script>
 <script src="playback-stability-fix.js?v=20260524a"></script>

@@ -123,6 +123,25 @@
     ctx.restore();
   }
 
+  const WIIK_Z_PARALLAX_BASE = { x: 640, y: 448 };
+  function combatCameraParallaxPoint(x, y, scrollX = 1, scrollY = scrollX){
+    const camZ = Number(state.camera?.zoom || 1);
+    if(window.REDUCE_MOTION || !Number.isFinite(camZ) || Math.abs(camZ - 1) < 0.001) return { x, y };
+    const focusX = Number.isFinite(state.camera?.focusX) ? state.camera.focusX : WIIK_Z_PARALLAX_BASE.x;
+    const focusY = Number.isFinite(state.camera?.focusY) ? state.camera.focusY : WIIK_Z_PARALLAX_BASE.y;
+    const layerFocusX = WIIK_Z_PARALLAX_BASE.x + (focusX - WIIK_Z_PARALLAX_BASE.x) * scrollX;
+    const layerFocusY = WIIK_Z_PARALLAX_BASE.y + (focusY - WIIK_Z_PARALLAX_BASE.y) * scrollY;
+    return {
+      x: x + (layerFocusX - focusX) * (1 - camZ) / camZ,
+      y: y + (layerFocusY - focusY) * (1 - camZ) / camZ
+    };
+  }
+
+  function drawImageParallax(key, x, y, scale = 1, alpha = 1, flipX = false, scrollX = 1, scrollY = scrollX){
+    const p = combatCameraParallaxPoint(x, y, scrollX, scrollY);
+    drawImage(key, p.x, p.y, scale, alpha, flipX);
+  }
+
   function wiiProjectionScale(z){
     const distance = Math.max(1, z - WII_COMBAT_DEPTH.eyeZ);
     return WII_COMBAT_DEPTH.focalLength / (WII_COMBAT_DEPTH.focalLength + distance);
@@ -218,16 +237,42 @@
     };
   }
 
-  function currentFrame(spriteName, characterKey, t){
+  function combatHeldNote(characterKey, t){
+    if(!state.chart?.notes || typeof isHoldNote !== "function" || typeof holdEndTime !== "function") return null;
+    for(const n of state.chart.notes){
+      if(n.time > t + 0.08) break;
+      if(!n.holdActive || n.holdDone || !isHoldNote(n) || n.character !== characterKey) continue;
+      if(t < n.time - 0.02 || t > holdEndTime(n) + 0.02) continue;
+      if(n.side === "player" && t > n.time + 0.09 && !state.keysDown[n.lane]) continue;
+      return n;
+    }
+    return null;
+  }
+
+  function currentAnimName(spriteName, characterKey, t = 0){
     const data = window.COMBAT_VISUAL_DATA?.sprites?.[spriteName];
-    if(!data) return null;
     const pose = state.poses?.[characterKey] || { time: -10, lane: 1, kind: "idle" };
+    const held = combatHeldNote(characterKey, t);
+    if(held){
+      const dir = DIR[held.lane % 4] || "down";
+      return dir;
+    }
     const age = performance.now() / 1000 - (pose.time || -10);
     let anim = "idle";
     if(age < 0.42 && Number.isFinite(pose.lane)){
       const dir = DIR[pose.lane % 4] || "down";
-      anim = pose.kind === "miss" && data.animations[dir + "Miss"]?.length ? dir + "Miss" : dir;
+      anim = pose.kind === "miss" && data?.animations?.[dir + "Miss"]?.length ? dir + "Miss" : dir;
     }
+    return anim;
+  }
+
+  function currentFrame(spriteName, characterKey, t){
+    const data = window.COMBAT_VISUAL_DATA?.sprites?.[spriteName];
+    if(!data) return null;
+    const pose = state.poses?.[characterKey] || { time: -10, lane: 1, kind: "idle" };
+    const held = combatHeldNote(characterKey, t);
+    const age = held ? Math.max(0, t - held.time) : performance.now() / 1000 - (pose.time || -10);
+    const anim = currentAnimName(spriteName, characterKey, t);
     const frames = data.animations[anim]?.length ? data.animations[anim] : data.animations.idle;
     const isSinging = anim !== "idle";
     // Match the original Wii Funkin character.json fps + loop behavior:
@@ -249,63 +294,27 @@
     return (fh + fy - visibleHeight) * scale;
   }
 
-  function mattHorizontalAnchorCorrection(frame, scale){
-    const idleFrameWidth = 423;
-    const fw = frame.fw || frame.w;
-    return Math.max(0, (fw - idleFrameWidth) * 0.5 * scale);
-  }
-
-  // Per-anim drawX/drawY shifts that put matt's visible content EXACTLY where
-  // Wii Funkin's Psych engine would render it on screen, relative to the idle
-  // anchor (which is treated as 0,0 = our chosen rock position).
-  //
-  // Derivation (the math that took me five tries to get right):
-  //
-  // 1. In Psych, the sprite's padded canvas top-left lands at
-  //    (base.x - offset.x, base.y - offset.y). The visible trim sits at
-  //    (canvas + fx, canvas + fy) within that, sized (vis_w, vis_h) where
-  //    vis_w/vis_h are h/w for rotated frames (since the -90deg rotation
-  //    swaps the displayed dims).
-  // 2. So WF visible bottom Y = (base.y - offset.y) + fy + vis_h
-  //                centre X = (base.x - offset.x) + fx + vis_w/2
-  // 3. In our renderer at drawX=0/drawY=0, the visible content lands at:
-  //                bottom Y = y + (h - fh - fy) * scale   (non-rot)
-  //                bottom Y = y + (w - fh - fy) * scale   (rot; w is stored width)
-  //                centre X = x + (w - fw)/2 * scale - fx*scale (non-rot)
-  //                centre X = x + (h - fw)/2 * scale - fx*scale (rot)
-  // 4. The drawX/drawY needed to put OUR rendering at the WF visible position,
-  //    measured as a delta from idle (so idle stays at the rock at 0,0):
-  //
-  //         dx = (WF centre X delta from idle) - (our centre X delta from idle)
-  //         dy = (WF bottom Y delta from idle) - (our bottom Y delta from idle)
-  //
-  // Computed from swordmatt.json offsets + WIIK_Z_MATT.xml frame data:
-  //   idle  offset(90, -255)  fx=0    fy=-23  vis_w=416  vis_h=439  rot=no
-  //   left  offset(36, -286)  fx=-4   fy=0    vis_w=699  vis_h=501  rot=yes
-  //   down  offset(209,-336)  fx=0    fy=-11  vis_w=539  vis_h=380  rot=yes
-  //   up    offset(171,-238)  fx=0    fy=0    vis_w=557  vis_h=479  rot=yes
-  //   right offset(161,-302)  fx=-75  fy=-5   vis_w=627  vis_h=412  rot=yes
-  // Anchored by FEET (not body). Foot anchor keeps the visible bottom (matt's
-  // feet for idle, sword-tip approximation for sings) at the rock surface,
-  // and these per-anim deltas nudge each sing pose slightly UP so the body
-  // sits where you expect rather than dropping below the rock.
-  //   dx: horizontal shift from idle's screen position (small, to keep matt's
-  //        body roughly centred on the rock as the sword swings around him)
-  //   dy: NEGATIVE = up. Sings lift slightly so the body reads as "above feet"
-  //        instead of "dropped into the rock".
-  const MATT_DRAW_DELTAS = {
-    idle:  { dx:   0,  dy:   0 },
-    left:  { dx:  35,  dy: -28 },
-    down:  { dx: -15,  dy: -18 },
-    up:    { dx:  -8,  dy: -22 },
-    right: { dx: -25,  dy: -20 },
+  // Wiik Z/Psych Engine offsets from mods/characters/swordmatt.json.
+  // HaxeFlixel draws the graphic at sprite position minus offset.
+  const MATT_WIIK_Z_IDLE_FRAME = { fw: 423, fh: 462 };
+  const MATT_WIIK_Z_OFFSETS = {
+    idle: { x: 90, y: -255 },
+    left: { x: 36, y: -286 },
+    down: { x: 209, y: -336 },
+    up: { x: 171, y: -238 },
+    right: { x: 161, y: -302 }
   };
-  function mattAnimDelta(characterKey){
-    const pose = state.poses?.[characterKey];
-    if(!pose) return MATT_DRAW_DELTAS.idle;
-    const age = performance.now() / 1000 - (pose.time || -10);
-    const anim = (age < 0.42 && Number.isFinite(pose.lane)) ? (DIR[pose.lane % 4] || "down") : "idle";
-    return MATT_DRAW_DELTAS[anim] || MATT_DRAW_DELTAS.idle;
+
+  function mattWiikZDrawCorrection(frame, anim, scale){
+    const key = String(anim || "idle").replace(/Miss$/, "");
+    const idle = MATT_WIIK_Z_OFFSETS.idle;
+    const offset = MATT_WIIK_Z_OFFSETS[key] || idle;
+    const fw = frame.fw || frame.w;
+    const fh = frame.fh || frame.h;
+    return {
+      x: (idle.x - offset.x + (fw - MATT_WIIK_Z_IDLE_FRAME.fw) * 0.5) * scale,
+      y: (idle.y - offset.y + (fh - MATT_WIIK_Z_IDLE_FRAME.fh)) * scale
+    };
   }
 
   function drawCharacter(spriteName, imageKey, characterKey, x, y, scale, flipX, t, lean = 0){
@@ -319,22 +328,9 @@
     const dy = lane === 2 ? -13 : lane === 1 ? 10 : 0;
     const bob = Math.sin(t * Math.PI * 2 * 1.5) * 1.8;
     const plainSprite = spriteName === "matt";
-    const anchorFeet = spriteName === "matt";
-    // Matt sing poses lift off the rock so the body reads above the feet.
-    // The lift amount lives on window.MATT_SING_LIFT (set in the HTMLs) so
-    // it can be tweaked there without touching this file. Default -50.
-    let mattSingLift = 0;
-    if (spriteName === "matt") {
-      const pose = state.poses?.[characterKey];
-      const poseAge = performance.now() / 1000 - (pose?.time || -10);
-      const isSinging = poseAge < 0.42 && Number.isFinite(pose?.lane);
-      if (isSinging) {
-        const cfg = (typeof window !== "undefined" && Number.isFinite(window.MATT_SING_LIFT)) ? window.MATT_SING_LIFT : -50;
-        mattSingLift = cfg * scale;
-      }
-    }
-    const drawX = anchorFeet ? mattHorizontalAnchorCorrection(frame, scale) : dx * hit;
-    const drawY = (anchorFeet ? atlasFootCorrection(frame, scale) : bob + dy * hit) + mattSingLift;
+    const mattDraw = plainSprite ? mattWiikZDrawCorrection(frame, currentAnimName(spriteName, characterKey, t), scale) : null;
+    const drawX = mattDraw ? mattDraw.x : dx * hit;
+    const drawY = mattDraw ? mattDraw.y : bob + dy * hit;
     ctx.save();
     if(!plainSprite){
       ctx.shadowColor = "rgba(118,180,255,0.46)";
@@ -374,13 +370,16 @@
     const maxFrame = Math.max(1, ...mainFrames.map(frame => (frame.I || 0) + (frame.DU || 1)));
     const labelStarts = mainFrames.filter(frame => frame.N).map(frame => ({ name: frame.N, start: frame.I || 0 }));
     const labels = {};
+    const labelMatrices = {};
     labelStarts.forEach((label, index) => {
       labels[label.name] = {
         start: label.start,
         end: index + 1 < labelStarts.length ? labelStarts[index + 1].start : maxFrame
       };
+      const frame = mainFrames.find(item => item.N === label.name);
+      labelMatrices[label.name] = frame?.E?.find(element => element.SI)?.SI?.M3D || null;
     });
-    combatState.bfRuntime = { data, symbols, labels, maxFrame };
+    combatState.bfRuntime = { data, symbols, labels, labelMatrices, maxFrame };
     return combatState.bfRuntime;
   }
 
@@ -442,26 +441,62 @@
     });
   }
 
-  function combatBfAnimLabel(){
+  const BF_WIIK_Z_SING_STEPS = 4;
+  function combatBfSingWindow(){
+    const bpm = Number(state.chart?.bpm || state.currentSong?.tempo || 150) || 150;
+    const stepSeconds = 60 / Math.max(1, bpm) / 4;
+    return Math.max(0.16, Math.min(0.42, stepSeconds * BF_WIIK_Z_SING_STEPS));
+  }
+
+  function combatBfAnimLabel(t = 0){
+    const held = combatHeldNote("player", t);
+    if(held){
+      const dir = DIR[held.lane % 4] || "down";
+      return dir;
+    }
     const pose = state.poses?.player || { time: -10, lane: 1, kind: "idle" };
     const age = performance.now() / 1000 - (pose.time || -10);
-    if(age >= 0.42 || !Number.isFinite(pose.lane)) return "idle";
+    if(age >= combatBfSingWindow() || !Number.isFinite(pose.lane)) return "idle";
     const dir = DIR[pose.lane % 4] || "down";
     return pose.kind === "miss" ? `miss ${dir}` : dir;
+  }
+
+  function combatBfOffsetKey(label){
+    if(label === "miss left") return "leftMiss";
+    if(label === "miss down") return "downMiss";
+    if(label === "miss up") return "upMiss";
+    if(label === "miss right") return "rightMiss";
+    return label || "idle";
+  }
+
+  function combatBfOffsetResidual(rt, label){
+    const offsets = rt.data.offsets || {};
+    const idleOffset = offsets.idle || [0, 0];
+    const offset = offsets[combatBfOffsetKey(label)] || idleOffset;
+    const idleMatrix = rt.labelMatrices?.idle;
+    const labelMatrix = rt.labelMatrices?.[label] || idleMatrix;
+    const currentX = (labelMatrix?.[12] || 0) - (idleMatrix?.[12] || 0);
+    const currentY = (labelMatrix?.[13] || 0) - (idleMatrix?.[13] || 0);
+    return {
+      x: (idleOffset[0] - offset[0]) - currentX,
+      y: (idleOffset[1] - offset[1]) - currentY
+    };
   }
 
   function drawBfSwordCharacter(x, y, scale, flipX, t, lean = 0){
     const rt = combatAnimateRuntime();
     if(!rt || !imgReady(combatState.images.bfSword)) return;
-    const label = combatBfAnimLabel();
+    const label = combatBfAnimLabel(t);
     const range = rt.labels[label] || rt.labels.idle || { start: 0, end: rt.maxFrame };
     const pose = state.poses?.player || { time: -10 };
-    const age = performance.now() / 1000 - (pose.time || -10);
+    const held = combatHeldNote("player", t);
+    const age = held ? Math.max(0, t - held.time) : performance.now() / 1000 - (pose.time || -10);
     const len = Math.max(1, range.end - range.start);
     const frameOffset = label === "idle"
       ? Math.floor(t * 24) % len
       : Math.min(len - 1, Math.max(0, Math.floor(age * 24)));
     const anchor = rt.data.anchor || { centerX: -527, bottomY: 138 };
+    const residual = combatBfOffsetResidual(rt, label);
     ctx.save();
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
@@ -470,6 +505,7 @@
     ctx.translate(x, y);
     ctx.rotate(lean);
     ctx.scale(flipX ? -scale : scale, scale);
+    ctx.translate(residual.x, residual.y);
     ctx.translate(-anchor.centerX, -anchor.bottomY);
     drawAnimateTimeline(rt, rt.data.animation.AN.TL, range.start + frameOffset);
     ctx.restore();
@@ -497,6 +533,8 @@
 
   function drawCombatDust(layer, t, depth){
     const depthStyle = combatDustDepthStyle(layer, depth || combatDepth(t));
+    const scrollFactors = { far: 0.2, mid: 0.6, near: 1.4 };
+    const scroll = scrollFactors[layer] || 1;
     combatState.dust.forEach(p => {
       if(p.layer !== layer) return;
       const image = combatState.images[p.layer];
@@ -509,7 +547,8 @@
       ctx.save();
       ctx.globalAlpha = p.alpha * depthStyle.alpha;
       ctx.globalCompositeOperation = "screen";
-      ctx.translate(canvas.width * 0.5 + depthStyle.x, canvas.height * 0.58 + depthStyle.y);
+      const origin = combatCameraParallaxPoint(canvas.width * 0.5 + depthStyle.x, canvas.height * 0.58 + depthStyle.y, scroll, scroll);
+      ctx.translate(origin.x, origin.y);
       ctx.rotate(depthStyle.angle);
       ctx.scale(depthStyle.scale, depthStyle.scale);
       ctx.translate(-canvas.width * 0.5, -canvas.height * 0.58);
@@ -543,11 +582,13 @@
       const centerX = canvas.width * (spec.sx + (spec.ex - spec.sx) * p) + depth.mid * 0.16 + Math.sin(t * 1.1 + spec.delay * 3) * spec.drift * (0.25 + p);
       const centerY = canvas.height * (spec.sy + (spec.ey - spec.sy) * p) + depth.midY * 0.52 + Math.cos(t * 0.9 + spec.delay * 4) * spec.drift * 0.22;
       const scale = spec.s0 + (spec.s1 - spec.s0) * p;
+      const scroll = 0.28 + p * 0.64;
+      const pos = combatCameraParallaxPoint(centerX - image.naturalWidth * scale * 0.5, centerY - image.naturalHeight * scale * 0.5, scroll, scroll);
       queue.push({
         p,
         key: spec.key,
-        x: centerX - image.naturalWidth * scale * 0.5,
-        y: centerY - image.naturalHeight * scale * 0.5,
+        x: pos.x,
+        y: pos.y,
         scale,
         angle: spec.rot + Math.sin(t * 0.65 + spec.delay * 5) * 0.045 + p * spec.rot * 0.8,
         alpha: warmup * fadeIn * Math.max(0, fadeOut) * spec.alpha,
@@ -1031,13 +1072,13 @@
     ctx.fillStyle = "#050612";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     const depth = combatDepth(t);
-    drawImage("unknownBG", -410 + depth.far, -210 + depth.farY, 1.68 * depth.scale.far);
+    drawImageParallax("unknownBG", -410 + depth.far, -210 + depth.farY, 1.68 * depth.scale.far, 1, false, 0, 0.3);
     drawCombatDust("far", t, depth);
     if(isOneHit() && t >= ONE_HIT_MOVING_ROCK_START){
       drawOneHitBackgroundRockField(t, depth);
     } else {
-      drawImage("back4", worldX(23) + depth.mid, worldY(150) - 4 + depth.midY, worldScale(2.05) * depth.scale.mid, 0.98);
-      drawImage("back5", worldX(-458.4) + depth.near, worldY(253.6) + 4 + depth.nearY, worldScale(2.45) * depth.scale.near, 0.95);
+      drawImageParallax("back4", worldX(23) + depth.mid, worldY(150) - 4 + depth.midY, worldScale(2.05) * depth.scale.mid, 0.98, false, 0.4, 0.4);
+      drawImageParallax("back5", worldX(-458.4) + depth.near, worldY(253.6) + 4 + depth.nearY, worldScale(2.45) * depth.scale.near, 0.95, false, 0.6, 0.6);
     }
     drawCombatDust("mid", t, depth);
     drawCombatDepthWash(depth);
@@ -1061,8 +1102,8 @@
     const bfRockFeetY = worldY(924) + 132;
     drawImageRotated("platform", leftPlatformX, leftPlatformY, platformScale, rockTilt);
     drawImageRotated("platform", rightPlatformX, rightPlatformY, platformScale, rightRockTilt, 1, true);
-    drawImage("split", worldX(0) + depth.near * 0.32, worldY(-500), worldScale(2.42), 0.88);
-    drawImage("split", worldX(2212.8) + depth.near * 0.32, worldY(-500), worldScale(2.42), 0.88, true);
+    drawImageParallax("split", worldX(0) + depth.near * 0.32, worldY(-500), worldScale(2.42), 0.88, false, 1.3, 1.3);
+    drawImageParallax("split", worldX(2212.8) + depth.near * 0.32, worldY(-500), worldScale(2.42), 0.88, true, 1.3, 1.3);
 
     const mattFeet = rotatePointAround(leftRockCenter - 22, mattRockFeetY + float, leftRockCenter, leftRockPivotY, rockTilt);
     const bfFeet = rotatePointAround(rightRockCenter + 8, bfRockFeetY - float * 0.7, rightRockCenter, rightRockPivotY, rightRockTilt);
