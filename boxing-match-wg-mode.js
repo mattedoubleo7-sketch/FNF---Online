@@ -647,31 +647,37 @@
       const bfX = 448 + Math.sin(t * 0.56 + 1.7) * 6;
       const bfY = 506 - flyBob * 0.65;
 
-      drawBeam("beamBlue", bfX - 98, bfY - 156, "rgba(40,232,255,0.98)", t, 1, {
-        length: 660,
-        nearHeight: 172,
-        farHeight: 102,
-        rise: -32,
-        phaseSpeed: 38,
+      // Flight trails - anchor each beam to its character's CENTRE and trail
+      // BEHIND the character (left, with a slight upward fade-into-distance).
+      // The wide near-end sits on the character body, narrow far-end fades
+      // into the background. Previously both beams floated 160-170px above
+      // their characters and both pointed the same direction (right), so
+      // they didn't read as flight trails.
+      drawBeam("beamBlue", bfX - 18, bfY - 20, "rgba(40,232,255,0.98)", t, -1, {
+        length: 560,
+        nearHeight: 150,
+        farHeight: 60,
+        rise: -54,
+        phaseSpeed: 110,
         textureStretch: 1.05,
         alpha: 0.96,
         textureAlpha: 0.22,
-        coreAlpha: 0.42,
-        glowAlpha: 0.48,
-        glowBlur: 34
+        coreAlpha: 0.5,
+        glowAlpha: 0.55,
+        glowBlur: 36
       });
-      drawBeam("beamRed", mattX - 34, mattY - 170, "rgba(255,38,42,0.98)", t, 1, {
-        length: 470,
-        nearHeight: 164,
-        farHeight: 104,
-        rise: -18,
-        phaseSpeed: -95,
+      drawBeam("beamRed", mattX + 24, mattY - 20, "rgba(255,38,42,0.98)", t, -1, {
+        length: 620,
+        nearHeight: 148,
+        farHeight: 62,
+        rise: -58,
+        phaseSpeed: 105,
         textureStretch: 1.02,
         alpha: 0.98,
         textureAlpha: 0.2,
-        coreAlpha: 0.4,
-        glowAlpha: 0.5,
-        glowBlur: 34
+        coreAlpha: 0.5,
+        glowAlpha: 0.55,
+        glowBlur: 36
       });
       drawAtlasCharacter("mattFly", "mattFly", "matt", mattX, mattY, 0.5, t, { glow:"rgba(255,70,45,0.5)", glowBlur:16, lean, noBob:true, poseShiftScale:0.2 });
       drawAtlasCharacter("bfFly", "bfFly", "player", bfX, bfY, 0.48, t, { glow:"rgba(80,200,255,0.56)", glowBlur:16, lean:-lean, noBob:true, poseShiftScale:0.2 });
