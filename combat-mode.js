@@ -320,13 +320,17 @@
     const bob = Math.sin(t * Math.PI * 2 * 1.5) * 1.8;
     const plainSprite = spriteName === "matt";
     const anchorFeet = spriteName === "matt";
-    // Foot anchor keeps matt's feet planted on the rock; horizontal
-    // centering keeps him aligned with the rock pivot. The per-anim delta
-    // then nudges each sing pose up/sideways a small amount so the body
-    // reads cleanly instead of dropping into the rock.
-    const animDelta = spriteName === "matt" ? mattAnimDelta(characterKey) : { dx: 0, dy: 0 };
-    const drawX = (anchorFeet ? mattHorizontalAnchorCorrection(frame, scale) : dx * hit) + animDelta.dx * scale;
-    const drawY = (anchorFeet ? atlasFootCorrection(frame, scale) : bob + dy * hit) + animDelta.dy * scale;
+    // Matt sing poses lift slightly off the rock so the body reads above
+    // the feet instead of sinking into the platform. Idle stays put.
+    let mattSingLift = 0;
+    if (spriteName === "matt") {
+      const pose = state.poses?.[characterKey];
+      const poseAge = performance.now() / 1000 - (pose?.time || -10);
+      const isSinging = poseAge < 0.42 && Number.isFinite(pose?.lane);
+      if (isSinging) mattSingLift = -20 * scale; // 20px up at scale 1
+    }
+    const drawX = anchorFeet ? mattHorizontalAnchorCorrection(frame, scale) : dx * hit;
+    const drawY = (anchorFeet ? atlasFootCorrection(frame, scale) : bob + dy * hit) + mattSingLift;
     ctx.save();
     if(!plainSprite){
       ctx.shadowColor = "rgba(118,180,255,0.46)";
