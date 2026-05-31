@@ -290,12 +290,22 @@
     const dy = lane === 2 ? -13 : lane === 1 ? 10 : 0;
     const bob = Math.sin(t * Math.PI * 2 * 1.5) * 1.8;
     const plainSprite = spriteName === "matt";
-    const anchorFeet = spriteName === "matt";
-    // Wii Funkin per-anim offset delta - shifts sing poses to where the
-    // original character.json drew them (idle stays at 0,0).
-    const animDelta = spriteName === "matt" ? mattAnimOffsetDelta(characterKey) : { x: 0, y: 0 };
-    const drawX = (anchorFeet ? mattHorizontalAnchorCorrection(frame, scale) : dx * hit) + animDelta.x * scale;
-    const drawY = (anchorFeet ? atlasFootCorrection(frame, scale) : bob + dy * hit) + animDelta.y * scale;
+    // For matt, Wii Funkin (Psych engine) positions the sprite using ONLY
+    // the per-anim character offsets. The previous foot-anchor +
+    // horizontal-anchor logic compensated for frame size, which double-
+    // corrected against the offsets and threw sing poses out of place.
+    // Use the delta from idle directly so idle stays at the same screen
+    // position as before, and every sing lands exactly where Wii Funkin
+    // draws it.
+    let drawX, drawY;
+    if (spriteName === "matt") {
+      const animDelta = mattAnimOffsetDelta(characterKey);
+      drawX = animDelta.x * scale;
+      drawY = animDelta.y * scale;
+    } else {
+      drawX = dx * hit;
+      drawY = bob + dy * hit;
+    }
     ctx.save();
     if(!plainSprite){
       ctx.shadowColor = "rgba(118,180,255,0.46)";
