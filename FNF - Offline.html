@@ -2207,13 +2207,26 @@ function handleMisses(t){
     const missCutoff = missWin();
     // Auto Player (solo only) - hit every player note perfectly and keep
     // keysDown pinned during hold notes so sustain ticks fire.
+    // NOTE: we DON'T go through handlePress here. handlePress judges by
+    // |note.time - songTime()|, and a backgrounded tab + RAF throttling can
+    // make that diff hundreds of ms when the tab returns and many notes are
+    // processed in one frame - which used to give "bad" judgments on what
+    // should have been auto-perfects. Auto Player marks the note as hit
+    // directly and judges it as perfect regardless of how late we got to it.
     const autoP = !!(state.settings && state.settings.autoPlayer && state.mode === "solo");
     const autoHoldLanes = autoP ? new Set() : null;
     for(const n of state.chart.notes){
         if(n.judged) continue;
         if(autoP && n.side === "player" && t >= n.time){
-            handlePress(n.lane);
-            if(isHoldNote(n)) autoHoldLanes.add(n.lane);
+            n.judged = true; n.played = true; n.hit = true;
+            if(isHoldNote(n)){
+                n.holdActive = true;
+                n.holdDone = false;
+                n.played = false;
+                n._lastHoldTick = t;
+                autoHoldLanes.add(n.lane);
+            }
+            judge("player", "perfect", n.lane, n.character);
             continue;
         }
         if(n.side === "opp" && state.mode === "solo" && t >= n.time){
