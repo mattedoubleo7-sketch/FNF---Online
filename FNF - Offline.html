@@ -996,6 +996,13 @@ body.loaded #loadingScreen { opacity: 0; visibility: hidden; pointer-events: non
                     <span>Gamepad / controller support (Xbox, PlayStation, generic). D-pad &amp; face buttons (X / O / □ / △) both work for all 4 directions.</span>
                 </label>
             </div>
+            <div class="block" style="margin-top:14px;">
+                <h3>Auto Player <span style="font-size:11px; color:#ffd166; letter-spacing:0.18em; text-transform:uppercase; margin-left:6px;">Offline only</span></h3>
+                <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:15px;">
+                    <input type="checkbox" id="autoPlayerToggle" style="width:18px; height:18px; margin-top:2px; flex-shrink:0;">
+                    <span><strong>Auto Player</strong> — the game hits every player note perfectly for you. Hold notes are held automatically too. Solo mode only; versus and online still need real input.</span>
+                </label>
+            </div>
             <div class="modalFoot" style="margin-top:20px; justify-content:flex-end;"><button class="btn secondary" id="resetBtn">Reset Defaults</button><button class="btn primary" id="closeSettings">Close</button></div>
         </div>
     </div>
@@ -1140,7 +1147,7 @@ const STORAGE = "fnf-browser-jam-v1";
 const DIRS = ["left", "down", "up", "right"];
 const COLORS = ["#ff5a91", "#ff9d42", "#b7ff65", "#4de3ff", "#ff5a91", "#ff9d42", "#b7ff65", "#4de3ff"];
 const MOTIFS = [[0,1,2,3,2,1],[0,2,1,3,2,0],[3,2,1,0,1,2],[1,1,2,3,2,0],[0,3,1,2,3,1],[2,0,3,1,2,1]];
-const DEFAULTS = { solo:{left:"a",down:"s",up:"w",right:"d"}, p1:{left:"a",down:"s",up:"w",right:"d"}, p2:{left:"arrowleft",down:"arrowdown",up:"arrowup",right:"arrowright"}, mobile: false, console: false, performance: false, fpsCounter: false, reduceMotion: false, muteVoices: false };
+const DEFAULTS = { solo:{left:"a",down:"s",up:"w",right:"d"}, p1:{left:"a",down:"s",up:"w",right:"d"}, p2:{left:"arrowleft",down:"arrowdown",up:"arrowup",right:"arrowright"}, mobile: false, console: false, performance: false, fpsCounter: false, reduceMotion: false, muteVoices: false, autoPlayer: false };
 const SONGS = {
     sporting:{ title:"Sporting", subtitle:"Original hard chart with 1.5x scroll", diff:"Hard (Original Chart)", tempo:300, root:45, scale:[0,2,3,5,7,8,10], prog:[0,5,3,7], scroll:920, seed:29, introBeats:0, outroBeats:4, palette:["#0f1422","#1b2f46","#314f74","#0b0e16","#4de3ff","#ff9d42"], blurb:"Imported from the original VS Matt Sporting hard chart with the real instrumental and vocals at normal speed on the boxing ring stage.", chartSource:"sporting"},
     boxingMatch:{ title:"Boxing Match", subtitle:"Original VS Matt chart", diff:"Normal (Original Chart)", tempo:339, root:45, scale:[0,2,3,5,7,8,10], prog:[0,5,3,7], scroll:760, seed:31, introBeats:0, outroBeats:4, palette:["#0f1422","#1b2f46","#314f74","#0b0e16","#4de3ff","#ff9d42"], blurb:"Imported from the original VS Matt Boxing Match chart with the real instrumental and vocals on the boxing ring, while keeping the Sporting noteskins.", chartSource:"boxingMatch"},
@@ -1849,7 +1856,7 @@ const state = {
     hitGlow: []
 };
 function copy(v){ return JSON.parse(JSON.stringify(v)); }
-function loadSettings(){ try { const s = JSON.parse(localStorage.getItem(STORAGE)); return s ? { solo:{...DEFAULTS.solo,...s.solo}, p1:{...DEFAULTS.p1,...s.p1}, p2:{...DEFAULTS.p2,...s.p2}, mobile: !!s.mobile, console: !!s.console, performance: !!s.performance, fpsCounter: !!s.fpsCounter, reduceMotion: !!s.reduceMotion, muteVoices: !!s.muteVoices } : copy(DEFAULTS); } catch { return copy(DEFAULTS); } }
+function loadSettings(){ try { const s = JSON.parse(localStorage.getItem(STORAGE)); return s ? { solo:{...DEFAULTS.solo,...s.solo}, p1:{...DEFAULTS.p1,...s.p1}, p2:{...DEFAULTS.p2,...s.p2}, mobile: !!s.mobile, console: !!s.console, performance: !!s.performance, fpsCounter: !!s.fpsCounter, reduceMotion: !!s.reduceMotion, muteVoices: !!s.muteVoices, autoPlayer: !!s.autoPlayer } : copy(DEFAULTS); } catch { return copy(DEFAULTS); } }
 function saveSettings(){ localStorage.setItem(STORAGE, JSON.stringify(state.settings)); }
 function keyName(k){ if(k === " ") return "Space"; if(k.startsWith("arrow")) return "Arrow " + k.slice(5,6).toUpperCase() + k.slice(6); return k.length === 1 ? k.toUpperCase() : k.replace(/^\w/, c => c.toUpperCase()); }
 function clamp(v,a,b){ return Math.min(b, Math.max(a, v)); }
@@ -2198,8 +2205,17 @@ function handlePress(lane){
 function handleMisses(t){
     if (window.__lagSpikeGrace) return;
     const missCutoff = missWin();
+    // Auto Player (solo only) - hit every player note perfectly and keep
+    // keysDown pinned during hold notes so sustain ticks fire.
+    const autoP = !!(state.settings && state.settings.autoPlayer && state.mode === "solo");
+    const autoHoldLanes = autoP ? new Set() : null;
     for(const n of state.chart.notes){
         if(n.judged) continue;
+        if(autoP && n.side === "player" && t >= n.time){
+            handlePress(n.lane);
+            if(isHoldNote(n)) autoHoldLanes.add(n.lane);
+            continue;
+        }
         if(n.side === "opp" && state.mode === "solo" && t >= n.time){
             n.judged = true; n.played = true; n.hit = true;
             if(isHoldNote(n)){
@@ -2213,6 +2229,14 @@ function handleMisses(t){
             continue;
         }
         if(t > n.time + missCutoff){ n.judged = true; n.played = true; judge(n.side, "miss", n.lane, n.character); }
+    }
+    if(autoP){
+        for(const n of state.chart.notes){
+            if(n.holdActive && !n.holdDone && isHoldNote(n) && n.side === "player"){
+                if(t >= n.time && t <= holdEndTime(n)) autoHoldLanes.add(n.lane);
+            }
+        }
+        for(let lane = 4; lane < 8; lane++) state.keysDown[lane] = autoHoldLanes.has(lane);
     }
 }
 function updateHoldNotes(t){
@@ -3090,6 +3114,10 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 
     function applyReduceMotion() { window.REDUCE_MOTION = !!S.reduceMotion; }
 
+    // Auto Player has no runtime side-effect to apply on toggle; the value is
+    // read by handleMisses each frame. Wire just persists + reflects in the UI.
+    function applyAutoPlayer() { /* read live by handleMisses */ }
+
     function wire(id, key, applyFn) {
         const el = document.getElementById(id);
         if (!el) return;
@@ -3104,24 +3132,26 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
     wire("fpsCounterToggle",   "fpsCounter",   applyFpsCounter);
     wire("reduceMotionToggle", "reduceMotion", applyReduceMotion);
     wire("muteVoicesToggle",   "muteVoices",   applyMuteVoices);
+    wire("autoPlayerToggle",   "autoPlayer",   applyAutoPlayer);
 
     if (typeof ui !== "undefined" && ui.resetBtn) {
         const _r = ui.resetBtn.onclick;
         ui.resetBtn.onclick = () => {
             if (_r) _r();
-            S.performance = false; S.fpsCounter = false; S.reduceMotion = false; S.muteVoices = false;
+            S.performance = false; S.fpsCounter = false; S.reduceMotion = false; S.muteVoices = false; S.autoPlayer = false;
             try { saveSettings(); } catch (e) {}
-            for (const id of ["perfModeToggle","fpsCounterToggle","reduceMotionToggle","muteVoicesToggle"]) {
+            for (const id of ["perfModeToggle","fpsCounterToggle","reduceMotionToggle","muteVoicesToggle","autoPlayerToggle"]) {
                 const el = document.getElementById(id);
                 if (el) el.checked = false;
             }
-            applyPerformanceMode(); applyFpsCounter(); applyReduceMotion(); applyMuteVoices();
+            applyPerformanceMode(); applyFpsCounter(); applyReduceMotion(); applyMuteVoices(); applyAutoPlayer();
         };
     }
     applyPerformanceMode();
     applyFpsCounter();
     applyReduceMotion();
     applyMuteVoices();
+    applyAutoPlayer();
 })();
 </script>
 </body>
