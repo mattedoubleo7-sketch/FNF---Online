@@ -255,28 +255,49 @@
     return Math.max(0, (fw - idleFrameWidth) * 0.5 * scale);
   }
 
-  // Per-anim offsets straight from Wii Funkin's swordmatt.json. Each entry is
-  // the absolute character offset for that anim (Psych engine convention -
-  // offset is SUBTRACTED from the base position). Applied as a delta from
-  // the idle baseline so the foot-anchor logic still positions matt at the
-  // same place at rest, and sings shift exactly the way the original does.
-  const MATT_OFFSETS = {
-    idle:  { x:  90, y: -255 },
-    left:  { x:  36, y: -286 },
-    down:  { x: 209, y: -336 },
-    up:    { x: 171, y: -238 },
-    right: { x: 161, y: -302 },
+  // Per-anim drawX/drawY shifts that put matt's visible content EXACTLY where
+  // Wii Funkin's Psych engine would render it on screen, relative to the idle
+  // anchor (which is treated as 0,0 = our chosen rock position).
+  //
+  // Derivation (the math that took me five tries to get right):
+  //
+  // 1. In Psych, the sprite's padded canvas top-left lands at
+  //    (base.x - offset.x, base.y - offset.y). The visible trim sits at
+  //    (canvas + fx, canvas + fy) within that, sized (vis_w, vis_h) where
+  //    vis_w/vis_h are h/w for rotated frames (since the -90deg rotation
+  //    swaps the displayed dims).
+  // 2. So WF visible bottom Y = (base.y - offset.y) + fy + vis_h
+  //                centre X = (base.x - offset.x) + fx + vis_w/2
+  // 3. In our renderer at drawX=0/drawY=0, the visible content lands at:
+  //                bottom Y = y + (h - fh - fy) * scale   (non-rot)
+  //                bottom Y = y + (w - fh - fy) * scale   (rot; w is stored width)
+  //                centre X = x + (w - fw)/2 * scale - fx*scale (non-rot)
+  //                centre X = x + (h - fw)/2 * scale - fx*scale (rot)
+  // 4. The drawX/drawY needed to put OUR rendering at the WF visible position,
+  //    measured as a delta from idle (so idle stays at the rock at 0,0):
+  //
+  //         dx = (WF centre X delta from idle) - (our centre X delta from idle)
+  //         dy = (WF bottom Y delta from idle) - (our bottom Y delta from idle)
+  //
+  // Computed from swordmatt.json offsets + WIIK_Z_MATT.xml frame data:
+  //   idle  offset(90, -255)  fx=0    fy=-23  vis_w=416  vis_h=439  rot=no
+  //   left  offset(36, -286)  fx=-4   fy=0    vis_w=699  vis_h=501  rot=yes
+  //   down  offset(209,-336)  fx=0    fy=-11  vis_w=539  vis_h=380  rot=yes
+  //   up    offset(171,-238)  fx=0    fy=0    vis_w=557  vis_h=479  rot=yes
+  //   right offset(161,-302)  fx=-75  fy=-5   vis_w=627  vis_h=412  rot=yes
+  const MATT_DRAW_DELTAS = {
+    idle:  { dx:    0,  dy:   0 },
+    left:  { dx:  201,  dy: 129 },
+    down:  { dx:  -52,  dy:  34 },
+    up:    { dx:  -15,  dy:  57 },
+    right: { dx:  -61,  dy:  39 },
   };
-  function mattAnimOffsetDelta(characterKey){
+  function mattAnimDelta(characterKey){
     const pose = state.poses?.[characterKey];
-    if(!pose) return { x: 0, y: 0 };
+    if(!pose) return MATT_DRAW_DELTAS.idle;
     const age = performance.now() / 1000 - (pose.time || -10);
     const anim = (age < 0.42 && Number.isFinite(pose.lane)) ? (DIR[pose.lane % 4] || "down") : "idle";
-    const offset = MATT_OFFSETS[anim] || MATT_OFFSETS.idle;
-    const base = MATT_OFFSETS.idle;
-    // Delta in screen pixels: offset is subtracted from position, so the
-    // shift from idle is -(offset - base) on each axis.
-    return { x: -(offset.x - base.x), y: -(offset.y - base.y) };
+    return MATT_DRAW_DELTAS[anim] || MATT_DRAW_DELTAS.idle;
   }
 
   function drawCharacter(spriteName, imageKey, characterKey, x, y, scale, flipX, t, lean = 0){
@@ -290,9 +311,19 @@
     const dy = lane === 2 ? -13 : lane === 1 ? 10 : 0;
     const bob = Math.sin(t * Math.PI * 2 * 1.5) * 1.8;
     const plainSprite = spriteName === "matt";
-    const anchorFeet = spriteName === "matt";
-    const drawX = anchorFeet ? mattHorizontalAnchorCorrection(frame, scale) : dx * hit;
-    const drawY = anchorFeet ? atlasFootCorrection(frame, scale) : bob + dy * hit;
+    // Matt is positioned ENTIRELY by the per-anim WF deltas - no foot anchor
+    // or horizontal centering on top, since those fought the deltas in the
+    // last attempt. Idle delta is (0, 0) so idle still lands at the rock
+    // exactly the same as before. Sings shift by the computed WF offsets.
+    let drawX, drawY;
+    if (spriteName === "matt") {
+      const animDelta = mattAnimDelta(characterKey);
+      drawX = animDelta.dx * scale;
+      drawY = animDelta.dy * scale;
+    } else {
+      drawX = dx * hit;
+      drawY = bob + dy * hit;
+    }
     ctx.save();
     if(!plainSprite){
       ctx.shadowColor = "rgba(118,180,255,0.46)";

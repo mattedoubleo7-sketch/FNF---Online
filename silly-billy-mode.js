@@ -1076,47 +1076,68 @@
     return Math.max(0, Math.min(1, Math.min(inT, outT)));
   }
   function drawSillySpeedLines(t) {
-    // Skip the burst when Performance Mode or Reduce Motion is on — 140 additive
-    // strokes per frame is the single most expensive thing in this mode.
     if (window.PERFORMANCE_MODE || window.REDUCE_MOTION) return;
     const intensity = speedLinesIntensity(t);
     if (intensity <= 0) return;
     const cx = canvas.width / 2;
     const cy = canvas.height / 2;
     const maxR = Math.hypot(cx, cy);
-    // smoothstep cutoff 0.2 -> 0.7 in the shader: leave the center clear, max
-    // brightness near the edges. We mimic that by starting streaks ~25% out.
-    const minR = maxR * 0.25;
-    const span = maxR - minR;
-    // Streak count scales with intensity. ~140 lines at peak reads as a dense
-    // "WHOOSH" without tanking framerate.
-    const n = Math.floor(140 * intensity);
     ctx.save();
-    ctx.globalCompositeOperation = "lighter"; // matches `Color.rgb += amount` (additive)
+    ctx.globalCompositeOperation = "lighter";
     ctx.lineCap = "round";
-    for (let i = 0; i < n; i++) {
-      // Deterministic per-streak pseudo-random angle/speed/length/offset.
-      const seed = i * 12.9898;
-      const r1 = (Math.sin(seed) * 43758.5453) % 1;
-      const r2 = (Math.sin(seed * 1.7 + 4.3) * 24634.6345) % 1;
-      const r3 = (Math.sin(seed * 0.9 + 1.1) * 16345.123) % 1;
-      const r4 = (Math.sin(seed * 2.3 + 7.7) * 9532.43) % 1;
-      const angle = Math.abs(r1) * Math.PI * 2;
-      const speedPx = 320 + Math.abs(r2) * 520;     // px/sec outward
-      const length = 60 + Math.abs(r3) * 110;       // streak length
-      const phaseR = Math.abs(r4) * span;
-      // Scroll outward over time, wrapping back to minR.
-      const offset = ((t * speedPx) + phaseR) % span;
-      const r0 = minR + offset;
-      const rEnd = Math.min(maxR + length, r0 + length);
-      const cos = Math.cos(angle), sin = Math.sin(angle);
-      const x0 = cx + cos * r0, y0 = cy + sin * r0;
-      const x1 = cx + cos * rEnd, y1 = cy + sin * rEnd;
-      // Brighter the further out (shader's smoothstep) — clamp to [0.25, 1].
-      const radialBoost = Math.min(1, (r0 - minR) / span + 0.25);
-      const alpha = 0.55 * intensity * radialBoost;
-      ctx.strokeStyle = "rgba(255,255,255," + alpha.toFixed(3) + ")";
-      ctx.lineWidth = 1.5 + Math.abs(r2) * 2.5;
+
+    // Faithful port of mods/shaders/SpeedEffect.frag.
+    // The shader runs per pixel; here we sample a dense set of angles around
+    // the screen center, replicate its threshold-and-multiply logic, and
+    // draw a full-length radial streak everywhere the shader would have lit
+    // up the pixel. Same flicker timing (speed=25, 1.2x harmonic), same
+    // smoothstep mask (cutoff=0.2), same per-angle gate against the `effect`
+    // uniform (driven here by `intensity`).
+    const SPEED = 25.0;
+    const CUTOFF = 0.2; // smoothstep low edge from shader
+    const SMOOTH_TOP = 0.7; // smoothstep high edge
+    const N_ANGLES = 360; // one streak per degree
+    // Deterministic 2D noise (close-enough port of the shader's noise() for
+    // sampling along a single radial direction parameterized by angle).
+    function noise2(a, b) {
+      const n = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453;
+      return n - Math.floor(n);
+    }
+    for (let i = 0; i < N_ANGLES; i++) {
+      const angle = (i / N_ANGLES) * Math.PI * 2;
+      // Shader does dir = normalize(centeredUV) * (size + noise(iTime)); size=50.
+      // The direction's magnitude pulses slightly with time. Same idea here.
+      const sizePulse = 50 + (Math.sin(t * 1.3 + i * 0.07) * 0.5);
+      const dirSeed = angle * sizePulse;
+      // amount = noise(dir, iTime*speed) * noise(dir, iTime*speed*1.2)
+      const a1 = noise2(dirSeed, t * SPEED);
+      const a2 = noise2(dirSeed, t * SPEED * 1.2);
+      let amount = a1 * a2;
+      // Shader: if (amount > 0.2) amount *= 3; else amount = 0;
+      if (amount > 0.2) amount *= 3.0;
+      else continue;
+      // Shader: if (noise(dir, iTime) > effect) amount = 0. Our `effect` is
+      // driven by intensity (higher intensity = more streaks survive).
+      const gate = noise2(dirSeed, t);
+      if (gate > intensity * 0.9) continue;
+      // Draw the lit ray. The shader's smoothstep(0.2, 0.7, dist) makes
+      // brightness ramp from 0 at radius 20% to 1 at 70%. We mimic this with
+      // a linear gradient stroke from minR outward.
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      const r0 = maxR * CUTOFF;
+      const r1 = maxR * (SMOOTH_TOP + 0.3); // extend past edges so the streak meets the corner
+      const x0 = cx + cos * r0;
+      const y0 = cy + sin * r0;
+      const x1 = cx + cos * r1;
+      const y1 = cy + sin * r1;
+      const alpha = Math.min(1, amount) * intensity;
+      const grad = ctx.createLinearGradient(x0, y0, x1, y1);
+      grad.addColorStop(0, "rgba(255,255,255,0)");
+      grad.addColorStop((SMOOTH_TOP - CUTOFF) / (SMOOTH_TOP + 0.3 - CUTOFF), "rgba(255,255,255," + alpha.toFixed(3) + ")");
+      grad.addColorStop(1, "rgba(255,255,255," + alpha.toFixed(3) + ")");
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = 1.4;
       ctx.beginPath();
       ctx.moveTo(x0, y0);
       ctx.lineTo(x1, y1);
