@@ -229,8 +229,17 @@
       anim = pose.kind === "miss" && data.animations[dir + "Miss"]?.length ? dir + "Miss" : dir;
     }
     const frames = data.animations[anim]?.length ? data.animations[anim] : data.animations.idle;
-    const fps = anim === "idle" ? 18 : spriteName === "boyfriend" ? 24 : 20;
-    return frameFromList(frames, t + age * 0.16, fps, true);
+    const isSinging = anim !== "idle";
+    // Match the original Wii Funkin character.json fps + loop behavior:
+    //   idle: fps 18, loops indefinitely
+    //   sing*: fps 24, plays once then clamps at the last frame (no wrap)
+    // The elapsed time for sing must be `age` (time since the pose was set)
+    // so each note hit plays the animation fresh from frame 0. Idle stays
+    // indexed by song time so the loop runs continuously.
+    const fps = anim === "idle" ? 18 : 24;
+    const loop = !isSinging;
+    const elapsed = isSinging ? age : t;
+    return frameFromList(frames, elapsed, fps, loop);
   }
 
   function atlasFootCorrection(frame, scale){
@@ -267,6 +276,19 @@
     }
     ctx.translate(x, y);
     ctx.rotate(lean);
+    // === Wii Funkin "3D" perspective sway on matt ===
+    // The original mod uses a MirrorRepeatWarpEffect shader whose `warp` and
+    // `zoom` properties get tweened by the modchart. We can't run the GLSL
+    // shader in canvas 2D, but we can approximate the perceived 3D motion
+    // with a periodic horizontal skew + scale pulse - the most visible part
+    // of the original look.
+    if (spriteName === "matt" && !window.PERFORMANCE_MODE && !window.REDUCE_MOTION) {
+      const beat = t * Math.PI * 2 * (state.currentSong?.tempo || 150) / 60 / 4;
+      const skewX = Math.sin(beat) * 0.045;   // ~2.5deg sway, beat-sync'd
+      const scaleY = 1 + Math.cos(beat) * 0.018;
+      const punch = hit > 0 ? hit * 0.04 : 0; // momentary scale punch on hit
+      ctx.transform(1 + punch, 0, skewX, scaleY + punch, 0, 0);
+    }
     drawAtlasFrame(combatState.images[imageKey], frame, drawX, drawY, scale, 1, flipX);
     if(!plainSprite){
       ctx.globalCompositeOperation = "screen";
