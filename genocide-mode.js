@@ -17,31 +17,44 @@
       stageScale: 0.5,
       stageX: 0,
       stageY: 10,
-      destroyedAlpha: 0.28,
+      destroyedAlpha: 0.32,
+      // Main fire at the centre (behind GF / the speaker)
       fireX: 640,
-      fireY: 708,
-      fireScale: 0.92,
-      fireAlpha: 0.66,
-      fireGlowAlpha: 0.24,
-      stageGlowAlpha: 0.4,
-      stageGlowPulse: 0.32,
+      fireY: 718,
+      fireScale: 1.05,
+      fireAlpha: 0.72,
+      fireGlowAlpha: 0.30,
+      // Two extra fire instances at the room corners for the "room is burning
+      // down" feel from VS Tabi Rework. Slightly smaller, slightly faster
+      // timing so they don't look like duplicates of the centre fire.
+      sideFireScale: 0.72,
+      sideFireAlpha: 0.58,
+      sideFireGlowAlpha: 0.22,
+      sideFireLeftX: 165,
+      sideFireRightX: 1115,
+      sideFireY: 700,
+      stageGlowAlpha: 0.46,
+      stageGlowPulse: 0.34,
       speakerX: 650,
       speakerY: 594,
       speakerScale: 0.5,
-      vignetteAlpha: 0.38,
+      vignetteAlpha: 0.42,
       roleScale: {
-        opponent: 0.78,
+        opponent: 0.82,    // a touch larger so Tabi reads as the angry threat
         girlfriend: 0.58,
         boyfriend: 0.76
       },
+      // Tightened triangle: Tabi pulled a bit right, BF a bit left, GF anchored
+      // to the speaker. Y values tuned so feet plant on the floor planks
+      // instead of floating just above them.
       roleAnchor: {
-        opponent: { x: 186, y: 667, mode: "fixed" },
-        boyfriend: { x: 879, y: 626, mode: "fixed" },
-        girlfriend: { x: 658, y: 446, mode: "fixed" }
+        opponent: { x: 222, y: 678, mode: "fixed" },
+        boyfriend: { x: 858, y: 638, mode: "fixed" },
+        girlfriend: { x: 654, y: 462, mode: "fixed" }
       },
       camera: {
-        opponent: { x: 405, y: 480 },
-        boyfriend: { x: 820, y: 500 }
+        opponent: { x: 425, y: 488 },
+        boyfriend: { x: 808, y: 504 }
       }
     };
     const COMMAND_EVENT_SCALE = [0.18, 0.4, 0.72, 1];
@@ -524,16 +537,55 @@
     }
 
     function drawStageFire(t) {
-      const frame = frameFromList(G.stage.fireFrames || [], t * 0.7, 24, true);
-      if (!frame || !imageReady(genState.images.fire)) return;
+      const frames = G.stage.fireFrames || [];
+      if (!frames.length || !imageReady(genState.images.fire)) return;
       const fx = genocideFxProfile(t);
       const pulse = fx.beat;
-      const fireAlpha = LAYOUT.fireAlpha + pulse * 0.12;
-      drawAtlasBottomCentered(genState.images.fire, frame, LAYOUT.fireX, LAYOUT.fireY, LAYOUT.fireScale, fireAlpha);
+
+      // Two side fire instances at the room corners. Each uses its own time
+      // offset so the flicker doesn't sync up - that would read as duplicates.
+      // Drawn BEFORE the main fire so the centre one sits on top.
+      const leftFrame = frameFromList(frames, (t + 0.31) * 0.62, 24, true);
+      const rightFrame = frameFromList(frames, (t + 0.83) * 0.68, 24, true);
+      const sideAlpha = LAYOUT.sideFireAlpha + pulse * 0.10;
+      if (leftFrame) {
+        drawAtlasBottomCentered(genState.images.fire, leftFrame, LAYOUT.sideFireLeftX, LAYOUT.sideFireY, LAYOUT.sideFireScale, sideAlpha);
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.globalAlpha = LAYOUT.sideFireGlowAlpha + pulse * 0.12 + fx.command * 0.10;
+        drawAtlasBottomCentered(genState.images.fire, leftFrame, LAYOUT.sideFireLeftX, LAYOUT.sideFireY, LAYOUT.sideFireScale * 1.05, 1);
+        ctx.restore();
+      }
+      if (rightFrame) {
+        drawAtlasBottomCentered(genState.images.fire, rightFrame, LAYOUT.sideFireRightX, LAYOUT.sideFireY, LAYOUT.sideFireScale, sideAlpha);
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.globalAlpha = LAYOUT.sideFireGlowAlpha + pulse * 0.12 + fx.command * 0.10;
+        drawAtlasBottomCentered(genState.images.fire, rightFrame, LAYOUT.sideFireRightX, LAYOUT.sideFireY, LAYOUT.sideFireScale * 1.05, 1);
+        ctx.restore();
+      }
+
+      // Main centre fire
+      const centreFrame = frameFromList(frames, t * 0.7, 24, true);
+      if (!centreFrame) return;
+      const fireAlpha = LAYOUT.fireAlpha + pulse * 0.14;
+      drawAtlasBottomCentered(genState.images.fire, centreFrame, LAYOUT.fireX, LAYOUT.fireY, LAYOUT.fireScale, fireAlpha);
       ctx.save();
       ctx.globalCompositeOperation = "screen";
-      ctx.globalAlpha = LAYOUT.fireGlowAlpha + pulse * 0.16 + fx.command * 0.18 + Math.sin(t * 3.6) * 0.025;
-      drawAtlasBottomCentered(genState.images.fire, frame, LAYOUT.fireX, LAYOUT.fireY, LAYOUT.fireScale * (1.03 + fx.command * 0.035), 1);
+      ctx.globalAlpha = LAYOUT.fireGlowAlpha + pulse * 0.20 + fx.command * 0.22 + Math.sin(t * 3.6) * 0.030;
+      drawAtlasBottomCentered(genState.images.fire, centreFrame, LAYOUT.fireX, LAYOUT.fireY, LAYOUT.fireScale * (1.04 + fx.command * 0.04), 1);
+      ctx.restore();
+
+      // Warm floor-light wash that intensifies on beat - sells the heat
+      // coming from the three fires combined.
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      const wash = ctx.createRadialGradient(canvas.width * 0.5, canvas.height * 0.88, 60, canvas.width * 0.5, canvas.height * 0.88, canvas.width * 0.62);
+      wash.addColorStop(0, "rgba(255,124,52," + (0.18 + pulse * 0.10).toFixed(3) + ")");
+      wash.addColorStop(0.55, "rgba(255,80,30," + (0.08 + pulse * 0.05).toFixed(3) + ")");
+      wash.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = wash;
+      ctx.fillRect(0, canvas.height * 0.45, canvas.width, canvas.height * 0.55);
       ctx.restore();
     }
 
