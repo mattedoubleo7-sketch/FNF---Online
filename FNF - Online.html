@@ -833,6 +833,56 @@ body.loaded #loadingScreen { opacity: 0; visibility: hidden; pointer-events: non
 }
 #deviceDetectPrompt button:hover { transform: translateY(-2px); }
 
+/* === Controller / gamepad menu navigation (activated by Console mode) === */
+.gpFocused {
+    outline: 3px solid #46c5ff !important;
+    outline-offset: 5px !important;
+    box-shadow: 0 0 0 6px rgba(70, 197, 255, 0.2), 0 0 28px rgba(70, 197, 255, 0.55) !important;
+    transition: outline-color 0.12s, box-shadow 0.12s;
+    position: relative;
+    z-index: 10;
+}
+#consoleHud {
+    position: fixed;
+    bottom: 12px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 9990;
+    display: none;
+    gap: 14px;
+    padding: 10px 18px;
+    border-radius: 999px;
+    background: rgba(20, 5, 14, 0.92);
+    border: 1px solid rgba(70, 197, 255, 0.4);
+    box-shadow: 0 8px 28px rgba(0,0,0,0.55);
+    font-family: Impact, Haettenschweiler, sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    pointer-events: none;
+    user-select: none;
+    color: #d7dff8;
+    backdrop-filter: blur(6px);
+}
+body.gamepadOn #consoleHud { display: inline-flex; }
+/* In-game the hint bar would just clutter the playfield */
+body.gamepadOn.gameRunning #consoleHud { display: none; }
+#consoleHud .gpHint { display: inline-flex; align-items: center; gap: 7px; }
+#consoleHud .gpBtn {
+    display: inline-grid;
+    place-items: center;
+    min-width: 22px; height: 22px; padding: 0 6px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 900;
+    background: linear-gradient(135deg, #46c5ff, #ff3a82 82%);
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+    box-shadow: 0 0 12px rgba(70, 197, 255, 0.45);
+}
+@media (max-width: 700px) {
+    #consoleHud { gap: 8px; font-size: 10px; padding: 8px 12px; }
+    #consoleHud .gpBtn { min-width: 18px; height: 18px; font-size: 9px; }
+}
+
 /* === Online features: presence badge, chat panel, emote bar, emote popups === */
 .onlinePresence {
     display: inline-flex; align-items: center; gap: 8px;
@@ -3308,6 +3358,200 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
         btn.addEventListener("contextmenu", e => e.preventDefault());
     }
     applyMobile();
+})();
+(function () {
+    // === Gamepad menu navigation (separate from in-game lane input) ===
+    // Activated by Console mode. D-pad / left-stick to move focus, A to
+    // confirm, B to back/close, Y to open Settings. Sits dormant during
+    // gameplay (the lane-input IIFE below takes over there).
+    if (typeof state === "undefined") return;
+
+    // Inject the hint bar once
+    if (!document.getElementById("consoleHud")) {
+        const hud = document.createElement("div");
+        hud.id = "consoleHud";
+        hud.setAttribute("aria-hidden", "true");
+        hud.innerHTML =
+            '<span class="gpHint"><span class="gpBtn">✛</span> Navigate</span>' +
+            '<span class="gpHint"><span class="gpBtn">A</span> Select</span>' +
+            '<span class="gpHint"><span class="gpBtn">B</span> Back</span>' +
+            '<span class="gpHint"><span class="gpBtn">Y</span> Settings</span>';
+        document.body.appendChild(hud);
+    }
+
+    function syncBodyClass() {
+        const on = !!(state.settings && state.settings.console);
+        document.body.classList.toggle("gamepadOn", on);
+        document.body.classList.toggle("gameRunning", !!state.playing);
+    }
+    setInterval(syncBodyClass, 300);
+    syncBodyClass();
+
+    function topOverlay() {
+        let best = null;
+        for (const id of ["authWrap", "settings", "resultsWrap", "menu"]) {
+            const el = document.getElementById(id);
+            if (el && el.classList.contains("show")) { best = el; break; }
+        }
+        return best;
+    }
+    const FOCUS_SELECTORS = [
+        ".songCard", ".iconBtn", ".catChip", ".playBig", ".btn",
+        ".onlineBtn", ".bind", '.modeToggle input', '.cameraSelect',
+        'input[type="checkbox"]', 'input[type="search"]'
+    ].join(",");
+    function focusableIn(container) {
+        if (!container) return [];
+        const els = container.querySelectorAll(FOCUS_SELECTORS);
+        return Array.from(els).filter(el => {
+            if (el.disabled) return false;
+            if (el.tagName === "INPUT" && el.type === "hidden") return false;
+            const rect = el.getBoundingClientRect();
+            if (rect.width <= 0 || rect.height <= 0) return false;
+            const style = getComputedStyle(el);
+            if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) < 0.1) return false;
+            return true;
+        });
+    }
+
+    let focused = null;
+    function setFocus(el) {
+        if (focused === el) return;
+        if (focused) focused.classList.remove("gpFocused");
+        focused = el;
+        if (focused) {
+            focused.classList.add("gpFocused");
+            try { focused.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" }); } catch (e) {}
+        }
+    }
+    function refreshFocus() {
+        const overlay = topOverlay();
+        const els = focusableIn(overlay);
+        if (!els.length) { setFocus(null); return; }
+        if (!focused || !els.includes(focused)) setFocus(els[0]);
+    }
+    // For songCard grid: 2D-aware up/down (find closest in the row above/below)
+    function moveFocus2D(dir) {
+        const overlay = topOverlay();
+        const els = focusableIn(overlay);
+        if (!els.length) return;
+        if (!focused || !els.includes(focused)) { setFocus(els[0]); return; }
+        const idx = els.indexOf(focused);
+        const r = focused.getBoundingClientRect();
+        const cx = r.left + r.width / 2;
+        const cy = r.top + r.height / 2;
+        if (dir === "up" || dir === "down") {
+            let best = null, bestCost = Infinity;
+            for (const e of els) {
+                if (e === focused) continue;
+                const er = e.getBoundingClientRect();
+                const ex = er.left + er.width / 2;
+                const ey = er.top + er.height / 2;
+                if (dir === "down" && ey <= cy + 4) continue;
+                if (dir === "up" && ey >= cy - 4) continue;
+                const cost = Math.abs(ex - cx) * 1.3 + Math.abs(ey - cy);
+                if (cost < bestCost) { bestCost = cost; best = e; }
+            }
+            if (best) { setFocus(best); return; }
+            // Wrap to next/prev row equivalent
+            setFocus(els[dir === "down" ? (idx + 1) % els.length : (idx - 1 + els.length) % els.length]);
+            return;
+        }
+        // left/right: prefer same-row elements first, then wrap
+        let best = null, bestCost = Infinity;
+        for (const e of els) {
+            if (e === focused) continue;
+            const er = e.getBoundingClientRect();
+            const ex = er.left + er.width / 2;
+            const ey = er.top + er.height / 2;
+            const sameRow = Math.abs(ey - cy) < r.height * 0.6;
+            if (!sameRow) continue;
+            if (dir === "right" && ex <= cx + 2) continue;
+            if (dir === "left" && ex >= cx - 2) continue;
+            const cost = Math.abs(ex - cx);
+            if (cost < bestCost) { bestCost = cost; best = e; }
+        }
+        if (best) { setFocus(best); return; }
+        setFocus(els[dir === "right" ? (idx + 1) % els.length : (idx - 1 + els.length) % els.length]);
+    }
+
+    function press(name) {
+        if (!state.settings.console || state.playing) return;
+        if (name === "a") {
+            if (focused) {
+                focused.click();
+                setTimeout(refreshFocus, 80);
+            }
+            return;
+        }
+        if (name === "b") {
+            const auth = document.getElementById("authWrap");
+            const settings = document.getElementById("settings");
+            const results = document.getElementById("resultsWrap");
+            if (auth && auth.classList.contains("show")) {
+                const c = document.getElementById("closeAuth"); if (c) c.click(); return;
+            }
+            if (settings && settings.classList.contains("show")) {
+                const c = document.getElementById("closeSettings"); if (c) c.click(); return;
+            }
+            if (results && results.classList.contains("show")) {
+                const c = document.getElementById("menuBtn"); if (c) c.click(); return;
+            }
+            return;
+        }
+        if (name === "y") {
+            const sb = document.getElementById("settingsBtn"); if (sb) sb.click(); return;
+        }
+        if (["up","down","left","right"].includes(name)) moveFocus2D(name);
+    }
+
+    const NAV_BUTTONS = { 12:"up", 13:"down", 14:"left", 15:"right", 0:"a", 1:"b", 3:"y" };
+    const navHeld = new Set();
+    let lastStickTime = 0;
+    const STICK_REPEAT_MS = 180;
+    function navPoll() {
+        requestAnimationFrame(navPoll);
+        if (!state.settings.console || state.playing) {
+            if (navHeld.size) navHeld.clear();
+            if (focused) { focused.classList.remove("gpFocused"); focused = null; }
+            return;
+        }
+        const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+        const now = new Set();
+        let stickActive = false;
+        for (const pad of pads) {
+            if (!pad) continue;
+            for (const btn in NAV_BUTTONS) {
+                const b = pad.buttons[Number(btn)];
+                if (b && b.pressed) now.add(NAV_BUTTONS[btn]);
+            }
+            const ax0 = pad.axes[0] || 0;
+            const ax1 = pad.axes[1] || 0;
+            if (ax1 < -0.6) { now.add("up"); stickActive = true; }
+            if (ax1 > 0.6)  { now.add("down"); stickActive = true; }
+            if (ax0 < -0.6) { now.add("left"); stickActive = true; }
+            if (ax0 > 0.6)  { now.add("right"); stickActive = true; }
+        }
+        // Directional inputs: fire on first press, then auto-repeat while held
+        const dt = performance.now();
+        for (const name of now) {
+            const isDir = name === "up" || name === "down" || name === "left" || name === "right";
+            if (!navHeld.has(name)) {
+                press(name);
+                if (isDir) lastStickTime = dt;
+            } else if (isDir && dt - lastStickTime > STICK_REPEAT_MS) {
+                press(name);
+                lastStickTime = dt;
+            }
+        }
+        // Reset repeat clock when no direction held
+        if (![...now].some(n => ["up","down","left","right"].includes(n))) lastStickTime = 0;
+        navHeld.clear();
+        for (const n of now) navHeld.add(n);
+        // Initial focus when none yet
+        if (!focused) refreshFocus();
+    }
+    requestAnimationFrame(navPoll);
 })();
 (function() {
     // Console mode — gamepad / controller support via the Gamepad API.
