@@ -51,7 +51,7 @@
 
     const SONG_ID = "genocide";
     const SONG_SOURCE = "genocide";
-    const genState = { ready: false, images: {}, groundCache: {}, referenceCache: {}, afterimages: { opponent: [], boyfriend: [] }, clockStart: 0, cacheKey: USING_REVIVAL ? "genocide-revival-v6" : "genocide-v10" };
+    const genState = { ready: false, images: {}, groundCache: {}, referenceCache: {}, afterimages: { opponent: [], boyfriend: [] }, clockStart: 0, cacheKey: USING_REVIVAL ? "genocide-revival-v7" : "genocide-v10" };
     const clamp01 = value => Math.max(0, Math.min(1, value));
     const DIR_TO_ANIM = {
       left: "singLEFT",
@@ -156,14 +156,16 @@
           girlfriend: 0.60,
           boyfriend: 0.70
         },
-        // FEET-PLANTED ground anchors. Tabi on the left side of the
-        // restaurant, GF on the speaker behind the floor, BF on the right.
-        // All three at the same floor line (y ≈ 620 in canvas space) so
-        // nothing floats.
+        // FEET-PLANTED ground anchors. Each character's `pos.y` ends up
+        // 12px ABOVE where the shadow draws (drawRoleRender offsets the
+        // ellipse to pos.y + 12). Net effect was the trio reading as
+        // hovering above their own shadows. Lower the anchor.y values
+        // so feet meet shadow, then BF/Tabi also pin to the idle frame's
+        // ground point above (so they don't bob as sing frames cycle).
         roleAnchor: {
-          opponent:   { x: 305, y: 612, mode: "ground" },
-          girlfriend: { x: 632, y: 478, mode: "ground" },
-          boyfriend:  { x: 935, y: 620, mode: "ground" }
+          opponent:   { x: 305, y: 644, mode: "ground" },
+          girlfriend: { x: 632, y: 506, mode: "ground" },
+          boyfriend:  { x: 935, y: 652, mode: "ground" }
         },
         // Camera focus points - x is well to one side so a side-pan during
         // singing actually swings noticeably toward the singer instead of
@@ -517,7 +519,15 @@
         };
       } else {
         const currentOffset = animOffset(anim);
-        const ground = frameGroundPoint(image, frame);
+        // Use the IDLE frame's ground point (not the current frame's) as the
+        // foot anchor. Each sing animation's frames have different bottom
+        // contours - resampling per-frame makes the feet skid around as the
+        // sprite animates. Locking to the idle reference gives BF and Tabi
+        // a single planted foot point that stays where the shadow is. The
+        // per-anim offset still moves the sprite up/down/left/right relative
+        // to that anchor, which is exactly what Psych offsets are for.
+        const ref = spriteReference(role);
+        const ground = (USING_REVIVAL && ref) ? ref.ground : frameGroundPoint(image, frame);
         pos = {
           x: anchor.x + (Number(frame.fw || frame.w || 0) * 0.5 + Number(frame.fx || 0) - ground.x - currentOffset.x) * scale,
           y: anchor.y + (Number(frame.fh || frame.h || 0) + Number(frame.fy || 0) - ground.y - currentOffset.y) * scale
