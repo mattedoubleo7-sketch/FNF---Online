@@ -15,11 +15,43 @@
       G.sprites.tabi = Object.assign({}, G.sprites.tabi, REVIVAL.sprites.tabi);
       G.sprites.boyfriend = Object.assign({}, G.sprites.boyfriend, REVIVAL.sprites.boyfriend);
       G.sprites.gf = Object.assign({}, G.sprites.gf, REVIVAL.sprites.gf);
+      // Swap the chart + audio so we're actually playing the Revival song,
+      // not the Rework chart with Revival sprites.
+      G.chart = Object.assign({}, G.chart, REVIVAL.chart);
+      G.audio = Object.assign({}, G.audio, REVIVAL.audio);
+      G.song = Object.assign({}, G.song, REVIVAL.song);
     }
+
+    // ============================================================
+    // LOW-SPEC / CONSOLE MODE
+    //
+    // Microsoft Edge on Xbox falls off a cliff the moment we hit
+    // canvas filter("blur(...)") or compound globalCompositeOperation
+    // passes. Detect "we're on a console browser" (Xbox/PlayStation/Switch
+    // UA, or low-DPI fullscreen TV-resolution browser with a controller
+    // attached) and skip the bloom/halo/vignette-image/afterimage passes.
+    //
+    // The mode is also reachable via ?lowspec=1 for testing on desktop.
+    // ============================================================
+    const IS_CONSOLE = (() => {
+      try {
+        const ua = (navigator.userAgent || "").toLowerCase();
+        if (/xbox|playstation|nintendo|playstation 4|playstation 5|ps4|ps5|switch/.test(ua)) return true;
+        const params = new URLSearchParams(location.search);
+        if (params.get("lowspec") === "1" || params.get("console") === "1") return true;
+        // Heuristic: TV-resolution viewport + a connected gamepad usually
+        // means living-room playback even when the UA hides it.
+        const isTvRes = (screen.width >= 1920 && screen.height >= 1080 && devicePixelRatio === 1);
+        const hasPads = (navigator.getGamepads?.() || []).some(p => p && p.connected);
+        if (isTvRes && hasPads) return true;
+      } catch {}
+      return false;
+    })();
+    const LOWSPEC = IS_CONSOLE;
 
     const SONG_ID = "genocide";
     const SONG_SOURCE = "genocide";
-    const genState = { ready: false, images: {}, groundCache: {}, referenceCache: {}, afterimages: { opponent: [], boyfriend: [] }, clockStart: 0, cacheKey: USING_REVIVAL ? "genocide-revival-v1" : "genocide-v10" };
+    const genState = { ready: false, images: {}, groundCache: {}, referenceCache: {}, afterimages: { opponent: [], boyfriend: [] }, clockStart: 0, cacheKey: USING_REVIVAL ? "genocide-revival-v3" : "genocide-v10" };
     const clamp01 = value => Math.max(0, Math.min(1, value));
     const DIR_TO_ANIM = {
       left: "singLEFT",
@@ -101,43 +133,48 @@
 
     const LAYOUT_REVIVAL = (() => {
       if (!USING_REVIVAL) return null;
-      const S = REVIVAL.stage;
-      const oppA = revivalAnchor(S.opponent, REVIVAL.sprites.tabi.position, REVIVAL.sprites.tabi.scale);
-      const bfA = revivalAnchor(S.boyfriend, REVIVAL.sprites.boyfriend.position, REVIVAL.sprites.boyfriend.scale);
-      const gfA = revivalAnchor(S.girlfriend, REVIVAL.sprites.gf.position, REVIVAL.sprites.gf.scale);
-
-      // Camera focus uses Psych's midpoint+camera_position formula. Mid of
-      // each character's idle bounding box ≈ anchor + half size; we don't
-      // know the size up-front, so we approximate using a fixed +120/+150
-      // shift in screen space. Plus dad/bf camera offsets get applied
-      // (see Smooth Camera.lua getCharPos).
-      const oppCam = {
-        x: oppA.x + 150 * REVIVAL_STAGE_SCALE + (REVIVAL.sprites.tabi.cameraPosition?.[0] || 0) * REVIVAL_STAGE_SCALE,
-        y: oppA.y + (REVIVAL.sprites.tabi.cameraPosition?.[1] || 0) * REVIVAL_STAGE_SCALE
-      };
-      const bfCam = {
-        x: bfA.x - 100 * REVIVAL_STAGE_SCALE - (REVIVAL.sprites.boyfriend.cameraPosition?.[0] || 0) * REVIVAL_STAGE_SCALE + S.cameraBoyfriend[0] * REVIVAL_STAGE_SCALE,
-        y: bfA.y + (REVIVAL.sprites.boyfriend.cameraPosition?.[1] || 0) * REVIVAL_STAGE_SCALE + S.cameraBoyfriend[1] * REVIVAL_STAGE_SCALE
-      };
-
+      // The Revival source positions assume a 1280x720 flixel stage that the
+      // camera renders at defaultZoom 0.7. Mapping them straight through
+      // makes the characters float because Psych positions are the
+      // TOP-LEFT of the visible frame, and the source character.json puts
+      // tabi at -50 and bf at +200 relative to the floor anchor, which
+      // means they're at *different floor lines* in the source mod. Our
+      // canvas is 1280x720 already, so feet have to plant on the same
+      // restaurant floor (around canvas Y ~ 600). Use calibrated canvas-
+      // space ground anchors, not the literal psych coordinates.
       return {
-        // The stage layers are drawn by their own helper, so legacy
-        // stageScale/stageX/stageY/destroyedAlpha aren't used in Revival mode.
         revival: true,
-        defaultZoom: S.defaultZoom,
-        roleScale: { opponent: 1, girlfriend: 1, boyfriend: 1 },
-        roleAnchor: {
-          opponent: { x: oppA.x, y: oppA.y, scale: oppA.scale, mode: "psych" },
-          boyfriend: { x: bfA.x, y: bfA.y, scale: bfA.scale, mode: "psych" },
-          girlfriend: { x: gfA.x, y: gfA.y, scale: gfA.scale, mode: "psych" }
+        defaultZoom: REVIVAL.stage.defaultZoom,
+        // Frame display scale on our canvas. Source `scale` was 0.9 for
+        // tabi/bf and 1.2 for gf, times the stage's 0.7 zoom = 0.63 / 0.84.
+        // We render slightly bigger so the characters read on a TV-distance
+        // viewport without spilling off-screen.
+        roleScale: {
+          opponent: 0.70 * Number(REVIVAL.sprites.tabi.scale || 0.9),
+          girlfriend: 0.62 * Number(REVIVAL.sprites.gf.scale || 1.2),
+          boyfriend: 0.70 * Number(REVIVAL.sprites.boyfriend.scale || 0.9)
         },
-        camera: { opponent: oppCam, boyfriend: bfCam },
-        vignetteAlpha: S.layers.vignette?.alpha ?? 0.4,
-        // Pulse / glow knobs that the original layout used; reused for the
-        // restaurant glow + light wash. Kept conservative so the Revival
-        // stage doesn't read as blown-out.
+        // FEET-PLANTED ground anchors. Tabi on the left side of the
+        // restaurant, GF on the speaker behind the floor, BF on the right.
+        // All three at the same floor line (y ≈ 620 in canvas space) so
+        // nothing floats.
+        roleAnchor: {
+          opponent:   { x: 305, y: 612, mode: "ground" },
+          girlfriend: { x: 632, y: 478, mode: "ground" },
+          boyfriend:  { x: 935, y: 620, mode: "ground" }
+        },
+        // Camera focus points - x is well to one side so a side-pan during
+        // singing actually swings noticeably toward the singer instead of
+        // hovering near the centre.
+        camera: {
+          opponent:   { x: 410, y: 502 },
+          girlfriend: { x: 640, y: 470 },
+          boyfriend:  { x: 870, y: 510 }
+        },
+        vignetteAlpha: REVIVAL.stage.layers.vignette?.alpha ?? 0.4,
         stageGlowPulse: 0.28,
-        // Kept so legacy fire-side helpers don't NaN if called.
+        // Legacy fire helpers - unused in revival path but kept so any
+        // accidental call doesn't NaN.
         fireAlpha: 0, fireGlowAlpha: 0, sideFireAlpha: 0, sideFireGlowAlpha: 0,
         fireScale: 1, sideFireScale: 1,
         fireX: 640, fireY: 718, sideFireLeftX: 0, sideFireRightX: 1280, sideFireY: 720,
@@ -155,16 +192,18 @@
       title: G.song.title,
       subtitle: G.song.subtitle,
       diff: G.song.diff,
-      tempo: Number(G.song.bpm || 213),
+      tempo: Number(G.song.bpm || (USING_REVIVAL ? 200 : 213)),
       root: 38,
       scale: [0, 2, 3, 5, 7, 8, 10],
       prog: [0, 5, 3, 6],
-      scroll: 1080,
+      scroll: USING_REVIVAL ? 990 : 1080,
       seed: 59,
       introBeats: 0,
       outroBeats: 4,
       palette: ["#0e0508", "#28090f", "#4d141e", "#090406", "#ff9a73", "#ffd2b3"],
-      blurb: "Imported from VS Tabi Rework with the original Genocide hard chart, angry Tabi sprites, post-exp BF/GF, Genocide note skin, and the fire stage audio.",
+      blurb: USING_REVIVAL
+        ? "VS Tabi Revival: the full Revival genocide chart at 200 BPM, the actual restaurant-fire stage with bloom-shaded flames, and the reworked tabi/bf/gf-genocide sprites."
+        : "Imported from VS Tabi Rework with the original Genocide hard chart, angry Tabi sprites, post-exp BF/GF, Genocide note skin, and the fire stage audio.",
       chartSource: SONG_SOURCE
     };
 
@@ -550,6 +589,7 @@
     }
 
     function drawAfterimages(role, t) {
+      if (LOWSPEC) return; // skip the trail composite passes entirely
       const list = genState.afterimages[role];
       if (!list?.length) return;
       const now = performance.now() / 1000;
@@ -738,6 +778,18 @@
 
     function drawTopLeftAtlasOverlay(image, frame, srcX, srcY, srcScale = 1, alpha = 1) {
       if (!imageReady(image) || !frame) return;
+      if (LOWSPEC) {
+        // Console / Edge: skip the canvas filter("blur") passes entirely -
+        // those alone can drop us from 60fps to 12fps on an Xbox Series S.
+        // Use a single screen-composite draw with a brighter alpha so the
+        // flames still pop without GPU compositing thrash.
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.globalAlpha = alpha * 0.85;
+        drawTopLeftAtlas(image, frame, srcX, srcY, srcScale, 1);
+        ctx.restore();
+        return;
+      }
       // Orange-tinted blurred bloom underneath
       ctx.save();
       ctx.globalCompositeOperation = "screen";
@@ -802,9 +854,30 @@
     function drawRevivalPostFX(t) {
       const fx = genocideFxProfile(t);
       const pulse = fx.beat;
+      const a = (LAYOUT.vignetteAlpha + pulse * 0.10 + fx.command * 0.08);
+      if (LOWSPEC) {
+        // Console: skip the additive vignette image entirely and use a
+        // cached cheap radial overlay. No compound composites.
+        if (!drawRevivalPostFX._cachedVig || drawRevivalPostFX._cachedVigSize !== canvas.width + "x" + canvas.height) {
+          const off = document.createElement("canvas");
+          off.width = canvas.width; off.height = canvas.height;
+          const octx = off.getContext("2d");
+          const grad = octx.createRadialGradient(canvas.width / 2, canvas.height / 2, canvas.height * 0.30, canvas.width / 2, canvas.height / 2, canvas.height * 0.75);
+          grad.addColorStop(0, "rgba(0,0,0,0)");
+          grad.addColorStop(1, "rgba(0,0,0,0.78)");
+          octx.fillStyle = grad;
+          octx.fillRect(0, 0, off.width, off.height);
+          drawRevivalPostFX._cachedVig = off;
+          drawRevivalPostFX._cachedVigSize = canvas.width + "x" + canvas.height;
+        }
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, a * 0.9);
+        ctx.drawImage(drawRevivalPostFX._cachedVig, 0, 0);
+        ctx.restore();
+        return;
+      }
       // camHUD vignette (blend ADD = "lighter"). The Lua lerps alpha to 0.4
       // every update; we mirror that with a beat-driven push above 0.4.
-      const a = (LAYOUT.vignetteAlpha + pulse * 0.10 + fx.command * 0.08);
       if (imageReady(genState.images.vignette)) {
         ctx.save();
         ctx.globalCompositeOperation = "lighter";
@@ -812,7 +885,6 @@
         ctx.drawImage(genState.images.vignette, 0, 0, canvas.width, canvas.height);
         ctx.restore();
       } else {
-        // Fallback radial vignette so the screen still feels enclosed
         ctx.save();
         ctx.globalAlpha = Math.min(1, a * 0.8);
         const grad = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, canvas.height * 0.32, canvas.width / 2, canvas.height / 2, canvas.height * 0.72);
@@ -1079,6 +1151,13 @@
 
     bg = function(song, t) {
       if (state.selectedSong !== SONG_ID) return baseBg(song, t);
+      if (LOWSPEC) {
+        // Single flat fill - the stage layers fully cover the canvas
+        // anyway, so the gradient + radial haze are pure waste on console.
+        ctx.fillStyle = "#0a0306";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        return;
+      }
       const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
       gradient.addColorStop(0, "#030002");
       gradient.addColorStop(0.56, "#140306");
@@ -1143,33 +1222,37 @@
       const dtc = Math.max(0, dt || 0.016);
 
       if (USING_REVIVAL) {
-        let targetX, targetY;
-        if (side === "opp") {
-          targetX = camCfg.opponent.x;
-          targetY = camCfg.opponent.y;
-        } else if (side === "player") {
-          targetX = camCfg.boyfriend.x;
-          targetY = camCfg.boyfriend.y;
-        } else {
-          // Default: average the two characters with a slight upward bias,
-          // the same trick the Smooth Camera "over" event uses.
-          targetX = (camCfg.opponent.x + camCfg.boyfriend.x) / 2;
-          targetY = (camCfg.opponent.y + camCfg.boyfriend.y) / 2 - 70;
-        }
-        // Per-sing displacement (Smooth Camera.lua getDisplacement)
-        const focusPose = side === "opp" ? state.poses.tabi : state.poses.player;
-        if (focusPose && performance.now() / 1000 - Number(focusPose.time || -10) < 0.18 && focusPose.kind === "hit") {
+        // Pick the focus character. The mustHitSection-driven "side" gives
+        // us opp/player/both. We extend "both" to mean "look at GF" so the
+        // camera actually goes somewhere on instrumental breaks instead of
+        // hovering in dead centre.
+        let focus;
+        if (side === "opp") focus = "opponent";
+        else if (side === "player") focus = "boyfriend";
+        else focus = "girlfriend";
+        let targetX = camCfg[focus].x;
+        let targetY = camCfg[focus].y;
+        // Per-sing displacement (Smooth Camera.lua getDisplacement), now a
+        // much bigger nudge so the camera visibly leans into each note.
+        const focusPose = focus === "opponent" ? state.poses.tabi : (focus === "boyfriend" ? state.poses.player : null);
+        if (focusPose && performance.now() / 1000 - Number(focusPose.time || -10) < 0.22 && focusPose.kind === "hit") {
           const lane = Number(focusPose.lane || 0) % 4;
-          const D = 20 * REVIVAL_STAGE_SCALE;
+          const D = 36;
           if (lane === 0) targetX -= D;       // singLEFT
           else if (lane === 1) targetY += D;  // singDOWN
           else if (lane === 2) targetY -= D;  // singUP
           else if (lane === 3) targetX += D;  // singRIGHT
         }
-        // defaultZoom + small beat punch + close-up when one side is owned.
-        const baseZoom = REVIVAL.stage.defaultZoom * (side === "both" ? 1.32 : 1.46);
+        // Zoom levels: defaultZoom 0.7 already shrinks everything, so we
+        // multiply BACK UP to fill the screen, then add a beat bump on top.
+        // Opp / BF sides zoom in tighter; the GF / both side stays wider.
+        const tightZoom = REVIVAL.stage.defaultZoom * 1.60;   // 1.12 effective
+        const wideZoom  = REVIVAL.stage.defaultZoom * 1.42;   // 0.994 effective
+        const baseZoom = focus === "girlfriend" ? wideZoom : tightZoom;
         const targetZoom = baseZoom * bump;
-        const panLerp = 1 - Math.pow(0.04, dtc);
+        // Snappier pan so side switches read instantly (mustHitSection is
+        // the only camera signal we get from the chart events).
+        const panLerp = 1 - Math.pow(0.012, dtc);
         const zoomLerp = 1 - Math.pow(0.025, dtc);
         state.camera.focusX += (targetX - state.camera.focusX) * panLerp;
         state.camera.focusY += (targetY - state.camera.focusY) * panLerp;
@@ -1245,7 +1328,11 @@
     if (baseCameraTargets) {
       cameraTargets = function() {
         if (state.selectedSong === SONG_ID) {
-          return { oppX: Number(LAYOUT.camera.opponent.x || 405), playerX: Number(LAYOUT.camera.boyfriend.x || 820), focusY: Number(LAYOUT.camera.boyfriend.y || 500) };
+          return {
+            oppX: Number(LAYOUT.camera.opponent.x || 405),
+            playerX: Number(LAYOUT.camera.boyfriend.x || 820),
+            focusY: Number(LAYOUT.camera.boyfriend.y || 500)
+          };
         }
         return baseCameraTargets();
       };
@@ -1254,7 +1341,11 @@
     if (baseCameraPanProfile) {
       cameraPanProfile = function() {
         if (state.selectedSong === SONG_ID) {
-          return { zoom: 1.04, bias: 1.15, hud: 0.18, hudClamp: 58, speed: 3.4 };
+          // Bias > 1 amplifies the X-offset between opp and player focus so
+          // the side switch is unmistakable on a TV at couch distance.
+          return USING_REVIVAL
+            ? { zoom: 1.00, bias: 1.45, hud: 0.22, hudClamp: 80, speed: 3.8 }
+            : { zoom: 1.04, bias: 1.15, hud: 0.18, hudClamp: 58, speed: 3.4 };
         }
         return baseCameraPanProfile();
       };
