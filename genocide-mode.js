@@ -51,7 +51,7 @@
 
     const SONG_ID = "genocide";
     const SONG_SOURCE = "genocide";
-    const genState = { ready: false, images: {}, groundCache: {}, referenceCache: {}, afterimages: { opponent: [], boyfriend: [] }, clockStart: 0, cacheKey: USING_REVIVAL ? "genocide-revival-v7" : "genocide-v10" };
+    const genState = { ready: false, images: {}, groundCache: {}, referenceCache: {}, afterimages: { opponent: [], boyfriend: [] }, clockStart: 0, cacheKey: USING_REVIVAL ? "genocide-revival-v8" : "genocide-v10" };
     const clamp01 = value => Math.max(0, Math.min(1, value));
     const DIR_TO_ANIM = {
       left: "singLEFT",
@@ -165,7 +165,9 @@
         roleAnchor: {
           opponent:   { x: 305, y: 644, mode: "ground" },
           girlfriend: { x: 632, y: 506, mode: "ground" },
-          boyfriend:  { x: 935, y: 652, mode: "ground" }
+          // BF back at the original Rework spot (858, 638) per request.
+          // Size (roleScale.boyfriend) untouched - only the anchor moves.
+          boyfriend:  { x: 858, y: 638, mode: "ground" }
         },
         // Camera focus points - x is well to one side so a side-pan during
         // singing actually swings noticeably toward the singer instead of
@@ -173,7 +175,9 @@
         camera: {
           opponent:   { x: 410, y: 502 },
           girlfriend: { x: 640, y: 470 },
-          boyfriend:  { x: 870, y: 510 }
+          // Track BF's new x=858 spot. Camera target sits ~30px right of
+          // him so his face/torso reads centre-of-frame on the pan.
+          boyfriend:  { x: 790, y: 504 }
         },
         vignetteAlpha: REVIVAL.stage.layers.vignette?.alpha ?? 0.4,
         stageGlowPulse: 0.28,
