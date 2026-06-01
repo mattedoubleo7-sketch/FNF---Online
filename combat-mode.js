@@ -250,7 +250,8 @@
   function wiikZPlatformBob(t, strength){
     const rate = 1.5;
     const assumedFps = 60;
-    const amplitude = assumedFps * strength / rate;
+    const sourceAmplitude = assumedFps * strength / rate;
+    const amplitude = worldScale(sourceAmplitude);
     return {
       x: amplitude * (1 - Math.cos(t * rate)),
       y: amplitude * Math.sin(t * rate)
