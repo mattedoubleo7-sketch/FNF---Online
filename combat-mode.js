@@ -285,9 +285,23 @@
   }
 
   function wiikZBfBaseAnchor(){
+    // User: put BF back at his original spot, don't touch his size. Pre-
+    // 7125603 BF was positioned relative to the right platform's foot point
+    // (rightRockCenter + 8, rightPlatformY + 132), which keeps him glued
+    // to the rock even though Matt now uses the constants-based anchor.
+    // The polish constants moved BF up ~109px and right ~96px in canvas
+    // space; restore the platform-foot calculation so he sits where he
+    // used to. WIIK_Z_BF_SCALE (his size knob) is untouched.
+    const platformScale = worldScale(WIIK_Z_STAGE.platformRight.scale || 1);
+    const platformImage = combatState.images.platform;
+    const platformWidth = platformImage && platformImage.naturalWidth
+      ? platformImage.naturalWidth * platformScale
+      : 0;
+    const rightPlatformX = worldX(WIIK_Z_STAGE.platformRight.x);
+    const rightPlatformY = worldY(WIIK_Z_STAGE.platformRight.y);
     return {
-      x: worldX(WIIK_Z_DEFAULT_BOYFRIEND.x + WIIK_Z_BF_POSITION.x),
-      y: worldY(WIIK_Z_DEFAULT_BOYFRIEND.y + WIIK_Z_BF_POSITION.y - WIIK_Z_BF_IDLE.offsetY + WIIK_Z_BF_IDLE.bottom)
+      x: rightPlatformX + platformWidth * 0.5 + 8,
+      y: rightPlatformY + 132
     };
   }
 
