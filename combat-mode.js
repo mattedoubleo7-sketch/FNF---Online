@@ -191,6 +191,14 @@
   }
 
   function combatDepth(t){
+    // User wants only the sky/back-back background to drift like it used
+    // to - rocks and platforms stay locked. We compute a slow idle sway
+    // for the `bg` channel here (used by unknownBG via the depth style
+    // below). Everything else stays at zero so the rock/foreground frame
+    // is rock-solid.
+    const tSafe = Number.isFinite(t) ? t : 0;
+    const bgX = Math.sin(tSafe * 0.42) * 22 + Math.sin(tSafe * 0.17) * 8;
+    const bgY = Math.cos(tSafe * 0.31) * 12 + Math.sin(tSafe * 0.09) * 4;
     return {
       far: 0,
       mid: 0,
@@ -199,6 +207,8 @@
       midY: 0,
       nearY: 0,
       lean: 0,
+      bgX,
+      bgY,
       scale: {
         far: 1,
         mid: 1,
@@ -269,12 +279,18 @@
   }
 
   function wiikZStageDepthStyle(layer, depth){
-    return {
-      x: 0,
-      y: 0,
-      scale: 1,
-      angle: 0
-    };
+    // Only the back sky (`bg`) drifts. Rocks (`far`/`mid`) and the
+    // foreground split cliffs (`near`) stay locked to camera-parallax
+    // only - any motion on those would visibly shear the rock frame.
+    if(layer === "bg"){
+      return {
+        x: Number(depth?.bgX || 0),
+        y: Number(depth?.bgY || 0),
+        scale: 1,
+        angle: 0
+      };
+    }
+    return { x: 0, y: 0, scale: 1, angle: 0 };
   }
 
   function wiikZMattBaseAnchor(){
