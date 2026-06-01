@@ -10,7 +10,8 @@
     cameraLastSideTime: -99,
     dust: [],
     fxCanvas: null,
-    fxCtx: null
+    fxCtx: null,
+    shimmySpeedFx: null
   };
 
   const ONE_HIT_SPEED_STEPS = [528, 600, 632, 652, 704, 3344, 3416, 3448, 3468, 3520, 4864];
@@ -33,6 +34,16 @@
       near: { z: 150, scrollX: 0.6, travel: 70, sway: 12, floatY: 9, floatRate: 0.42, phase: 2.3, angle: 0.015 },
       platform: { z: 35, scrollX: 1, travel: 86, sway: 15, floatY: 0, floatRate: 0.42, phase: 0, angle: 0.018 }
     }
+  };
+
+  const WIIK_Z_STAGE = {
+    unknownBG: { key: "unknownBG", x: -450, y: -100, scale: 2, scrollX: 0, scrollY: 0.3 },
+    back4: { key: "back4", x: -250 + 273, y: -100 + 250, scale: 2, scrollX: 0.4, scrollY: 0.4 },
+    back5: { key: "back5", x: -600 + 118 * 1.2, y: -200 + 378 * 1.2, scale: 1.2 * 2, scrollX: 0.6, scrollY: 0.6 },
+    platformLeft: { key: "platform", x: 207, y: -150 + 1074, scale: 1 },
+    platformRight: { key: "platform", x: 1471, y: -150 + 1074, scale: 1, flipX: true },
+    splitLeft: { key: "split", x: 0, y: -500, scale: 1.2 * 2, scrollX: 1.3, scrollY: 1.3 },
+    splitRight: { key: "split", x: 1844 * 1.2, y: -500, scale: 1.2 * 2, scrollX: 1.3, scrollY: 1.3, flipX: true }
   };
 
   function isCombat(){
@@ -80,6 +91,7 @@
         });
       }
     });
+    if(!window.REDUCE_MOTION && typeof setTimeout === "function") setTimeout(() => ensureShimmySpeedFx(), 0);
   }
 
   function imgReady(image){
@@ -225,6 +237,44 @@
   function worldX(x){ return x * 0.5 + 10; }
   function worldY(y){ return y * 0.5; }
   function worldScale(scale){ return scale * 0.5; }
+
+  function wiikZPlatformBob(t, strength){
+    const rate = 1.5;
+    const assumedFps = 60;
+    const amplitude = assumedFps * strength / rate;
+    return {
+      x: amplitude * (1 - Math.cos(t * rate)),
+      y: amplitude * Math.sin(t * rate)
+    };
+  }
+
+  function wiikZPlatformMotion(t, depth){
+    const extra = oneHitPlatformMotion(t, depth || combatDepth(t));
+    const leftBob = wiikZPlatformBob(t, 0.5);
+    const rightBob = wiikZPlatformBob(t, 0.3);
+    return {
+      left: {
+        x: leftBob.x + extra.x - extra.spread,
+        y: leftBob.y + extra.y + extra.leftY
+      },
+      right: {
+        x: rightBob.x + extra.x + extra.spread,
+        y: rightBob.y + extra.y + extra.rightY
+      },
+      angle: extra.angle || 0
+    };
+  }
+
+  function drawWiikZStageSprite(spec, xOffset = 0, yOffset = 0, scaleMult = 1, alpha = 1, angle = 0){
+    const x = worldX(spec.x) + xOffset;
+    const y = worldY(spec.y) + yOffset;
+    const scale = worldScale(spec.scale || 1) * scaleMult;
+    if(Math.abs(angle) > 0.0001){
+      drawImageRotated(spec.key, x, y, scale, angle, alpha, !!spec.flipX);
+    } else {
+      drawImageParallax(spec.key, x, y, scale, alpha, !!spec.flipX, spec.scrollX ?? 1, spec.scrollY ?? spec.scrollX ?? 1);
+    }
+  }
 
   function rotatePointAround(x, y, cx, cy, angle){
     const cos = Math.cos(angle);
@@ -650,8 +700,14 @@
     return x * x * x;
   }
 
+  function easeInOutCubic(v){
+    const x = Math.max(0, Math.min(1, v));
+    return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+  }
+
   function shaderEase(kind, value){
     const name = String(kind || "linear").toLowerCase();
+    if(name.includes("cubeinout")) return easeInOutCubic(value);
     if(name.includes("cubeout")) return easeOutCubic(value);
     if(name.includes("cubein")) return easeInCubic(value);
     return Math.max(0, Math.min(1, value));
@@ -741,8 +797,17 @@
     return Math.min(fadeIn, fadeOut);
   }
 
+  function currentWiiShaderEvents(){
+    if(typeof state !== "undefined" && Array.isArray(state.chart?.shaderEvents) && state.chart.shaderEvents.length) return state.chart.shaderEvents;
+    const selected = typeof state !== "undefined" ? state.selectedSong : "";
+    if(selected === "combat") return window.COMBAT_CHART?.shaderEvents || [];
+    if(selected === "oneHit") return window.ONE_HIT_CHART?.shaderEvents || [];
+    if(selected === "shimmy") return window.SHIMMY_CHART?.shaderEvents || [];
+    return [];
+  }
+
   function shimmyShaderValue(step, name, property, fallback = 0){
-    const events = window.SHIMMY_CHART?.shaderEvents || [];
+    const events = currentWiiShaderEvents();
     let value = fallback;
     for(const event of events){
       if(event.name !== name || event.property !== property) continue;
@@ -761,14 +826,17 @@
   }
 
   function shimmyShaderFxState(t){
+    const events = currentWiiShaderEvents();
+    if(!events.length && !isShimmy()) return null;
     const step = combatSongStep(t);
-    const mirrorZoom = Math.abs(shimmyShaderValue(step, "mirror", "zoom", 1) - 1);
+    const mirrorGameZoom = Math.abs(shimmyShaderValue(step, "mirror", "zoom", 1) - 1);
     const mirrorHudZoom = Math.abs(shimmyShaderValue(step, "mirrorHud", "zoom", 1) - 1);
     const mirrorOtherZoom = Math.abs(shimmyShaderValue(step, "mirrorOther", "zoom", 1) - 1);
-    const mirrorAngle = Math.max(
+    const mirrorGameAngle = Math.max(
       Math.abs(shimmyShaderValue(step, "mirror", "angle", 0)),
       Math.abs(shimmyShaderValue(step, "mirrorOther", "angle", 0))
     ) / 8;
+    const mirrorHudAngle = Math.abs(shimmyShaderValue(step, "mirrorHud", "angle", 0)) / 8;
     const bloomRaw = Math.max(
       shimmyShaderValue(step, "bloom", "effect", 0),
       shimmyShaderValue(step, "bloom", "strength", 0)
@@ -778,9 +846,18 @@
     const greyscale = Math.max(0, Math.min(1, shimmyShaderValue(step, "greyscale", "strength", 0)));
     const speed = Math.max(0, shimmyShaderValue(step, "speed", "effect", 0));
     const bars = Math.max(0, shimmyShaderValue(step, "bars", "effect", 0));
+    const colorFillFade = Math.max(0, Math.min(1, shimmyShaderValue(step, "ColorFill", "fade", 1)));
+    const colorFill = {
+      amount: 1 - colorFillFade,
+      red: Math.max(0, Math.min(255, shimmyShaderValue(step, "ColorFill", "red", 0))),
+      green: Math.max(0, Math.min(255, shimmyShaderValue(step, "ColorFill", "green", 0))),
+      blue: Math.max(0, Math.min(255, shimmyShaderValue(step, "ColorFill", "blue", 0)))
+    };
     const bloom = bloomRaw / 3;
-    const mirror = Math.max(mirrorZoom * 2.8, mirrorHudZoom * 2.2, mirrorOtherZoom * 2.4, mirrorAngle);
+    const mirror = Math.max(mirrorGameZoom * 2.8, mirrorOtherZoom * 2.4, mirrorGameAngle);
+    const hudMirror = Math.max(mirrorHudZoom * 2.2, mirrorHudAngle);
     return {
+      hasEvents: events.length > 0,
       step,
       greyscale,
       blur,
@@ -788,9 +865,12 @@
       bars,
       bloom,
       mirror,
-      angle: mirrorAngle * 7,
-      chrom: 1.2 + bloom * 9 + speed * 8 + bars * 5 + mirror * 7 + blur * 7 + notBad * 11,
-      active: greyscale + blur + speed + bars + bloom + mirror + notBad
+      hudMirror,
+      colorFill,
+      angle: mirrorGameAngle * 7,
+      hudAngle: mirrorHudAngle * 7,
+      chrom: 1.2 + bloom * 9 + speed * 8 + bars * 5 + Math.max(mirror, hudMirror) * 7 + blur * 7 + notBad * 11,
+      active: greyscale + blur + speed + bars + bloom + mirror + hudMirror + notBad + colorFill.amount
     };
   }
 
@@ -905,6 +985,164 @@
     ctx.restore();
   }
 
+  function compileCombatShader(gl, type, source){
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if(!gl.getShaderParameter(shader, gl.COMPILE_STATUS)){
+      const info = gl.getShaderInfoLog(shader);
+      gl.deleteShader(shader);
+      throw new Error(info || "shader compile failed");
+    }
+    return shader;
+  }
+
+  function ensureShimmySpeedFx(){
+    if(combatState.shimmySpeedFx?.failed) return null;
+    if(combatState.shimmySpeedFx) return combatState.shimmySpeedFx;
+    const fxCanvas = document.createElement("canvas");
+    const gl = fxCanvas.getContext("webgl", {
+      alpha: true,
+      antialias: false,
+      depth: false,
+      premultipliedAlpha: false,
+      preserveDrawingBuffer: false,
+      stencil: false
+    });
+    if(!gl){
+      combatState.shimmySpeedFx = { failed: true };
+      return null;
+    }
+    try {
+      const vertex = compileCombatShader(gl, gl.VERTEX_SHADER, `
+        attribute vec2 aPosition;
+        attribute vec2 aTexCoord;
+        varying vec2 openfl_TextureCoordv;
+        void main(){
+          openfl_TextureCoordv = aTexCoord;
+          gl_Position = vec4(aPosition, 0.0, 1.0);
+        }
+      `);
+      const fragment = compileCombatShader(gl, gl.FRAGMENT_SHADER, `
+        precision mediump float;
+        uniform float iTime;
+        uniform float effect;
+        varying vec2 openfl_TextureCoordv;
+
+        float mod289(float x){return x - floor(x * (1.0 / 289.0)) * 289.0;}
+        vec4 mod289(vec4 x){return x - floor(x * (1.0 / 289.0)) * 289.0;}
+        vec4 perm(vec4 x){return mod289(((x * 34.0) + 1.0) * x);}
+
+        float noise(vec3 p){
+          vec3 a = floor(p);
+          vec3 d = p - a;
+          d = d * d * (3.0 - 2.0 * d);
+
+          vec4 b = a.xxyy + vec4(0.0, 1.0, 0.0, 1.0);
+          vec4 k1 = perm(b.xyxy);
+          vec4 k2 = perm(k1.xyxy + b.zzww);
+
+          vec4 c = k2 + a.zzzz;
+          vec4 k3 = perm(c);
+          vec4 k4 = perm(c + 1.0);
+
+          vec4 o1 = fract(k3 * (1.0 / 41.0));
+          vec4 o2 = fract(k4 * (1.0 / 41.0));
+
+          vec4 o3 = o2 * d.z + o1 * (1.0 - d.z);
+          vec2 o4 = o3.yw * d.x + o3.xz * (1.0 - d.x);
+
+          return o4.y * d.y + o4.x * (1.0 - d.y);
+        }
+
+        float speed = 25.0;
+        float size = 50.0;
+        float cutoff = 0.2;
+
+        void main(){
+          vec2 uv = openfl_TextureCoordv.xy;
+          vec2 centeredUV = uv - 0.5;
+          float dist = length(centeredUV);
+          vec2 dir = dist > 0.001 ? normalize(centeredUV) * (size + noise(vec3(iTime))) : vec2(0.0);
+          float amount = noise(vec3(dir, iTime * speed)) * noise(vec3(dir, iTime * speed * 1.2));
+          amount *= smoothstep(cutoff, 0.7, dist);
+          if(amount > 0.2)
+            amount *= 3.0;
+          else
+            amount = 0.0;
+          if(noise(vec3(dir, iTime)) > effect)
+            amount = 0.0;
+          gl_FragColor = vec4(vec3(amount), clamp(amount * 0.82, 0.0, 1.0));
+        }
+      `);
+      const program = gl.createProgram();
+      gl.attachShader(program, vertex);
+      gl.attachShader(program, fragment);
+      gl.linkProgram(program);
+      if(!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program) || "shader link failed");
+      const buffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        -1, -1, 0, 0,
+         1, -1, 1, 0,
+        -1,  1, 0, 1,
+         1,  1, 1, 1
+      ]), gl.STATIC_DRAW);
+      combatState.shimmySpeedFx = {
+        canvas: fxCanvas,
+        gl,
+        program,
+        buffer,
+        aPosition: gl.getAttribLocation(program, "aPosition"),
+        aTexCoord: gl.getAttribLocation(program, "aTexCoord"),
+        uTime: gl.getUniformLocation(program, "iTime"),
+        uEffect: gl.getUniformLocation(program, "effect")
+      };
+      if(typeof canvas !== "undefined"){
+        fxCanvas.width = canvas.width;
+        fxCanvas.height = canvas.height;
+        paintShimmySpeedFx(combatState.shimmySpeedFx, 0, 0);
+      }
+    } catch(error) {
+      combatState.shimmySpeedFx = { failed: true, error };
+      return null;
+    }
+    return combatState.shimmySpeedFx;
+  }
+
+  function paintShimmySpeedFx(fx, amount, t){
+    const gl = fx.gl;
+    gl.viewport(0, 0, fx.canvas.width, fx.canvas.height);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.useProgram(fx.program);
+    gl.bindBuffer(gl.ARRAY_BUFFER, fx.buffer);
+    gl.enableVertexAttribArray(fx.aPosition);
+    gl.vertexAttribPointer(fx.aPosition, 2, gl.FLOAT, false, 16, 0);
+    gl.enableVertexAttribArray(fx.aTexCoord);
+    gl.vertexAttribPointer(fx.aTexCoord, 2, gl.FLOAT, false, 16, 8);
+    gl.uniform1f(fx.uTime, t);
+    gl.uniform1f(fx.uEffect, amount);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  function drawShimmyOriginalSpeedEffect(effect, t){
+    const amount = Math.max(0, Math.min(0.25, effect || 0));
+    if(amount <= 0.005) return;
+    const fx = ensureShimmySpeedFx();
+    if(!fx) return;
+    if(fx.canvas.width !== canvas.width || fx.canvas.height !== canvas.height){
+      fx.canvas.width = canvas.width;
+      fx.canvas.height = canvas.height;
+      paintShimmySpeedFx(fx, 0, 0);
+    }
+    paintShimmySpeedFx(fx, amount, t);
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    ctx.drawImage(fx.canvas, 0, 0);
+    ctx.restore();
+  }
+
   function drawOneHitSideSpeedLines(amount, t){
     if(amount <= 0.01) return;
     ctx.save();
@@ -939,15 +1177,47 @@
     ctx.restore();
   }
 
+  function drawWiiHudCameraShaders(fx, source, t){
+    const mirror = fx?.hudMirror || 0;
+    if(mirror <= 0.01) return;
+    const left = typeof laneX === "function" ? laneX(0) - 76 : canvas.width * 0.14;
+    const right = typeof laneX === "function" ? laneX(7) + 76 : canvas.width * 0.86;
+    const top = 0;
+    const height = canvas.height;
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(Math.max(0, left), top, Math.min(canvas.width, right) - Math.max(0, left), height);
+    ctx.clip();
+    ctx.globalCompositeOperation = "screen";
+    ctx.globalAlpha = Math.min(0.3, 0.06 + mirror * 0.18);
+    ctx.translate(cx, cy);
+    ctx.rotate(((fx?.hudAngle || 0) + Math.sin(t * 9) * mirror * 2) * Math.PI / 180 * 0.32);
+    const scale = 1 + mirror * 0.045;
+    ctx.scale(scale, scale);
+    ctx.drawImage(source, -cx + Math.sin(t * 10) * mirror * 5, -cy);
+    ctx.restore();
+  }
+
   function drawCombatInsanePostFx(t){
     if(!isCombat() || !state.playing || !Number.isFinite(t)) return;
-    const fx = isShimmy() ? { step: combatSongStep(t), bloom: 0, speed: 0, burst: 0, bars: 0, mirror: 0, angle: 0, chrom: 1.2 } : combatInsaneFxState(t);
-    const oneHitFx = isOneHit() ? oneHitShaderFxState(t) : null;
-    const shimmyFx = isShimmy() ? shimmyShaderFxState(t) : null;
+    const chartShaderFx = shimmyShaderFxState(t);
+    const useChartShaders = !!chartShaderFx?.hasEvents;
+    const zeroFx = { step: combatSongStep(t), bloom: 0, speed: 0, burst: 0, bars: 0, mirror: 0, angle: 0, chrom: 1.2 };
+    const fx = useChartShaders || isShimmy() ? zeroFx : combatInsaneFxState(t);
+    const oneHitFx = !useChartShaders && isOneHit() ? oneHitShaderFxState(t) : null;
+    const shimmyFx = useChartShaders || isShimmy() ? chartShaderFx : null;
     const active = fx.mirror + fx.bloom + fx.speed + fx.burst + (oneHitFx?.active || 0) + (shimmyFx?.active || 0);
     if(active <= 0.015 && fx.chrom <= 1.21 && (!oneHitFx || oneHitFx.active <= 0.015) && (!shimmyFx || shimmyFx.active <= 0.015)) return;
     const source = ensureCombatFxCanvas();
     const cx = canvas.width / 2, cy = canvas.height / 2;
+    const speedEffect = Math.max(
+      shimmyFx?.speed || 0,
+      Math.min(0.24, (fx.speed || 0) * 0.22),
+      Math.min(0.24, (oneHitFx?.speed || 0) * 0.22)
+    );
+    drawShimmyOriginalSpeedEffect(speedEffect, t);
 
     const greyscale = Math.max(oneHitFx?.greyscale || 0, shimmyFx?.greyscale || 0);
     const blur = Math.max(oneHitFx?.blur || 0, shimmyFx?.blur || 0);
@@ -972,6 +1242,7 @@
       ctx.drawImage(source, -cx + Math.sin(t * 12) * mirror * 6, -cy);
       ctx.restore();
     }
+    drawWiiHudCameraShaders(shimmyFx, source, t);
 
     const chrom = Math.max(fx.chrom, oneHitFx?.chrom || 0, shimmyFx?.chrom || 0);
     if(chrom > 1.4){
@@ -1001,22 +1272,29 @@
       ctx.restore();
     }
 
-    drawCombatSpeedLines(Math.max(fx.speed, fx.burst * 0.7, oneHitFx?.speed || 0, shimmyFx?.speed || 0), t);
+    const colorFill = shimmyFx?.colorFill;
+    if(colorFill && colorFill.amount > 0.01){
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, colorFill.amount);
+      ctx.fillStyle = "rgb(" + Math.round(colorFill.red) + "," + Math.round(colorFill.green) + "," + Math.round(colorFill.blue) + ")";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+    }
+
+    drawCombatSpeedLines(Math.max(fx.burst * 0.7, (fx.speed || 0) * 0.45, (oneHitFx?.speed || 0) * 0.45), t);
     drawOneHitSideSpeedLines(oneHitFx?.sideSpeed || 0, t);
 
-    const bars = Math.max(fx.bars, oneHitFx?.bars || 0, shimmyFx?.bars || 0);
-    if(bars > 0.01){
+    const bars = Math.max(
+      Math.min(0.24, (fx.bars || 0) * 0.15),
+      Math.min(0.24, (oneHitFx?.bars || 0) * 0.15),
+      Math.min(0.45, shimmyFx?.bars || 0)
+    );
+    if(bars > 0.003){
       ctx.save();
-      const h = 22 + bars * 42;
-      ctx.fillStyle = "rgba(3,4,12," + Math.min(0.44, bars * 0.34).toFixed(3) + ")";
+      const h = canvas.height * bars;
+      ctx.fillStyle = "#000";
       ctx.fillRect(0, 0, canvas.width, h);
       ctx.fillRect(0, canvas.height - h, canvas.width, h);
-      ctx.globalCompositeOperation = "screen";
-      ctx.globalAlpha = Math.min(0.2, bars * 0.14);
-      for(let y = 0; y < canvas.height; y += 18){
-        ctx.fillStyle = y % 36 === 0 ? "#c4d6ff" : "#9d6cff";
-        ctx.fillRect(0, y, canvas.width, 1);
-      }
       ctx.restore();
     }
 
@@ -1069,32 +1347,26 @@
       return;
     }
 
-    // Wii Funkin's unknownnew stage has no extra base-color fill or floor
-    // wash - the unknownBG image IS the background. Match that.
     const depth = combatDepth(t);
-    // Sky-fill the area outside the unknownBG image so transparent-canvas
-    // edges look like the WF stage (the camera in WF can pan further than
-    // the bg image, which extends to dark sides; FlxG.bgColor default 0xff000000).
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    drawImageParallax("unknownBG", -410 + depth.far, -210 + depth.farY, 1.68 * depth.scale.far, 1, false, 0, 0.3);
+    drawWiikZStageSprite(WIIK_Z_STAGE.unknownBG);
     drawCombatDust("far", t, depth);
     if(isOneHit() && t >= ONE_HIT_MOVING_ROCK_START){
       drawOneHitBackgroundRockField(t, depth);
     } else {
-      drawImageParallax("back4", worldX(23) + depth.mid, worldY(150) - 4 + depth.midY, worldScale(2.05) * depth.scale.mid, 1, false, 0.4, 0.4);
-      drawImageParallax("back5", worldX(-458.4) + depth.near, worldY(253.6) + 4 + depth.nearY, worldScale(2.45) * depth.scale.near, 1, false, 0.6, 0.6);
+      drawWiikZStageSprite(WIIK_Z_STAGE.back4);
+      drawWiikZStageSprite(WIIK_Z_STAGE.back5);
     }
     drawCombatDust("mid", t, depth);
 
-    const float = Math.sin(t * 1.5) * 2;
-    const platformScale = worldScale(1) * (1 + (depth.scale.platform - 1) * 0.35);
+    const platformScale = worldScale(WIIK_Z_STAGE.platformLeft.scale) * (1 + (depth.scale.platform - 1) * 0.35);
     const platformImage = combatState.images.platform;
-    const platformMotion = oneHitPlatformMotion(t, depth);
-    const leftPlatformX = worldX(207) + platformMotion.x - platformMotion.spread;
-    const rightPlatformX = worldX(1471) + platformMotion.x + platformMotion.spread;
-    const leftPlatformY = worldY(924) + float + platformMotion.y + platformMotion.leftY;
-    const rightPlatformY = worldY(924) - float * 0.7 + platformMotion.y + platformMotion.rightY;
+    const platformMotion = wiikZPlatformMotion(t, depth);
+    const leftPlatformX = worldX(WIIK_Z_STAGE.platformLeft.x) + platformMotion.left.x;
+    const rightPlatformX = worldX(WIIK_Z_STAGE.platformRight.x) + platformMotion.right.x;
+    const leftPlatformY = worldY(WIIK_Z_STAGE.platformLeft.y) + platformMotion.left.y;
+    const rightPlatformY = worldY(WIIK_Z_STAGE.platformRight.y) + platformMotion.right.y;
     const rockTilt = Math.sin(t * 1.35) * 0.035 + depth.lean + platformMotion.angle;
     const rightRockTilt = -rockTilt * 0.85 + platformMotion.angle * 0.35;
     const leftRockCenter = leftPlatformX + platformImage.naturalWidth * platformScale * 0.5;
@@ -1102,23 +1374,80 @@
     const platformCenterY = platformImage.naturalHeight * platformScale * 0.5;
     const leftRockPivotY = leftPlatformY + platformCenterY;
     const rightRockPivotY = rightPlatformY + platformCenterY;
-    const mattRockFeetY = worldY(924) + 64;
-    const bfRockFeetY = worldY(924) + 132;
+    const mattRockFeetY = leftPlatformY + 64;
+    const bfRockFeetY = rightPlatformY + 132;
     drawImageRotated("platform", leftPlatformX, leftPlatformY, platformScale, rockTilt);
     drawImageRotated("platform", rightPlatformX, rightPlatformY, platformScale, rightRockTilt, 1, true);
-    // 8split side cliffs - sit just in the top-outer corners like the
-    // original Wii Funkin scene (small jutting chunks framing the camera,
-    // not big walls crowding the characters).
-    drawImageParallax("split", worldX(0) + depth.near * 0.32 - 360, worldY(-500), worldScale(1.4), 0.85, false, 1.3, 1.3);
-    drawImageParallax("split", worldX(2212.8) + depth.near * 0.32 + 360, worldY(-500), worldScale(1.4), 0.85, true, 1.3, 1.3);
+    drawWiikZStageSprite(WIIK_Z_STAGE.splitLeft);
+    drawWiikZStageSprite(WIIK_Z_STAGE.splitRight);
 
-    const mattFeet = rotatePointAround(leftRockCenter - 22, mattRockFeetY + float, leftRockCenter, leftRockPivotY, rockTilt);
-    const bfFeet = rotatePointAround(rightRockCenter + 8, bfRockFeetY - float * 0.7, rightRockCenter, rightRockPivotY, rightRockTilt);
+    const mattFeet = rotatePointAround(leftRockCenter - 22, mattRockFeetY, leftRockCenter, leftRockPivotY, rockTilt);
+    const bfFeet = rotatePointAround(rightRockCenter + 8, bfRockFeetY, rightRockCenter, rightRockPivotY, rightRockTilt);
     if(isShimmy() && shimmyNotBadAmount(t) > 0.01) drawShimmyMattCharacter(mattFeet.x, mattFeet.y, 0.66, false, t, rockTilt);
     else drawCharacter("matt", "matt", "matt", mattFeet.x, mattFeet.y, 0.66, false, t, rockTilt);
     drawBfSwordCharacter(bfFeet.x, bfFeet.y, 0.6, false, t, rightRockTilt);
     drawCombatDust("near", t, depth);
     // (Wii Funkin's unknownnew has no top-of-screen purple glow; removed.)
+  }
+
+  function combatTimelineSide(t){
+    const timeline = state.chart?.timeline;
+    if(!Array.isArray(timeline) || !timeline.length) return "";
+    const bpm = Number(state.chart?.bpm || state.currentSong?.bpm || 160);
+    const spb = Number(state.chart?.spb || (Number.isFinite(bpm) && bpm > 0 ? 60 / bpm : 0.375));
+    let current = null;
+    for(let i = 0; i < timeline.length; i++){
+      const sec = timeline[i];
+      let start = Number(sec.startTime);
+      let end = Number(sec.endTime);
+      if(!Number.isFinite(start) && Number.isFinite(Number(sec.startBeat))) start = Number(sec.startBeat) * spb;
+      if(!Number.isFinite(end) && Number.isFinite(Number(sec.endBeat))) end = Number(sec.endBeat) * spb;
+      if(!Number.isFinite(start)) continue;
+      if(!Number.isFinite(end)){
+        const next = timeline[i + 1];
+        let nextStart = Number(next?.startTime);
+        if(!Number.isFinite(nextStart) && Number.isFinite(Number(next?.startBeat))) nextStart = Number(next.startBeat) * spb;
+        end = Number.isFinite(nextStart) ? nextStart : Infinity;
+      }
+      if(t >= start && t < end){
+        current = sec;
+        break;
+      }
+    }
+    if(!current) return "";
+    if(Object.prototype.hasOwnProperty.call(current, "mustHitSection")) return current.mustHitSection ? "player" : "opp";
+    if(Object.prototype.hasOwnProperty.call(current, "mustHit")) return current.mustHit ? "player" : "opp";
+    const turn = String(current.turn || current.side || current.camera || current.mode || "").toLowerCase();
+    if(turn === "player" || turn === "bf" || turn === "boyfriend") return "player";
+    if(turn === "opp" || turn === "opponent" || turn === "dad" || turn === "matt") return "opp";
+    if(turn === "both" || turn === "duet" || turn === "trade" || turn === "center" || turn === "middle") return "both";
+    return "";
+  }
+
+  function combatWiiCameraBump(t, side){
+    if(side !== "opp" && side !== "player") return { x: 0, y: 0, active: 0 };
+    const notes = state.chart?.notes;
+    if(!Array.isArray(notes)) return { x: 0, y: 0, active: 0 };
+    let latest = null;
+    for(const note of notes){
+      const noteTime = Number(note.time);
+      if(!Number.isFinite(noteTime)) continue;
+      if(noteTime > t) break;
+      if(note.side !== side) continue;
+      const age = t - noteTime;
+      if(age < 0 || age > 1) continue;
+      if(!latest || noteTime > latest.time) latest = { note, time: noteTime };
+    }
+    if(!latest) return { x: 0, y: 0, active: 0 };
+    const age = t - latest.time;
+    const active = Math.max(0, Math.min(1, age <= 0.86 ? 1 : 1 - easeOutCubic((age - 0.86) / 0.14)));
+    const laneRaw = Number(latest.note.lane || 0);
+    const lane = ((Math.floor(laneRaw) % 4) + 4) % 4;
+    const move = 9 * active;
+    if(lane === 0) return { x: -move, y: 0, active };
+    if(lane === 1) return { x: 0, y: move, active };
+    if(lane === 2) return { x: 0, y: -move, active };
+    return { x: move, y: 0, active };
   }
 
   function activeCombatSide(t){
@@ -1148,7 +1477,7 @@
     }
     const holdTime = isShimmy() ? 1.25 : 0.72;
     if(combatState.cameraLastSide !== "both" && t - combatState.cameraLastSideTime <= holdTime) return combatState.cameraLastSide;
-    return state.camera.lastSide || combatState.cameraLastSide || "both";
+    return combatTimelineSide(t) || "both";
   }
 
   function oneHitCameraState(t){
@@ -1174,11 +1503,30 @@
   }
 
   function combatRockCameraMotion(t, side){
-    const float = Math.sin(t * 1.5) * 2;
-    const tilt = Math.sin(t * 1.35) * 0.035;
-    if(side === "opp") return { x: tilt * 210, y: float * 4.2 + tilt * 95 };
-    if(side === "player") return { x: -tilt * 160, y: -float * 0.7 * 4.2 - tilt * 70 };
-    return { x: tilt * 24, y: float * 0.75 };
+    const depth = combatDepth(t);
+    const platformMotion = wiikZPlatformMotion(t, depth);
+    const tilt = Math.sin(t * 1.35) * 0.035 + depth.lean + platformMotion.angle;
+    if(side === "opp") return { x: platformMotion.left.x + tilt * 210, y: platformMotion.left.y + tilt * 95 };
+    if(side === "player") return { x: platformMotion.right.x - tilt * 160, y: platformMotion.right.y - tilt * 70 };
+    return {
+      x: (platformMotion.left.x + platformMotion.right.x) * 0.5 + tilt * 24,
+      y: platformMotion.left.y + tilt * 18
+    };
+  }
+
+  function combatMattRockAnchor(t){
+    const depth = combatDepth(t);
+    const platformMotion = wiikZPlatformMotion(t, depth);
+    const platformImage = combatState.images.platform;
+    const platformScale = worldScale(WIIK_Z_STAGE.platformLeft.scale) * (1 + (depth.scale.platform - 1) * 0.35);
+    const platformWidth = (imgReady(platformImage) ? platformImage.naturalWidth : 720) * platformScale;
+    const platformHeight = (imgReady(platformImage) ? platformImage.naturalHeight : 260) * platformScale;
+    const leftPlatformX = worldX(WIIK_Z_STAGE.platformLeft.x) + platformMotion.left.x;
+    const leftPlatformY = worldY(WIIK_Z_STAGE.platformLeft.y) + platformMotion.left.y;
+    const rockTilt = Math.sin(t * 1.35) * 0.035 + depth.lean + platformMotion.angle;
+    const leftRockCenter = leftPlatformX + platformWidth * 0.5;
+    const leftRockPivotY = leftPlatformY + platformHeight * 0.5;
+    return rotatePointAround(leftRockCenter - 22, leftPlatformY + 64, leftRockCenter, leftRockPivotY, rockTilt);
   }
 
   const originalStage = typeof stage === "function" ? stage : null;
@@ -1200,16 +1548,19 @@
       const side = activeCombatSide(t);
       const oneHitCamera = oneHitCameraState(t);
       const rockMotion = combatRockCameraMotion(t, side);
+      const mattRockAnchor = combatMattRockAnchor(t);
+      const mattCenterY = mattRockAnchor.y - 78;
+      const mattCloseY = mattRockAnchor.y - 58;
       const target = side === "opp"
-        ? { x: 332 + rockMotion.x, y: 468 + rockMotion.y, zoom: 1.76 }
+        ? { x: 332 + rockMotion.x, y: mattCloseY, zoom: 1.76 }
         : side === "player"
           ? { x: 958 + rockMotion.x, y: 468 + rockMotion.y, zoom: 1.76 }
-          : { x: 640 + rockMotion.x, y: 448 + rockMotion.y, zoom: 1.54 };
+          : { x: 640 + rockMotion.x, y: mattCenterY, zoom: 1.54 };
       if(isOneHit()) {
         target.zoom = Math.max(1.2, target.zoom + oneHitCamera.zoomOffset);
         if(oneHitCamera.duet) {
-          target.x = 640 + rockMotion.x * 0.34;
-          target.y = 456 + rockMotion.y * 0.3;
+          target.x = 640 + rockMotion.x;
+          target.y = mattCenterY;
         }
       }
       if(isShimmy()){
@@ -1217,19 +1568,19 @@
         if(notBad > 0.01){
           const mattMotion = combatRockCameraMotion(t, "opp");
           target.x = 332 + mattMotion.x * 0.45;
-          target.y = 456 + mattMotion.y * 0.35;
+          target.y = mattRockAnchor.y - 70;
           target.zoom = Math.max(target.zoom, 1.9 + notBad * 0.22);
         }
       }
+      const cameraBump = combatWiiCameraBump(t, side);
+      target.x += cameraBump.x;
+      target.y += cameraBump.y;
       // Camera smoothing - exponential lerp parameterised so per-frame catch-up
       // is a fixed FRACTION of the remaining distance per unit time, framerate
-      // independent. Higher base = slower / smoother. Was 0.001 (very snappy,
-      // ~10% catch-up per 60fps frame). New rates:
-      //   pos  -> ~4% per frame  (smooth glide between opp/player/both targets)
-      //   zoom -> ~3% per frame  (zoom changes feel less jarring than pans
-      //                            so we soften them more)
+      // independent. The note-direction bump uses the quicker Wii CamMovement
+      // catch-up, then settles back to the smoother platform camera.
       const dtClamped = Math.max(0, dt || 0.016);
-      const posLerp = 1 - Math.pow(0.08, dtClamped);
+      const posLerp = 1 - Math.pow(cameraBump.active > 0.01 ? 0.035 : 0.08, dtClamped);
       const zoomLerp = 1 - Math.pow(0.12, dtClamped);
       combatState.cameraCurrent.x += (target.x - combatState.cameraCurrent.x) * posLerp;
       combatState.cameraCurrent.y += (target.y - combatState.cameraCurrent.y) * posLerp;

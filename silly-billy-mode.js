@@ -23,7 +23,8 @@
     stayStarted: false,
     flashStarted: false,
     warmCanvas: null,
-    warmCtx: null
+    warmCtx: null,
+    speedFx: null
   };
 
   SONGS.sillyBilly = {
@@ -81,6 +82,9 @@
     if (SB.notes?.pixelImage) loadImage("notes:pixel", SB.notes.pixelImage);
     if (SB.notes?.pixelEndsImage) loadImage("notes:pixelEnds", SB.notes.pixelEndsImage);
     if (SB.notes?.hurtImage) loadImage("notes:hurt", SB.notes.hurtImage);
+    if (!window.PERFORMANCE_MODE && !window.REDUCE_MOTION && typeof setTimeout === "function") {
+      setTimeout(() => ensureSillySpeedFx(), 0);
+    }
     schedulePrewarm();
   }
 
@@ -1062,10 +1066,7 @@
     return active;
   }
 
-  // Anime-style speed lines (radial white streaks scrolling outward from the
-  // center) — a JS port of mods/shaders/SpeedEffect.frag. Triggered for 10s
-  // right after the "Count Your Seconds!" lyric (283s -> 293s) with quick
-  // fade in / out so it punches in and bleeds out.
+  // Original SpeedEffect-style lines right after "Count Your Seconds!".
   const SPEED_LINES = { start: 283.006, dur: 10.0, fadeIn: 0.5, fadeOut: 0.8 };
   function speedLinesIntensity(t) {
     const s = SPEED_LINES.start;
@@ -1075,74 +1076,163 @@
     const outT = (e - t) / SPEED_LINES.fadeOut;
     return Math.max(0, Math.min(1, Math.min(inT, outT)));
   }
+
+  function compileSillySpeedShader(gl, type, source) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      const info = gl.getShaderInfoLog(shader);
+      gl.deleteShader(shader);
+      throw new Error(info || "shader compile failed");
+    }
+    return shader;
+  }
+
+  function ensureSillySpeedFx() {
+    if (silly.speedFx?.failed) return null;
+    if (silly.speedFx) return silly.speedFx;
+    const fxCanvas = document.createElement("canvas");
+    const gl = fxCanvas.getContext("webgl", {
+      alpha: true,
+      antialias: false,
+      depth: false,
+      premultipliedAlpha: false,
+      preserveDrawingBuffer: false,
+      stencil: false
+    });
+    if (!gl) {
+      silly.speedFx = { failed: true };
+      return null;
+    }
+    try {
+      const vertex = compileSillySpeedShader(gl, gl.VERTEX_SHADER, `
+        attribute vec2 aPosition;
+        attribute vec2 aTexCoord;
+        varying vec2 openfl_TextureCoordv;
+        void main() {
+          openfl_TextureCoordv = aTexCoord;
+          gl_Position = vec4(aPosition, 0.0, 1.0);
+        }
+      `);
+      const fragment = compileSillySpeedShader(gl, gl.FRAGMENT_SHADER, `
+        precision mediump float;
+        uniform float iTime;
+        uniform float effect;
+        varying vec2 openfl_TextureCoordv;
+
+        float mod289(float x){return x - floor(x * (1.0 / 289.0)) * 289.0;}
+        vec4 mod289(vec4 x){return x - floor(x * (1.0 / 289.0)) * 289.0;}
+        vec4 perm(vec4 x){return mod289(((x * 34.0) + 1.0) * x);}
+
+        float noise(vec3 p) {
+          vec3 a = floor(p);
+          vec3 d = p - a;
+          d = d * d * (3.0 - 2.0 * d);
+
+          vec4 b = a.xxyy + vec4(0.0, 1.0, 0.0, 1.0);
+          vec4 k1 = perm(b.xyxy);
+          vec4 k2 = perm(k1.xyxy + b.zzww);
+
+          vec4 c = k2 + a.zzzz;
+          vec4 k3 = perm(c);
+          vec4 k4 = perm(c + 1.0);
+
+          vec4 o1 = fract(k3 * (1.0 / 41.0));
+          vec4 o2 = fract(k4 * (1.0 / 41.0));
+
+          vec4 o3 = o2 * d.z + o1 * (1.0 - d.z);
+          vec2 o4 = o3.yw * d.x + o3.xz * (1.0 - d.x);
+
+          return o4.y * d.y + o4.x * (1.0 - d.y);
+        }
+
+        float speed = 25.0;
+        float size = 50.0;
+        float cutoff = 0.2;
+
+        void main() {
+          vec2 uv = openfl_TextureCoordv.xy;
+          vec2 centeredUV = uv - 0.5;
+          float dist = length(centeredUV);
+          vec2 dir = dist > 0.001 ? normalize(centeredUV) * (size + noise(vec3(iTime))) : vec2(0.0);
+          float amount = noise(vec3(dir, iTime * speed)) * noise(vec3(dir, iTime * speed * 1.2));
+          amount *= smoothstep(cutoff, 0.7, dist);
+          if (amount > 0.2)
+            amount *= 3.0;
+          else
+            amount = 0.0;
+          if (noise(vec3(dir, iTime)) > effect)
+            amount = 0.0;
+          gl_FragColor = vec4(vec3(amount), clamp(amount * 0.82, 0.0, 1.0));
+        }
+      `);
+      const program = gl.createProgram();
+      gl.attachShader(program, vertex);
+      gl.attachShader(program, fragment);
+      gl.linkProgram(program);
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program) || "shader link failed");
+      const buffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        -1, -1, 0, 0,
+         1, -1, 1, 0,
+        -1,  1, 0, 1,
+         1,  1, 1, 1
+      ]), gl.STATIC_DRAW);
+      silly.speedFx = {
+        canvas: fxCanvas,
+        gl,
+        program,
+        buffer,
+        aPosition: gl.getAttribLocation(program, "aPosition"),
+        aTexCoord: gl.getAttribLocation(program, "aTexCoord"),
+        uTime: gl.getUniformLocation(program, "iTime"),
+        uEffect: gl.getUniformLocation(program, "effect")
+      };
+      if (typeof canvas !== "undefined") {
+        fxCanvas.width = canvas.width;
+        fxCanvas.height = canvas.height;
+        paintSillySpeedFx(silly.speedFx, 0, 0);
+      }
+    } catch (error) {
+      silly.speedFx = { failed: true, error };
+      return null;
+    }
+    return silly.speedFx;
+  }
+
+  function paintSillySpeedFx(fx, amount, t) {
+    const gl = fx.gl;
+    gl.viewport(0, 0, fx.canvas.width, fx.canvas.height);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.useProgram(fx.program);
+    gl.bindBuffer(gl.ARRAY_BUFFER, fx.buffer);
+    gl.enableVertexAttribArray(fx.aPosition);
+    gl.vertexAttribPointer(fx.aPosition, 2, gl.FLOAT, false, 16, 0);
+    gl.enableVertexAttribArray(fx.aTexCoord);
+    gl.vertexAttribPointer(fx.aTexCoord, 2, gl.FLOAT, false, 16, 8);
+    gl.uniform1f(fx.uTime, t);
+    gl.uniform1f(fx.uEffect, amount);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
   function drawSillySpeedLines(t) {
     if (window.PERFORMANCE_MODE || window.REDUCE_MOTION) return;
-    const intensity = speedLinesIntensity(t);
-    if (intensity <= 0) return;
-    const cx = canvas.width / 2;
-    const cy = canvas.height / 2;
-    const maxR = Math.hypot(cx, cy);
+    const amount = Math.max(0, Math.min(0.25, speedLinesIntensity(t) * 0.25));
+    if (amount <= 0.005) return;
+    const fx = ensureSillySpeedFx();
+    if (!fx) return;
+    if (fx.canvas.width !== canvas.width || fx.canvas.height !== canvas.height) {
+      fx.canvas.width = canvas.width;
+      fx.canvas.height = canvas.height;
+      paintSillySpeedFx(fx, 0, 0);
+    }
+    paintSillySpeedFx(fx, amount, t);
     ctx.save();
-    ctx.globalCompositeOperation = "lighter";
-    ctx.lineCap = "round";
-
-    // Faithful port of mods/shaders/SpeedEffect.frag.
-    // The shader runs per pixel; here we sample a dense set of angles around
-    // the screen center, replicate its threshold-and-multiply logic, and
-    // draw a full-length radial streak everywhere the shader would have lit
-    // up the pixel. Same flicker timing (speed=25, 1.2x harmonic), same
-    // smoothstep mask (cutoff=0.2), same per-angle gate against the `effect`
-    // uniform (driven here by `intensity`).
-    const SPEED = 25.0;
-    const CUTOFF = 0.2; // smoothstep low edge from shader
-    const SMOOTH_TOP = 0.7; // smoothstep high edge
-    const N_ANGLES = 360; // one streak per degree
-    // Deterministic 2D noise (close-enough port of the shader's noise() for
-    // sampling along a single radial direction parameterized by angle).
-    function noise2(a, b) {
-      const n = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453;
-      return n - Math.floor(n);
-    }
-    for (let i = 0; i < N_ANGLES; i++) {
-      const angle = (i / N_ANGLES) * Math.PI * 2;
-      // Shader does dir = normalize(centeredUV) * (size + noise(iTime)); size=50.
-      // The direction's magnitude pulses slightly with time. Same idea here.
-      const sizePulse = 50 + (Math.sin(t * 1.3 + i * 0.07) * 0.5);
-      const dirSeed = angle * sizePulse;
-      // amount = noise(dir, iTime*speed) * noise(dir, iTime*speed*1.2)
-      const a1 = noise2(dirSeed, t * SPEED);
-      const a2 = noise2(dirSeed, t * SPEED * 1.2);
-      let amount = a1 * a2;
-      // Shader: if (amount > 0.2) amount *= 3; else amount = 0;
-      if (amount > 0.2) amount *= 3.0;
-      else continue;
-      // Shader: if (noise(dir, iTime) > effect) amount = 0. Our `effect` is
-      // driven by intensity (higher intensity = more streaks survive).
-      const gate = noise2(dirSeed, t);
-      if (gate > intensity * 0.9) continue;
-      // Draw the lit ray. The shader's smoothstep(0.2, 0.7, dist) makes
-      // brightness ramp from 0 at radius 20% to 1 at 70%. We mimic this with
-      // a linear gradient stroke from minR outward.
-      const cos = Math.cos(angle);
-      const sin = Math.sin(angle);
-      const r0 = maxR * CUTOFF;
-      const r1 = maxR * (SMOOTH_TOP + 0.3); // extend past edges so the streak meets the corner
-      const x0 = cx + cos * r0;
-      const y0 = cy + sin * r0;
-      const x1 = cx + cos * r1;
-      const y1 = cy + sin * r1;
-      const alpha = Math.min(1, amount) * intensity;
-      const grad = ctx.createLinearGradient(x0, y0, x1, y1);
-      grad.addColorStop(0, "rgba(255,255,255,0)");
-      grad.addColorStop((SMOOTH_TOP - CUTOFF) / (SMOOTH_TOP + 0.3 - CUTOFF), "rgba(255,255,255," + alpha.toFixed(3) + ")");
-      grad.addColorStop(1, "rgba(255,255,255," + alpha.toFixed(3) + ")");
-      ctx.strokeStyle = grad;
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.moveTo(x0, y0);
-      ctx.lineTo(x1, y1);
-      ctx.stroke();
-    }
+    ctx.globalCompositeOperation = "screen";
+    ctx.drawImage(fx.canvas, 0, 0);
     ctx.restore();
   }
 

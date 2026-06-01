@@ -1299,8 +1299,8 @@ body.gamepadOn.gameRunning #consoleHud { display: none; }
 <script src="boxing-match-wg-chart.js"></script>
 <script src="boxing-match-wg-visual-data.js?v=20260513a"></script>
 <script src="boxing-match-wg-shader-events.js?v=20260514a"></script>
-<script src="combat-chart.js"></script>
-<script src="one-hit-chart.js?v=20260524b"></script>
+<script src="combat-chart.js?v=20260601c"></script>
+<script src="one-hit-chart.js?v=20260601c"></script>
 <script src="shimmy-chart.js?v=20260525a"></script>
 <script src="overthrone-data.js?v=20260524a"></script>
 <script src="silly-billy-data.js?v=20260525a"></script>
@@ -2286,8 +2286,8 @@ function phrase(notes, rng, startBeat, beats, side, motif, intensity, chars){
 function isImportedSong(song){ return !!song && (song.chartSource === "sporting" || song.chartSource === "boxingMatch" || song.chartSource === "combat" || song.chartSource === "oneHit" || song.chartSource === "shimmy" || song.chartSource === "perseverance" || song.chartSource === "brokenReality"); }
 function makeChart(song){ if(song.chartSource === "sporting" && window.SPORTING_CHART){ return { ...window.SPORTING_CHART, notes: window.SPORTING_CHART.notes.map(n => ({...n})), timeline: window.SPORTING_CHART.timeline.map(s => ({...s})) }; }
     if(song.chartSource === "boxingMatch" && window.BOXING_MATCH_CHART){ return { ...window.BOXING_MATCH_CHART, notes: window.BOXING_MATCH_CHART.notes.map(n => ({...n})), timeline: window.BOXING_MATCH_CHART.timeline.map(s => ({...s})) }; }
-    if(song.chartSource === "combat" && window.COMBAT_CHART){ return { ...window.COMBAT_CHART, notes: window.COMBAT_CHART.notes.map(n => ({...n})), timeline: window.COMBAT_CHART.timeline.map(s => ({...s})) }; }
-    if(song.chartSource === "oneHit" && window.ONE_HIT_CHART){ return { ...window.ONE_HIT_CHART, notes: window.ONE_HIT_CHART.notes.map(n => ({...n})), timeline: window.ONE_HIT_CHART.timeline.map(s => ({...s})) }; }
+    if(song.chartSource === "combat" && window.COMBAT_CHART){ return { ...window.COMBAT_CHART, notes: window.COMBAT_CHART.notes.map(n => ({...n})), timeline: window.COMBAT_CHART.timeline.map(s => ({...s})), shaderEvents: (window.COMBAT_CHART.shaderEvents || []).map(e => ({...e})) }; }
+    if(song.chartSource === "oneHit" && window.ONE_HIT_CHART){ return { ...window.ONE_HIT_CHART, notes: window.ONE_HIT_CHART.notes.map(n => ({...n})), timeline: window.ONE_HIT_CHART.timeline.map(s => ({...s})), cameraEvents: (window.ONE_HIT_CHART.cameraEvents || []).map(e => ({...e})), shaderEvents: (window.ONE_HIT_CHART.shaderEvents || []).map(e => ({...e})) }; }
     if(song.chartSource === "shimmy" && window.SHIMMY_CHART){ return { ...window.SHIMMY_CHART, notes: window.SHIMMY_CHART.notes.map(n => ({...n})), timeline: window.SHIMMY_CHART.timeline.map(s => ({...s})), shaderEvents: (window.SHIMMY_CHART.shaderEvents || []).map(e => ({...e})), dialogueEvents: (window.SHIMMY_CHART.dialogueEvents || []).map(e => ({...e})), notBadKid: window.SHIMMY_CHART.notBadKid ? {...window.SHIMMY_CHART.notBadKid} : null }; }
     if(song.chartSource === "perseverance" && window.PERSEVERANCE_DATA){ return { ...window.PERSEVERANCE_DATA.chart, notes: window.PERSEVERANCE_DATA.chart.notes.map(n => ({...n})), timeline: window.PERSEVERANCE_DATA.chart.timeline.map(s => ({...s})) }; }
     if(song.chartSource === "brokenReality" && window.BROKEN_REALITY_DATA){ return { ...window.BROKEN_REALITY_DATA.chart, notes: window.BROKEN_REALITY_DATA.chart.notes.map(n => ({...n})), timeline: (window.BROKEN_REALITY_DATA.chart.timeline || []).map(s => ({...s})) }; }
@@ -3139,7 +3139,7 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 })();
 </script>
 <script src="boxing-fight-mode.js?v=20260322-stage6"></script>
-<script src="combat-mode.js?v=20260531m"></script>
+<script src="combat-mode.js?v=20260601c"></script>
 <script src="ballistic-mode.js?v=20260524i"></script>
 <script src="boxing-match-wg-mode.js?v=20260531k"></script>
 <script src="broken-reality-mode.js"></script>
@@ -3150,7 +3150,7 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 <script src="genocide-mode.js?v=genocide-revival-v7"></script>
 <script src="indie-cross-mode.js?v=indiecross-v19"></script>
 <script src="overthrone-mode.js?v=20260525r"></script>
-<script src="silly-billy-mode.js?v=20260530j"></script>
+<script src="silly-billy-mode.js?v=20260531n"></script>
 <script src="playback-stability-fix.js?v=20260524a"></script>
 <script src="playback-start-fix.js?v=20260524a"></script>
 <script src="desktop-mode.js"></script>
@@ -3658,12 +3658,6 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 </script>
 </body>
 </html>
-
-
-
-
-
-
 
 
 

@@ -728,8 +728,8 @@ body.unlocked .needsTesterProxy { display: none; }
   <img src="assets/icon.ico" alt="Silly Billy app icon">
   <div>
     <span>New update</span>
-    <strong>Hold notes</strong>
-    <small>Universal hold-note behavior, original hold skins, and Combat polish.</small>
+    <strong>Wii Camera + Shaders</strong>
+    <small>Combat, One Hit, and Shimmy now carry the Wii Funkin camera nudge, camera shaders, and original shader timelines.</small>
   </div>
 </aside>
 <div class="page">
@@ -738,7 +738,7 @@ body.unlocked .needsTesterProxy { display: none; }
     <div>
       <div class="kicker"><span class="liveDot"></span> Live build updated</div>
       <div class="titleWrap"><h1 data-text="FNF Onliine">FNF Onliine</h1></div>
-      <p>This is the download portal for the browser and app builds. Browser play is the easiest route for friends because it avoids Windows SmartScreen warnings on the unsigned `.exe`. The newest build adds <strong>universal hold-note behavior</strong> on top of the Combat / Wii Funkin polish: hold notes now keep receptors and singers active across the game while every song keeps its own hold-note skin.</p>
+      <p>This is the download portal for the browser and app builds. Browser play is the easiest route for friends because it avoids Windows SmartScreen warnings on the unsigned `.exe`. The newest build tightens <strong>Combat / Wii Funkin polish</strong>: Combat, One Hit, and Shimmy now use the Wii Funkin section camera, note-direction camera nudges, game/HUD camera shader split, original shader event timelines, real SpeedEffect-style lines, and exact black bar shader behavior.</p>
       <div class="actions">
         <a class="btn primary needsTester" href="/play">Play Online In Browser</a>
         <a class="btn ghost needsTester" href="/offline">Play Offline In Browser</a>
@@ -762,10 +762,11 @@ body.unlocked .needsTesterProxy { display: none; }
       <h3>Tester Vault</h3>
       <p>Welcome, tester. You can now launch the game and download the desktop apps. These builds may be unstable — report bugs against the latest build only.</p>
       <ul>
-        <li>Latest hold-note pass: all songs use the fixed sustain behavior while keeping their own hold-note skins.</li>
-        <li>Silly Billy build with Test of Time chart, spikes-bf, flashback cutscene, speed lines, and power-50 drain.</li>
+        <li>Latest VFX pass: Wii Funkin section camera, note-direction camera nudges, camera shader split, Combat/One Hit shader timelines, Shimmy SpeedEffect-style lines, and platform camera follow.</li>
+        <li>Hold-note pass: all songs use the fixed sustain behavior while keeping their own hold-note skins.</li>
+        <li>Silly Billy build with Test of Time chart, spikes-bf, flashback cutscene, shader speed lines, and power-50 drain.</li>
         <li>Mobile + Console toggles in Settings — touch buttons + Xbox/PlayStation/generic gamepad support.</li>
-        <li>Experimental: set <code>window.__sillySpeedLinesDebug = true</code> in DevTools to tweak speed-lines intensity at runtime.</li>
+        <li>Silly Billy's speed-line shader is prewarmed so the post-Count burst does not hitch on first draw.</li>
         <li>Override the gamepad mapping with <code>localStorage.fnfConsoleMap</code> = JSON map of <code>{buttonIndex:lane}</code>.</li>
       </ul>
     </div>
@@ -774,15 +775,15 @@ body.unlocked .needsTesterProxy { display: none; }
   <section class="statsRow">
     <div class="statChip"><span>Newest song</span><strong>Silly Billy</strong></div>
     <div class="statChip"><span>Now supports</span><strong>Mobile + Gamepad</strong></div>
-    <div class="statChip"><span>Latest polish</span><strong>Hold Notes</strong></div>
+    <div class="statChip"><span>Latest polish</span><strong>Wii Shaders</strong></div>
     <div class="statChip"><span>Best route</span><strong>Browser</strong></div>
   </section>
 
   <section class="panel updatePanel">
     <div class="latestBox">
-      <div class="version">Update log - 2026.05.31</div>
-      <h2>Universal Hold Notes</h2>
-      <p>Hold notes now work consistently across the full setlist: sustained notes keep the receptor lit, keep the singer in the held pose, score sustain ticks, and still use each song's existing hold-note skin.</p>
+      <div class="version">Update log - 2026.06.01</div>
+      <h2>Wii Camera + Shader Timelines</h2>
+      <p>Combat, One Hit, and Shimmy now read the Wii Funkin shader event timelines and use the CamMovement-style camera nudge on note directions. Game/HUD camera shader assignment is split out, so mirrorHud, bars, SpeedEffect windows, mirror pulses, bloom, blur, greyscale, and ColorFill support are wired through the shared Wii renderer.</p>
       <div class="actions">
         <a class="btn primary needsTester" href="/play">Jump Into Online</a>
         <a class="btn secondary needsTester" href="/offline">Try Offline</a>
@@ -791,6 +792,10 @@ body.unlocked .needsTesterProxy { display: none; }
     <div class="logList">
       <div class="logItem">
         <div class="logDate">Latest</div>
+        <div><div class="logTitle">Wii camera and shaders</div><p>Combat, One Hit, and Shimmy now draw the unknownnew stage from the original Wii Funkin coordinates, ride Matt's platform height in center/duet camera, nudge the camera 9px by note direction, split game/HUD camera shaders, and run the imported shader timelines instead of the old approximation.</p></div>
+      </div>
+      <div class="logItem">
+        <div class="logDate">Previous</div>
         <div><div class="logTitle">Universal hold-note behavior</div><p>Sustains now run through one shared hold system for every song. One Hit and Shimmy keep the old Challenge Edd hold-note skin, Perseverance keeps its default/pixel sustain skins, and each chart keeps its own visuals.</p></div>
       </div>
       <div class="logItem">
@@ -815,7 +820,7 @@ body.unlocked .needsTesterProxy { display: none; }
       </div>
       <div class="logItem">
         <div class="logDate">VFX</div>
-        <div><div class="logTitle">Speed lines + flashbang + power-50</div><p>After "Count Your Seconds!" a 10-second anime-style speed-lines burst plays. The mirror break triggers a 0.5s flashbang. The last 10 seconds drop into "power 50" drain.</p></div>
+        <div><div class="logTitle">Speed lines + flashbang + power-50</div><p>After "Count Your Seconds!" a 10-second SpeedEffect-style burst plays. The mirror break triggers a 0.5s flashbang. The last 10 seconds drop into "power 50" drain.</p></div>
       </div>
       <div class="logItem">
         <div class="logDate">Controls</div>
@@ -851,7 +856,7 @@ body.unlocked .needsTesterProxy { display: none; }
           <h3>Online App</h3>
           <p>Packaged desktop app for online play. It has the current release files and connects to the hosted online game.</p>
           <div class="actions">
-            <a class="btn primary needsTester" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/ONLINE/FNF-Browser-Jam-1.0.0-portable.exe?cache=20260531d">Download Online App</a>
+            <a class="btn primary needsTester" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/ONLINE/FNF-Browser-Jam-1.0.0-portable.exe?cache=20260601c">Download Online App</a>
           </div>
         </div>
         <div class="dlBlock">
@@ -890,7 +895,7 @@ body.unlocked .needsTesterProxy { display: none; }
           <h3>Offline App</h3>
           <p>Packaged offline download with the current local-play build and bundled assets.</p>
           <div class="actions">
-            <a class="btn primary needsTester" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/fnf/FNF-Browser-Jam-offline-1.0.0-portable.exe?cache=20260531d">Download Offline App</a>
+            <a class="btn primary needsTester" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/fnf/FNF-Browser-Jam-offline-1.0.0-portable.exe?cache=20260601c">Download Offline App</a>
           </div>
         </div>
         <div class="dlBlock">
@@ -926,9 +931,9 @@ body.unlocked .needsTesterProxy { display: none; }
       <div class="songTile"><strong>Ballistic</strong><span>Whitty alley import with the hard chart, real split audio, crazy Whitty sprites, camera hits, flashes, shakes, smoke, and full-stage VFX.</span><div class="tagRow"><span class="tag">Whitty</span><span class="tag">VFX</span></div></div>
       <div class="songTile"><strong>Sporting</strong><span>Original VS Matt hard chart with 1.5x scroll and boxing ring layout.</span><div class="tagRow"><span class="tag">Matt</span><span class="tag">Hard</span></div></div>
       <div class="songTile"><strong>Boxing Match</strong><span>Real chart, paid boxer sprites, and boxing mechanics.</span><div class="tagRow"><span class="tag">Mechanics</span><span class="tag">Boxing</span></div></div>
-      <div class="songTile"><strong>Combat</strong><span>Wii Funkin hard chart, sword BF, rock stage, faster scroll, Wiik Z positioning, and insane-mode style VFX.</span><div class="tagRow"><span class="tag">VFX</span><span class="tag">Wiik Z</span></div></div>
-      <div class="songTile"><strong>One Hit</strong><span>Wii Funkin import with the original hard chart, Combat's rock stage, shader bursts, moving rock space section, and Challenge Edd hold-note skin.</span><div class="tagRow"><span class="tag">Wii Funkin</span><span class="tag">Hold Notes</span></div></div>
-      <div class="songTile"><strong>Shimmy</strong><span>Wii Funkin import — original hard chart, real split audio, Combat's 3D stage, modchart shader pulses, and the "Not bad, kid" dialogue bloom.</span><div class="tagRow"><span class="tag hot">NEW</span><span class="tag">Wii Funkin</span><span class="tag">Modchart</span></div></div>
+      <div class="songTile"><strong>Combat</strong><span>Wii Funkin hard chart, sword BF, rock stage, faster scroll, Wiik Z stage coordinates, platform-rock motion, CamMovement-style camera nudges, and imported shader timeline pulses.</span><div class="tagRow"><span class="tag">VFX</span><span class="tag">Wiik Z</span></div></div>
+      <div class="songTile"><strong>One Hit</strong><span>Wii Funkin import with the original hard chart, Combat's rock stage, imported shader bursts, moving rock space section, and Challenge Edd hold-note skin.</span><div class="tagRow"><span class="tag">Wii Funkin</span><span class="tag">Hold Notes</span></div></div>
+      <div class="songTile"><strong>Shimmy</strong><span>Wii Funkin import - original hard chart, real split audio, Combat's 3D stage, imported SpeedEffect windows, modchart shader pulses, and the "Not bad, kid" dialogue bloom.</span><div class="tagRow"><span class="tag hot">NEW</span><span class="tag">Wii Funkin</span><span class="tag">Modchart</span></div></div>
       <div class="songTile"><strong>Perseverance</strong><span>Dustin stage swap with dodge gameplay and blaster sequence.</span><div class="tagRow"><span class="tag">Dodge</span><span class="tag">Sans</span></div></div>
       <div class="songTile"><strong>Broken Reality</strong><span>Cutscenes, swaps, drain, attack prompts, scroll flips, and hall VFX.</span><div class="tagRow"><span class="tag">Dustin</span><span class="tag">Mechanics</span></div></div>
       <div class="songTile"><strong>Challenge Edd</strong><span>Imported backyard layout with updated placement work.</span><div class="tagRow"><span class="tag">Edd</span><span class="tag">Stage</span></div></div>
@@ -939,7 +944,7 @@ body.unlocked .needsTesterProxy { display: none; }
     </div>
   </section>
 
-  <div class="footer">FNF Onliine download portal - universal hold-note build - browser recommended, app builds refreshed</div>
+  <div class="footer">FNF Onliine download portal - Wii camera and shader polish - browser recommended, app builds refreshed</div>
 </div>
 
 <script>
