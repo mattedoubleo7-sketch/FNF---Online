@@ -1047,7 +1047,12 @@
     const elapsed = Math.max(0, t - startedAt);
     const frame = frameFromList(data.frames, elapsed, data.fps || 18, false);
     if(!frame) return drawCharacter("matt", "matt", "matt", x, y, scale, flipX, t, lean);
-    const drawScale = Number(data.scale || scale || 0.66);
+    // User wants the not-bad kid to render at the same size as Matt. The
+    // shimmer atlas has scale: 0.66 baked into SHIMMY_VISUAL_DATA, which
+    // used to win over the caller-supplied `scale`. Flip the precedence so
+    // the caller's value (WIIK_Z_MATT_SCALE = 0.5) takes priority; the
+    // 0.66 just stays as a final fallback if nobody passes a scale.
+    const drawScale = Number(scale || data.scale || 0.66);
     const amount = shimmyNotBadAmount(t);
     const juice = combatSpriteJuice("matt", 3, amount * 0.22, t);
     ctx.save();
