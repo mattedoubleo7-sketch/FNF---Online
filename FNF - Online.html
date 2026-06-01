@@ -1106,16 +1106,59 @@ body.mobile .chatLog { max-height: 130px !important; font-size: 12px !important;
             showPrompt();
             return;
         }
-        // Listen for a gamepad to connect for ~6 seconds (often only fires
-        // after first button press; some users don't have one plugged at load)
+        // No initial detection. Keep listening - the Gamepad API doesn't
+        // surface a connected controller until the page gets a user gesture
+        // AND the user presses a button on the pad. We:
+        //   1. Subscribe to gamepadconnected permanently (until ask happens).
+        //   2. Re-check getGamepads() on every requestAnimationFrame, since
+        //      Chrome can populate the list silently after first user input.
+        //   3. Also check on every menu click / keydown - some browsers
+        //      only enumerate gamepads inside a user-gesture handler.
+        function tryDetect() {
+            if (detected) return true;
+            const p = findGamepad();
+            if (p) {
+                detected = "console";
+                detectedName = p.id || "";
+                showPrompt();
+                return true;
+            }
+            return false;
+        }
         const onGp = (e) => {
+            if (detected) return;
             detected = "console";
             detectedName = (e.gamepad && e.gamepad.id) || "";
-            window.removeEventListener("gamepadconnected", onGp);
             showPrompt();
         };
         window.addEventListener("gamepadconnected", onGp);
-        setTimeout(() => window.removeEventListener("gamepadconnected", onGp), 6000);
+        // Poll every frame for the first 60 seconds (covers the "user clicks
+        // around before pressing a controller button" case).
+        const pollStart = performance.now();
+        function poll() {
+            if (detected) return;
+            if (performance.now() - pollStart > 60000) return;
+            if (!tryDetect()) requestAnimationFrame(poll);
+        }
+        requestAnimationFrame(poll);
+        // User-gesture hooks: clicks, keydown, touchstart can all wake up
+        // the gamepad API on some browsers.
+        const gestureOpts = { capture: true, passive: true };
+        const gestureCheck = () => { tryDetect(); };
+        document.addEventListener("click", gestureCheck, gestureOpts);
+        document.addEventListener("keydown", gestureCheck, gestureOpts);
+        document.addEventListener("touchstart", gestureCheck, gestureOpts);
+        // Cleanup once prompt fires
+        const stopWatching = () => {
+            window.removeEventListener("gamepadconnected", onGp);
+            document.removeEventListener("click", gestureCheck, gestureOpts);
+            document.removeEventListener("keydown", gestureCheck, gestureOpts);
+            document.removeEventListener("touchstart", gestureCheck, gestureOpts);
+        };
+        // Once detected fires, schedule cleanup
+        const watchInterval = setInterval(() => {
+            if (detected) { stopWatching(); clearInterval(watchInterval); }
+        }, 500);
     });
 
     function close(remember) {

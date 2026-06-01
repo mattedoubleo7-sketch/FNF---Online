@@ -942,14 +942,43 @@ body.gamepadOn.gameRunning #consoleHud { display: none; }
         if (pad) { detected = "console"; detectedName = pad.id || ""; showPrompt(); return; }
         const m = isMobileUA();
         if (m) { detected = "mobile"; detectedName = m; showPrompt(); return; }
+        // Gamepad API often won't surface a connected controller until the
+        // page gets a user gesture AND the user presses a button on the pad.
+        // Poll every frame for 60s and listen for events + user gestures.
+        function tryDetect() {
+            if (detected) return true;
+            const p = findGamepad();
+            if (p) { detected = "console"; detectedName = p.id || ""; showPrompt(); return true; }
+            return false;
+        }
         const onGp = (e) => {
+            if (detected) return;
             detected = "console";
             detectedName = (e.gamepad && e.gamepad.id) || "";
-            window.removeEventListener("gamepadconnected", onGp);
             showPrompt();
         };
         window.addEventListener("gamepadconnected", onGp);
-        setTimeout(() => window.removeEventListener("gamepadconnected", onGp), 6000);
+        const pollStart = performance.now();
+        function poll() {
+            if (detected) return;
+            if (performance.now() - pollStart > 60000) return;
+            if (!tryDetect()) requestAnimationFrame(poll);
+        }
+        requestAnimationFrame(poll);
+        const gestureOpts = { capture: true, passive: true };
+        const gestureCheck = () => { tryDetect(); };
+        document.addEventListener("click", gestureCheck, gestureOpts);
+        document.addEventListener("keydown", gestureCheck, gestureOpts);
+        document.addEventListener("touchstart", gestureCheck, gestureOpts);
+        const stopWatching = () => {
+            window.removeEventListener("gamepadconnected", onGp);
+            document.removeEventListener("click", gestureCheck, gestureOpts);
+            document.removeEventListener("keydown", gestureCheck, gestureOpts);
+            document.removeEventListener("touchstart", gestureCheck, gestureOpts);
+        };
+        const watchInterval = setInterval(() => {
+            if (detected) { stopWatching(); clearInterval(watchInterval); }
+        }, 500);
     });
 
     function close(remember) {
