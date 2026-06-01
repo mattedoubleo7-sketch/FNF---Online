@@ -3361,23 +3361,83 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 })();
 (function () {
     // === Gamepad menu navigation (separate from in-game lane input) ===
-    // Activated by Console mode. D-pad / left-stick to move focus, A to
-    // confirm, B to back/close, Y to open Settings. Sits dormant during
-    // gameplay (the lane-input IIFE below takes over there).
     if (typeof state === "undefined") return;
 
-    // Inject the hint bar once
+    // -- Controller-type detection from pad.id ----------------------------
+    // The Gamepad API normalises by POSITION (button 0 = south, 1 = east,
+    // 2 = west, 3 = north). What's painted ON that south button differs:
+    //   Xbox      -> A   (south, confirms in Xbox UI)
+    //   PlayStat. -> ×   (south, confirms in PS UI)
+    //   Switch    -> B   (south, but Nintendo confirms with A which is EAST)
+    //   8BitDo    -> A   (south, like Xbox)
+    //   Generic   -> 1
+    // So for Switch we swap CONFIRM and BACK indices (0<->1) and re-label
+    // the HUD using whatever button glyphs the user sees on their hardware.
+    function detectController(id) {
+        const s = String(id || "").toLowerCase();
+        // Vendor ID checks (USB IDs) come first since they're most reliable
+        if (s.includes("045e") || s.includes("microsoft") || s.includes("xbox") || s.includes("xinput")) return "xbox";
+        if (s.includes("054c") || s.includes("sony") || s.includes("dualshock") || s.includes("dualsense") || s.includes("playstation") || s.includes("ps3") || s.includes("ps4") || s.includes("ps5")) return "playstation";
+        if (s.includes("057e") || s.includes("nintendo") || s.includes("switch") || s.includes("joy-con") || s.includes("joycon") || s.includes("pro controller")) return "switch";
+        if (s.includes("2dc8") || s.includes("8bitdo")) return "8bitdo";
+        if (s.includes("046d") || s.includes("logitech")) return "logitech";
+        if (s.includes("28de") || s.includes("steam") || s.includes("valve")) return "steam";
+        if (s.includes("1532") || s.includes("razer")) return "razer";
+        return "generic";
+    }
+    // Per-controller button glyphs (and Switch's confirm/back swap)
+    const CONTROLLER_PROFILES = {
+        xbox:        { confirm:"A",  back:"B",  action:"X",  menu:"Y",  view:"▣",   start:"≡",     confirmIdx:0, backIdx:1, menuIdx:3 },
+        playstation: { confirm:"✕",  back:"○",  action:"□",  menu:"△",  view:"Share",start:"Opt",   confirmIdx:0, backIdx:1, menuIdx:3 },
+        // Switch: south button is labelled B, east is A. Nintendo uses A=confirm
+        // and B=back, so we swap which Gamepad-API index counts as confirm/back
+        // and we label them with the glyphs the user sees on the controller.
+        switch:      { confirm:"A",  back:"B",  action:"X",  menu:"Y",  view:"−",   start:"+",     confirmIdx:1, backIdx:0, menuIdx:3 },
+        "8bitdo":    { confirm:"A",  back:"B",  action:"X",  menu:"Y",  view:"−",   start:"+",     confirmIdx:0, backIdx:1, menuIdx:3 },
+        logitech:    { confirm:"A",  back:"B",  action:"X",  menu:"Y",  view:"Sel", start:"Strt",  confirmIdx:0, backIdx:1, menuIdx:3 },
+        steam:       { confirm:"A",  back:"B",  action:"X",  menu:"Y",  view:"◧",   start:"◨",     confirmIdx:0, backIdx:1, menuIdx:3 },
+        razer:       { confirm:"A",  back:"B",  action:"X",  menu:"Y",  view:"Sel", start:"Strt",  confirmIdx:0, backIdx:1, menuIdx:3 },
+        generic:     { confirm:"1",  back:"2",  action:"3",  menu:"4",  view:"Sel", start:"Strt",  confirmIdx:0, backIdx:1, menuIdx:3 }
+    };
+    let activeProfile = CONTROLLER_PROFILES.generic;
+    let activeKind = "generic";
+
+    // -- HUD ------------------------------------------------------------
     if (!document.getElementById("consoleHud")) {
         const hud = document.createElement("div");
         hud.id = "consoleHud";
         hud.setAttribute("aria-hidden", "true");
-        hud.innerHTML =
-            '<span class="gpHint"><span class="gpBtn">✛</span> Navigate</span>' +
-            '<span class="gpHint"><span class="gpBtn">A</span> Select</span>' +
-            '<span class="gpHint"><span class="gpBtn">B</span> Back</span>' +
-            '<span class="gpHint"><span class="gpBtn">Y</span> Settings</span>';
         document.body.appendChild(hud);
     }
+    function renderHud() {
+        const hud = document.getElementById("consoleHud");
+        if (!hud) return;
+        const p = activeProfile;
+        hud.innerHTML =
+            '<span class="gpHint"><span class="gpBtn">✛</span> Navigate</span>' +
+            '<span class="gpHint"><span class="gpBtn">' + p.confirm + '</span> Select</span>' +
+            '<span class="gpHint"><span class="gpBtn">' + p.back + '</span> Back</span>' +
+            '<span class="gpHint"><span class="gpBtn">' + p.menu + '</span> Settings</span>';
+    }
+    renderHud();
+
+    function syncControllerKind() {
+        try {
+            const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+            for (const p of pads) {
+                if (p && p.id) {
+                    const k = detectController(p.id);
+                    if (k !== activeKind) {
+                        activeKind = k;
+                        activeProfile = CONTROLLER_PROFILES[k] || CONTROLLER_PROFILES.generic;
+                        renderHud();
+                    }
+                    return;
+                }
+            }
+        } catch (e) {}
+    }
+    setInterval(syncControllerKind, 800);
 
     function syncBodyClass() {
         const on = !!(state.settings && state.settings.console);
@@ -3502,10 +3562,34 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
         if (name === "y") {
             const sb = document.getElementById("settingsBtn"); if (sb) sb.click(); return;
         }
+        if (name === "start") {
+            const play = document.getElementById("playBtn"); if (play) play.click(); return;
+        }
+        if (name === "L1" || name === "R1") {
+            // Jump between category chips
+            const chips = Array.from(document.querySelectorAll(".catChip"));
+            if (!chips.length) return;
+            const activeIdx = Math.max(0, chips.findIndex(c => c.classList.contains("active")));
+            const nextIdx = name === "R1" ? (activeIdx + 1) % chips.length : (activeIdx - 1 + chips.length) % chips.length;
+            chips[nextIdx].click();
+            setTimeout(refreshFocus, 80);
+            return;
+        }
+        if (name === "L2") {
+            const els = focusableIn(topOverlay()); if (els.length) setFocus(els[0]);
+            return;
+        }
+        if (name === "R2") {
+            const els = focusableIn(topOverlay()); if (els.length) setFocus(els[els.length - 1]);
+            return;
+        }
         if (["up","down","left","right"].includes(name)) moveFocus2D(name);
     }
 
-    const NAV_BUTTONS = { 12:"up", 13:"down", 14:"left", 15:"right", 0:"a", 1:"b", 3:"y" };
+    // D-pad indices are fixed across all controllers (standard mapping).
+    // confirm/back/menu indices come from the active profile so Switch's
+    // A/B swap is respected.
+    const NAV_DPAD = { 12:"up", 13:"down", 14:"left", 15:"right" };
     const navHeld = new Set();
     let lastStickTime = 0;
     const STICK_REPEAT_MS = 180;
@@ -3518,19 +3602,32 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
         }
         const pads = navigator.getGamepads ? navigator.getGamepads() : [];
         const now = new Set();
-        let stickActive = false;
         for (const pad of pads) {
             if (!pad) continue;
-            for (const btn in NAV_BUTTONS) {
+            // D-pad direction buttons
+            for (const btn in NAV_DPAD) {
                 const b = pad.buttons[Number(btn)];
-                if (b && b.pressed) now.add(NAV_BUTTONS[btn]);
+                if (b && b.pressed) now.add(NAV_DPAD[btn]);
             }
+            // Profile-driven action buttons (confirm/back/menu)
+            if (pad.buttons[activeProfile.confirmIdx]?.pressed) now.add("a");
+            if (pad.buttons[activeProfile.backIdx]?.pressed)    now.add("b");
+            if (pad.buttons[activeProfile.menuIdx]?.pressed)    now.add("y");
+            // Shoulder buttons - L1/R1 jump between category chips, L2/R2
+            // jump to first/last focusable element
+            if (pad.buttons[4]?.pressed) now.add("L1");
+            if (pad.buttons[5]?.pressed) now.add("R1");
+            if (pad.buttons[6]?.pressed) now.add("L2");
+            if (pad.buttons[7]?.pressed) now.add("R2");
+            // Start (button 9) = open Play / confirm selected
+            if (pad.buttons[9]?.pressed) now.add("start");
+            // Left stick analog
             const ax0 = pad.axes[0] || 0;
             const ax1 = pad.axes[1] || 0;
-            if (ax1 < -0.6) { now.add("up"); stickActive = true; }
-            if (ax1 > 0.6)  { now.add("down"); stickActive = true; }
-            if (ax0 < -0.6) { now.add("left"); stickActive = true; }
-            if (ax0 > 0.6)  { now.add("right"); stickActive = true; }
+            if (ax1 < -0.6) now.add("up");
+            if (ax1 > 0.6)  now.add("down");
+            if (ax0 < -0.6) now.add("left");
+            if (ax0 > 0.6)  now.add("right");
         }
         // Directional inputs: fire on first press, then auto-repeat while held
         const dt = performance.now();

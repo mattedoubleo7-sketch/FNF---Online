@@ -3239,17 +3239,66 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 (function () {
     // === Gamepad menu navigation (separate from in-game lane input) ===
     if (typeof state === "undefined") return;
+
+    function detectController(id) {
+        const s = String(id || "").toLowerCase();
+        if (s.includes("045e") || s.includes("microsoft") || s.includes("xbox") || s.includes("xinput")) return "xbox";
+        if (s.includes("054c") || s.includes("sony") || s.includes("dualshock") || s.includes("dualsense") || s.includes("playstation") || s.includes("ps3") || s.includes("ps4") || s.includes("ps5")) return "playstation";
+        if (s.includes("057e") || s.includes("nintendo") || s.includes("switch") || s.includes("joy-con") || s.includes("joycon") || s.includes("pro controller")) return "switch";
+        if (s.includes("2dc8") || s.includes("8bitdo")) return "8bitdo";
+        if (s.includes("046d") || s.includes("logitech")) return "logitech";
+        if (s.includes("28de") || s.includes("steam") || s.includes("valve")) return "steam";
+        if (s.includes("1532") || s.includes("razer")) return "razer";
+        return "generic";
+    }
+    const CONTROLLER_PROFILES = {
+        xbox:        { confirm:"A",  back:"B",  action:"X",  menu:"Y",  view:"▣",   start:"≡",     confirmIdx:0, backIdx:1, menuIdx:3 },
+        playstation: { confirm:"✕",  back:"○",  action:"□",  menu:"△",  view:"Share",start:"Opt",   confirmIdx:0, backIdx:1, menuIdx:3 },
+        switch:      { confirm:"A",  back:"B",  action:"X",  menu:"Y",  view:"−",   start:"+",     confirmIdx:1, backIdx:0, menuIdx:3 },
+        "8bitdo":    { confirm:"A",  back:"B",  action:"X",  menu:"Y",  view:"−",   start:"+",     confirmIdx:0, backIdx:1, menuIdx:3 },
+        logitech:    { confirm:"A",  back:"B",  action:"X",  menu:"Y",  view:"Sel", start:"Strt",  confirmIdx:0, backIdx:1, menuIdx:3 },
+        steam:       { confirm:"A",  back:"B",  action:"X",  menu:"Y",  view:"◧",   start:"◨",     confirmIdx:0, backIdx:1, menuIdx:3 },
+        razer:       { confirm:"A",  back:"B",  action:"X",  menu:"Y",  view:"Sel", start:"Strt",  confirmIdx:0, backIdx:1, menuIdx:3 },
+        generic:     { confirm:"1",  back:"2",  action:"3",  menu:"4",  view:"Sel", start:"Strt",  confirmIdx:0, backIdx:1, menuIdx:3 }
+    };
+    let activeProfile = CONTROLLER_PROFILES.generic;
+    let activeKind = "generic";
+
     if (!document.getElementById("consoleHud")) {
         const hud = document.createElement("div");
         hud.id = "consoleHud";
         hud.setAttribute("aria-hidden", "true");
-        hud.innerHTML =
-            '<span class="gpHint"><span class="gpBtn">✛</span> Navigate</span>' +
-            '<span class="gpHint"><span class="gpBtn">A</span> Select</span>' +
-            '<span class="gpHint"><span class="gpBtn">B</span> Back</span>' +
-            '<span class="gpHint"><span class="gpBtn">Y</span> Settings</span>';
         document.body.appendChild(hud);
     }
+    function renderHud() {
+        const hud = document.getElementById("consoleHud");
+        if (!hud) return;
+        const p = activeProfile;
+        hud.innerHTML =
+            '<span class="gpHint"><span class="gpBtn">✛</span> Navigate</span>' +
+            '<span class="gpHint"><span class="gpBtn">' + p.confirm + '</span> Select</span>' +
+            '<span class="gpHint"><span class="gpBtn">' + p.back + '</span> Back</span>' +
+            '<span class="gpHint"><span class="gpBtn">' + p.menu + '</span> Settings</span>';
+    }
+    renderHud();
+
+    function syncControllerKind() {
+        try {
+            const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+            for (const p of pads) {
+                if (p && p.id) {
+                    const k = detectController(p.id);
+                    if (k !== activeKind) {
+                        activeKind = k;
+                        activeProfile = CONTROLLER_PROFILES[k] || CONTROLLER_PROFILES.generic;
+                        renderHud();
+                    }
+                    return;
+                }
+            }
+        } catch (e) {}
+    }
+    setInterval(syncControllerKind, 800);
     function syncBodyClass() {
         document.body.classList.toggle("gamepadOn", !!(state.settings && state.settings.console));
         document.body.classList.toggle("gameRunning", !!state.playing);
@@ -3351,9 +3400,21 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
             return;
         }
         if (name === "y") { const sb = document.getElementById("settingsBtn"); if (sb) sb.click(); return; }
+        if (name === "start") { const play = document.getElementById("playBtn"); if (play) play.click(); return; }
+        if (name === "L1" || name === "R1") {
+            const chips = Array.from(document.querySelectorAll(".catChip"));
+            if (!chips.length) return;
+            const activeIdx = Math.max(0, chips.findIndex(c => c.classList.contains("active")));
+            const nextIdx = name === "R1" ? (activeIdx + 1) % chips.length : (activeIdx - 1 + chips.length) % chips.length;
+            chips[nextIdx].click();
+            setTimeout(refreshFocus, 80);
+            return;
+        }
+        if (name === "L2") { const els = focusableIn(topOverlay()); if (els.length) setFocus(els[0]); return; }
+        if (name === "R2") { const els = focusableIn(topOverlay()); if (els.length) setFocus(els[els.length - 1]); return; }
         if (["up","down","left","right"].includes(name)) moveFocus2D(name);
     }
-    const NAV_BUTTONS = { 12:"up", 13:"down", 14:"left", 15:"right", 0:"a", 1:"b", 3:"y" };
+    const NAV_DPAD = { 12:"up", 13:"down", 14:"left", 15:"right" };
     const navHeld = new Set();
     let lastStickTime = 0;
     const STICK_REPEAT_MS = 180;
@@ -3368,10 +3429,18 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
         const now = new Set();
         for (const pad of pads) {
             if (!pad) continue;
-            for (const btn in NAV_BUTTONS) {
+            for (const btn in NAV_DPAD) {
                 const b = pad.buttons[Number(btn)];
-                if (b && b.pressed) now.add(NAV_BUTTONS[btn]);
+                if (b && b.pressed) now.add(NAV_DPAD[btn]);
             }
+            if (pad.buttons[activeProfile.confirmIdx]?.pressed) now.add("a");
+            if (pad.buttons[activeProfile.backIdx]?.pressed)    now.add("b");
+            if (pad.buttons[activeProfile.menuIdx]?.pressed)    now.add("y");
+            if (pad.buttons[4]?.pressed) now.add("L1");
+            if (pad.buttons[5]?.pressed) now.add("R1");
+            if (pad.buttons[6]?.pressed) now.add("L2");
+            if (pad.buttons[7]?.pressed) now.add("R2");
+            if (pad.buttons[9]?.pressed) now.add("start");
             const ax0 = pad.axes[0] || 0;
             const ax1 = pad.axes[1] || 0;
             if (ax1 < -0.6) now.add("up");
