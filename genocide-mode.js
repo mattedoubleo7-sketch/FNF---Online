@@ -51,7 +51,7 @@
 
     const SONG_ID = "genocide";
     const SONG_SOURCE = "genocide";
-    const genState = { ready: false, images: {}, groundCache: {}, referenceCache: {}, afterimages: { opponent: [], boyfriend: [] }, clockStart: 0, cacheKey: USING_REVIVAL ? "genocide-revival-v3" : "genocide-v10" };
+    const genState = { ready: false, images: {}, groundCache: {}, referenceCache: {}, afterimages: { opponent: [], boyfriend: [] }, clockStart: 0, cacheKey: USING_REVIVAL ? "genocide-revival-v4" : "genocide-v10" };
     const clamp01 = value => Math.max(0, Math.min(1, value));
     const DIR_TO_ANIM = {
       left: "singLEFT",
@@ -145,14 +145,16 @@
       return {
         revival: true,
         defaultZoom: REVIVAL.stage.defaultZoom,
-        // Frame display scale on our canvas. Source `scale` was 0.9 for
-        // tabi/bf and 1.2 for gf, times the stage's 0.7 zoom = 0.63 / 0.84.
-        // We render slightly bigger so the characters read on a TV-distance
-        // viewport without spilling off-screen.
+        // Frame display scale on our canvas. roleRenderState multiplies
+        // this by sprite.scale a second time, so this number is BEFORE
+        // the per-sprite scale. Source `scale` was 0.9 for tabi/bf and
+        // 1.2 for gf, multiplied by stage's 0.7 zoom = 0.63 / 0.84
+        // effective. Don't pre-multiply sprite.scale here or we'd
+        // square it.
         roleScale: {
-          opponent: 0.70 * Number(REVIVAL.sprites.tabi.scale || 0.9),
-          girlfriend: 0.62 * Number(REVIVAL.sprites.gf.scale || 1.2),
-          boyfriend: 0.70 * Number(REVIVAL.sprites.boyfriend.scale || 0.9)
+          opponent: 0.70,
+          girlfriend: 0.60,
+          boyfriend: 0.70
         },
         // FEET-PLANTED ground anchors. Tabi on the left side of the
         // restaurant, GF on the speaker behind the floor, BF on the right.
@@ -1133,10 +1135,17 @@
       baseRefreshHUD(t);
       if (state.selectedSong !== SONG_ID) return;
       ui.timer.textContent = `${formatTime(t)} / ${formatTime(totalTime())}`;
-      ui.statusText.textContent = t < 16 ? "Genocide intro" : "Genocide";
-      ui.statusSub.textContent = t < 16
-        ? "The original VS Tabi intro lead-in is still running before the note wall starts."
-        : "Angry Tabi, the Genocide chart, and the Tabi noteskin are running from the original mod files.";
+      const introCutoff = USING_REVIVAL ? 19 : 16;
+      ui.statusText.textContent = t < introCutoff ? "Genocide intro" : "Genocide";
+      if (USING_REVIVAL) {
+        ui.statusSub.textContent = t < introCutoff
+          ? "VS Tabi Revival intro - the note wall drops once the buildup finishes."
+          : "VS Tabi Revival: 200 BPM, 1468 notes, restaurant-fire stage with bloom-shaded flames.";
+      } else {
+        ui.statusSub.textContent = t < introCutoff
+          ? "The original VS Tabi intro lead-in is still running before the note wall starts."
+          : "Angry Tabi, the Genocide chart, and the Tabi noteskin are running from the original mod files.";
+      }
     };
 
     finish = function(failed = false) {
