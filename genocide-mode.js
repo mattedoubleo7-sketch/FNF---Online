@@ -51,7 +51,7 @@
 
     const SONG_ID = "genocide";
     const SONG_SOURCE = "genocide";
-    const genState = { ready: false, images: {}, groundCache: {}, referenceCache: {}, afterimages: { opponent: [], boyfriend: [] }, clockStart: 0, cacheKey: USING_REVIVAL ? "genocide-revival-v4" : "genocide-v10" };
+    const genState = { ready: false, images: {}, groundCache: {}, referenceCache: {}, afterimages: { opponent: [], boyfriend: [] }, clockStart: 0, cacheKey: USING_REVIVAL ? "genocide-revival-v6" : "genocide-v10" };
     const clamp01 = value => Math.max(0, Math.min(1, value));
     const DIR_TO_ANIM = {
       left: "singLEFT",
@@ -1215,16 +1215,48 @@
       drawStagePostFX(t);
     };
 
+    // Decide which character owns the camera right now by sampling the
+    // chart around the current song time. The base engine's updateCamera
+    // is a stub that forces lastSide="both" every frame, and we converted
+    // the chart from sections to a flat note list so mustHitSection isn't
+    // directly available. So derive side from the density of opp vs player
+    // notes around now (±2s).
+    function genocideSideAt(t) {
+      const notes = state.chart?.notes || [];
+      let oppCount = 0, playerCount = 0;
+      let nextSide = null, nextDt = Infinity;
+      for (const n of notes) {
+        const dn = n.time - t;
+        if (dn < -1.6 || dn > 2.4) continue;
+        const weight = dn >= 0 ? (1 - dn / 2.4) : (1 + dn / 1.6) * 0.7;
+        if (n.side === "opp") oppCount += weight;
+        else if (n.side === "player") playerCount += weight;
+        if (dn >= 0 && dn < nextDt) { nextDt = dn; nextSide = n.side; }
+      }
+      if (oppCount > playerCount * 1.6) return "opp";
+      if (playerCount > oppCount * 1.6) return "player";
+      if (nextSide === "opp" || nextSide === "player") return nextSide;
+      return "both";
+    }
+
     // VS Tabi Genocide camera. Two regimes:
-    //   - Revival (Smooth Camera.lua port): camBetterFollowLerp = 0.1 +
-    //     per-sing camera displacement (left=-20x, right=+20x, etc.). Base
-    //     zoom is the stage defaultZoom (0.7), but the camHUD-level beat
-    //     bump scales it up by ~5.5% on each beat to mirror the original's
-    //     beatHit -> camGame.zoom += 0.015 behaviour.
+    //   - Revival: side derived from chart density, focus pans to the
+    //     active singer, beat bump tightens zoom each beat.
     //   - Rework (legacy): aggressive side-switch close-ups.
     updateCamera = function(t, dt) {
-      if (baseUpdateCamera) baseUpdateCamera.apply(this, arguments);
-      if (state.selectedSong !== SONG_ID) return;
+      if (state.selectedSong !== SONG_ID) {
+        if (baseUpdateCamera) return baseUpdateCamera.apply(this, arguments);
+        return;
+      }
+      // CRITICAL: do NOT call baseUpdateCamera while we're rendering
+      // Genocide. The base stub unconditionally clobbers focusX=midX,
+      // focusY=midY, zoom=1, lastSide="both" EVERY frame, which makes
+      // our lerp cover only ~7% of the distance before the next frame
+      // snaps focus back to centre. Skipping it is safe because the base
+      // only writes to state.camera (which we fully own for this song).
+      if (USING_REVIVAL) {
+        state.camera.lastSide = genocideSideAt(t);
+      }
       const bump = genocideCameraBump(t);
       const side = state.camera?.lastSide || "both";
       const camCfg = LAYOUT.camera;
