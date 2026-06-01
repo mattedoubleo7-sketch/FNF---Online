@@ -751,8 +751,8 @@
       ctx.strokeStyle = "rgba(255,29,96," + (0.07 + pulse * 0.035).toFixed(3) + ")";
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.moveTo(x, laneY + 26);
-      ctx.lineTo(x, 448 + lanePos.y * 0.4);
+      ctx.moveTo(x, typeof receptorGuideStartY === "function" ? receptorGuideStartY(laneY) : laneY + 26);
+      ctx.lineTo(x, typeof receptorGuideEndY === "function" ? receptorGuideEndY(lanePos.y * 0.4) : 448 + lanePos.y * 0.4);
       ctx.stroke();
       ctx.restore();
     }
@@ -781,7 +781,9 @@
     const ry = receptorY();
     if(t < ballisticState.lastNoteRenderTime - 0.5) ballisticState.firstDrawIndex = 0;
     ballisticState.lastNoteRenderTime = t;
-    while(ballisticState.firstDrawIndex < noteList.length){
+    const down = typeof isDownScroll === "function" && isDownScroll();
+    if(down) ballisticState.firstDrawIndex = 0;
+    while(!down && ballisticState.firstDrawIndex < noteList.length){
       const n = noteList[ballisticState.firstDrawIndex];
       if(ry + (holdEndTime(n) - t) * scroll >= minY) break;
       ballisticState.firstDrawIndex++;
@@ -792,10 +794,10 @@
       if(n.played && n.hit && (!isHoldNote(n) || n.holdDone)) continue;
       if(n.judged && n.side !== "opp" && (!isHoldNote(n) || n.holdDone || !n.hit)) continue;
       const diff = n.time - t;
-      const y = ry + diff * scroll;
-      const tailY = ry + (holdEndTime(n) - t) * scroll;
-      if(y > maxY && tailY > maxY) break;
-      if(y < minY && tailY < minY) continue;
+      const y = typeof noteYFromDiff === "function" ? noteYFromDiff(diff, scroll, ry) : ry + diff * scroll;
+      const tailY = typeof noteYFromDiff === "function" ? noteYFromDiff(holdEndTime(n) - t, scroll, ry) : ry + (holdEndTime(n) - t) * scroll;
+      if(typeof notePastViewport === "function" ? notePastViewport(y, tailY, minY, maxY) : (y < minY && tailY < minY)) continue;
+      if(typeof noteFutureViewport === "function" ? noteFutureViewport(y, tailY, minY, maxY) : (y > maxY && tailY > maxY)) break;
       const lane = n.lane;
       const lanePos = ballisticLanePosition(lane, t, special);
       const x = lanePos.x;

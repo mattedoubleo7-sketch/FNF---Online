@@ -540,8 +540,8 @@
         ctx.strokeStyle = `rgba(255,255,255,${(0.05 * alpha).toFixed(3)})`;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(x, receptorY() + 26);
-        ctx.lineTo(x, 448);
+        ctx.moveTo(x, typeof receptorGuideStartY === "function" ? receptorGuideStartY(receptorY()) : receptorY() + 26);
+        ctx.lineTo(x, typeof receptorGuideEndY === "function" ? receptorGuideEndY() : 448);
         ctx.stroke();
       }
     }
@@ -557,10 +557,10 @@
       const diff = note.time - t;
       const x = sillyLaneX(note.lane, t);
       const recY = sillyLaneY(note.lane, t);
-      const y = recY + diff * scroll;
-      const tailY = recY + (holdEndTime(note) - t) * scroll;
-      if (y < -140 && tailY < -140) continue;
-      if (y > canvas.height + 140 && tailY > canvas.height + 140) continue;
+      const y = typeof noteYFromDiff === "function" ? noteYFromDiff(diff, scroll, recY) : recY + diff * scroll;
+      const tailY = typeof noteYFromDiff === "function" ? noteYFromDiff(holdEndTime(note) - t, scroll, recY) : recY + (holdEndTime(note) - t) * scroll;
+      if (typeof notePastViewport === "function" ? notePastViewport(y, tailY, -140, canvas.height + 140) : (y < -140 && tailY < -140)) continue;
+      if (typeof noteFutureViewport === "function" ? noteFutureViewport(y, tailY, -140, canvas.height + 140) : (y > canvas.height + 140 && tailY > canvas.height + 140)) continue;
       const alpha = sillyLaneAlpha(note.lane, t) * (note.side === "opp" ? 0.84 : 1);
       if (alpha <= 0.01) continue;
       const scale = Math.max(0.75, Math.min(1.12, 1 - Math.pow(Math.abs(diff), 0.7) * 0.45));

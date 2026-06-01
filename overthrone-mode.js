@@ -777,8 +777,8 @@
         ctx.strokeStyle = lane < 4 ? `rgba(255,72,84,${(0.06 * laneAlpha).toFixed(3)})` : "rgba(255,72,84,0.08)";
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(x, y + 26);
-        ctx.lineTo(x, 376);
+        ctx.moveTo(x, typeof receptorGuideStartY === "function" ? receptorGuideStartY(y) : y + 26);
+        ctx.lineTo(x, typeof receptorGuideEndY === "function" ? receptorGuideEndY(-72) : 376);
         ctx.stroke();
       }
       ctx.restore();
@@ -850,10 +850,10 @@
         const diff = note.time - t;
         const x = overthroneLaneX(note.lane);
         const receptor = overthroneReceptorY();
-        const y = receptor + diff * scroll;
-        const tailY = receptor + (holdEndTime(note) - t) * scroll;
-        if (y < -150 && tailY < -150) continue;
-        if (y > canvas.height + 150 && tailY > canvas.height + 150) continue;
+        const y = typeof noteYFromDiff === "function" ? noteYFromDiff(diff, scroll, receptor) : receptor + diff * scroll;
+        const tailY = typeof noteYFromDiff === "function" ? noteYFromDiff(holdEndTime(note) - t, scroll, receptor) : receptor + (holdEndTime(note) - t) * scroll;
+        if (typeof notePastViewport === "function" ? notePastViewport(y, tailY, -150, canvas.height + 150) : (y < -150 && tailY < -150)) continue;
+        if (typeof noteFutureViewport === "function" ? noteFutureViewport(y, tailY, -150, canvas.height + 150) : (y > canvas.height + 150 && tailY > canvas.height + 150)) continue;
         const scale = clamp(1 - Math.pow(Math.abs(diff), 0.7) * 0.45, 0.75, 1.12);
         // Online matches: opponent notes get full alpha (no sansOpponentNoteAlpha fade)
         const alpha = isOnlineMatch ? 1 : (note.side === "opp" ? 0.72 * sansOpponentNoteAlpha(t) : 1);

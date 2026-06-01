@@ -1134,8 +1134,8 @@
           ctx.strokeStyle = "rgba(255,255,255,0.06)";
           ctx.lineWidth = 1.5;
           ctx.beginPath();
-          ctx.moveTo(x, y + 26);
-          ctx.lineTo(x, 448 + shake.y);
+          ctx.moveTo(x, typeof receptorGuideStartY === "function" ? receptorGuideStartY(y) : y + 26);
+          ctx.lineTo(x, typeof receptorGuideEndY === "function" ? receptorGuideEndY(shake.y) : 448 + shake.y);
           ctx.stroke();
         }
         return;
@@ -1153,8 +1153,8 @@
         ctx.strokeStyle = "rgba(255,255,255,0.06)";
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(x, y + 26);
-        ctx.lineTo(x, 448 + shake.y);
+        ctx.moveTo(x, typeof receptorGuideStartY === "function" ? receptorGuideStartY(y) : y + 26);
+        ctx.lineTo(x, typeof receptorGuideEndY === "function" ? receptorGuideEndY(shake.y) : 448 + shake.y);
         ctx.stroke();
       }
     };
@@ -1173,10 +1173,10 @@
           if (note.invisible) continue;
           const diff = note.time - t;
           const x = laneX(note.lane) + shake.x;
-          const y = receptorY() + diff * scroll + shake.y;
-          const tailY = receptorY() + (holdEndTime(note) - t) * scroll + shake.y;
-          if (y < -120 && tailY < -120) continue;
-          if (y > canvas.height + 120 && tailY > canvas.height + 120) continue;
+          const y = (typeof noteYFromDiff === "function" ? noteYFromDiff(diff, scroll) : receptorY() + diff * scroll) + shake.y;
+          const tailY = (typeof noteYFromDiff === "function" ? noteYFromDiff(holdEndTime(note) - t, scroll) : receptorY() + (holdEndTime(note) - t) * scroll) + shake.y;
+          if (typeof notePastViewport === "function" ? notePastViewport(y, tailY) : (y < -120 && tailY < -120)) continue;
+          if (typeof noteFutureViewport === "function" ? noteFutureViewport(y, tailY) : (y > canvas.height + 120 && tailY > canvas.height + 120)) continue;
           const scale = clamp(1 - Math.pow(Math.abs(diff), 0.7) * .45, .75, 1.12);
           const alpha = note.side === "opp" ? .84 : 1;
           if (isHoldNote(note)) drawSportingFallbackSustain(note, note.hit ? receptorY() + shake.y : y, tailY, alpha * (note.hit ? 0.94 : 1), x);
@@ -1194,10 +1194,10 @@
         if (note.invisible) continue;
         const diff = note.time - t;
         const x = laneX(note.lane) + shake.x;
-        const y = receptorY() + diff * scroll + shake.y;
-        const tailY = receptorY() + (holdEndTime(note) - t) * scroll + shake.y;
-        if (y < -120 && tailY < -120) continue;
-        if (y > canvas.height + 120 && tailY > canvas.height + 120) continue;
+        const y = (typeof noteYFromDiff === "function" ? noteYFromDiff(diff, scroll) : receptorY() + diff * scroll) + shake.y;
+        const tailY = (typeof noteYFromDiff === "function" ? noteYFromDiff(holdEndTime(note) - t, scroll) : receptorY() + (holdEndTime(note) - t) * scroll) + shake.y;
+        if (typeof notePastViewport === "function" ? notePastViewport(y, tailY) : (y < -120 && tailY < -120)) continue;
+        if (typeof noteFutureViewport === "function" ? noteFutureViewport(y, tailY) : (y > canvas.height + 120 && tailY > canvas.height + 120)) continue;
         const scale = clamp(1 - Math.pow(Math.abs(diff), 0.7) * .45, .75, 1.12);
         const alpha = note.side === "opp" ? .84 : 1;
         if (isHoldNote(note)) drawChallengeSustain(note, note.hit ? receptorY() + shake.y : y, tailY, alpha * (note.hit ? 0.94 : 1), x);

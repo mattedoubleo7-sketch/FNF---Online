@@ -6,11 +6,11 @@
 
   const baseStage = stage;
   const baseBg = bg;
-  const nativeDepthSongs = new Set(["combat", "oneHit", "shimmy"]);
+  const nativeDepthSongs = new Set();
   const strengthBySong = {
-    combat: 0.18,
-    oneHit: 0.18,
-    shimmy: 0.18,
+    combat: 0.68,
+    oneHit: 0.68,
+    shimmy: 0.68,
     boxingMatchWg: 0.34,
     sporting: 0.58,
     boxingMatch: 0.58,

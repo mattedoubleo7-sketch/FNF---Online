@@ -913,10 +913,10 @@
         if(n.played && n.hit && (!isHoldNote(n) || n.holdDone)) continue;
         if(n.judged && n.side !== "opp" && (!isHoldNote(n) || n.holdDone || !n.hit)) continue;
         const diff = n.time - t;
-        const y = ry + diff * scroll;
-        const tailY = ry + (holdEndTime(n) - t) * scroll;
-        if(y < -140 && tailY < -140) continue;
-        if(y > canvas.height + 140 && tailY > canvas.height + 140) continue;
+        const y = typeof noteYFromDiff === "function" ? noteYFromDiff(diff, scroll, ry) : ry + diff * scroll;
+        const tailY = typeof noteYFromDiff === "function" ? noteYFromDiff(holdEndTime(n) - t, scroll, ry) : ry + (holdEndTime(n) - t) * scroll;
+        if(typeof notePastViewport === "function" ? notePastViewport(y, tailY, -140, canvas.height + 140) : (y < -140 && tailY < -140)) continue;
+        if(typeof noteFutureViewport === "function" ? noteFutureViewport(y, tailY, -140, canvas.height + 140) : (y > canvas.height + 140 && tailY > canvas.height + 140)) break;
         const rawScale = clamp(1 - Math.pow(Math.abs(diff), 0.7) * 0.45, 0.75, 1.12);
         const alpha = n.side === "opp" ? 0.84 : 1;
         if(isHoldNote(n)) drawWgSustain(n, laneX(n.lane), n.hit ? ry : y, tailY, alpha * (n.hit ? 0.9 : 1), t);
@@ -1344,8 +1344,8 @@
         const x = laneX(lane);
         drawWgReceptor(lane, x, y, t);
         ctx.beginPath();
-        ctx.moveTo(x, y + 26);
-        ctx.lineTo(x, canvas.height - 40);
+        ctx.moveTo(x, typeof receptorGuideStartY === "function" ? receptorGuideStartY(y) : y + 26);
+        ctx.lineTo(x, typeof receptorGuideEndY === "function" ? receptorGuideEndY() : canvas.height - 40);
         ctx.stroke();
       }
     };

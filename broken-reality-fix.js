@@ -2098,8 +2098,8 @@
         ctx.moveTo(x, y - 26);
         ctx.lineTo(x, 96);
       } else {
-        ctx.moveTo(x, y + 26);
-        ctx.lineTo(x, 448);
+        ctx.moveTo(x, typeof receptorGuideStartY === "function" ? receptorGuideStartY(y) : y + 26);
+        ctx.lineTo(x, typeof receptorGuideEndY === "function" ? receptorGuideEndY() : 448);
       }
       ctx.stroke();
     }

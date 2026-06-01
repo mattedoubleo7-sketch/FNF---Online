@@ -790,8 +790,8 @@
         ctx.strokeStyle = "rgba(255,255,255,0.06)";
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(x, y + 26);
-        ctx.lineTo(x, 448);
+        ctx.moveTo(x, typeof receptorGuideStartY === "function" ? receptorGuideStartY(y) : y + 26);
+        ctx.lineTo(x, typeof receptorGuideEndY === "function" ? receptorGuideEndY() : 448);
         ctx.stroke();
       }
     };
@@ -806,10 +806,10 @@
         if (note.invisible) continue;
         const diff = note.time - t;
         const x = laneX(note.lane);
-        const y = receptorY() + diff * scroll;
-        const tailY = receptorY() + (holdEndTime(note) - t) * scroll;
-        if (y < -120 && tailY < -120) continue;
-        if (y > canvas.height + 120 && tailY > canvas.height + 120) continue;
+        const y = typeof noteYFromDiff === "function" ? noteYFromDiff(diff, scroll) : receptorY() + diff * scroll;
+        const tailY = typeof noteYFromDiff === "function" ? noteYFromDiff(holdEndTime(note) - t, scroll) : receptorY() + (holdEndTime(note) - t) * scroll;
+        if (typeof notePastViewport === "function" ? notePastViewport(y, tailY) : (y < -120 && tailY < -120)) continue;
+        if (typeof noteFutureViewport === "function" ? noteFutureViewport(y, tailY) : (y > canvas.height + 120 && tailY > canvas.height + 120)) continue;
         const scale = clamp(1 - Math.pow(Math.abs(diff), 0.7) * 0.45, 0.75, 1.12);
         const alpha = note.side === "opp" ? 0.84 : 1;
         if (isHoldNote(note)) drawFallenStarsSustain(note, note.hit ? receptorY() : y, tailY, alpha * (note.hit ? 0.94 : 1), x);

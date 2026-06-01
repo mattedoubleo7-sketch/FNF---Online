@@ -1467,6 +1467,13 @@ body.mobile .chatLog { max-height: 130px !important; font-size: 12px !important;
                 </label>
             </div>
             <div class="block" style="margin-top:14px;">
+                <h3>Gameplay</h3>
+                <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:15px;">
+                    <input type="checkbox" id="downScrollToggle" style="width:18px; height:18px; margin-top:2px; flex-shrink:0;">
+                    <span><strong>Downscroll</strong> - puts the receptors near the bottom and makes notes fall down toward them.</span>
+                </label>
+            </div>
+            <div class="block" style="margin-top:14px;">
                 <h3>Audio</h3>
                 <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:15px;">
                     <input type="checkbox" id="muteVoicesToggle" style="width:18px; height:18px; margin-top:2px; flex-shrink:0;">
@@ -1631,7 +1638,7 @@ const STORAGE = "fnf-browser-jam-v1";
 const DIRS = ["left", "down", "up", "right"];
 const COLORS = ["#ff5a91", "#ff9d42", "#b7ff65", "#4de3ff", "#ff5a91", "#ff9d42", "#b7ff65", "#4de3ff"];
 const MOTIFS = [[0,1,2,3,2,1],[0,2,1,3,2,0],[3,2,1,0,1,2],[1,1,2,3,2,0],[0,3,1,2,3,1],[2,0,3,1,2,1]];
-const DEFAULTS = { solo:{left:"a",down:"s",up:"w",right:"d"}, p1:{left:"a",down:"s",up:"w",right:"d"}, p2:{left:"arrowleft",down:"arrowdown",up:"arrowup",right:"arrowright"}, mobile: false, console: false, performance: false, fpsCounter: false, reduceMotion: false, muteVoices: false };
+const DEFAULTS = { solo:{left:"a",down:"s",up:"w",right:"d"}, p1:{left:"a",down:"s",up:"w",right:"d"}, p2:{left:"arrowleft",down:"arrowdown",up:"arrowup",right:"arrowright"}, mobile: false, console: false, performance: false, fpsCounter: false, reduceMotion: false, downScroll: false, muteVoices: false };
 const SONGS = {
     sporting:{ title:"Sporting", subtitle:"Original hard chart with 1.5x scroll", diff:"Hard (Original Chart)", tempo:300, root:45, scale:[0,2,3,5,7,8,10], prog:[0,5,3,7], scroll:920, seed:29, introBeats:0, outroBeats:4, palette:["#0f1422","#1b2f46","#314f74","#0b0e16","#4de3ff","#ff9d42"], blurb:"Imported from the original VS Matt Sporting hard chart with the real instrumental and vocals at normal speed on the boxing ring stage.", chartSource:"sporting"},
     boxingMatch:{ title:"Boxing Match", subtitle:"Original VS Matt chart", diff:"Normal (Original Chart)", tempo:339, root:45, scale:[0,2,3,5,7,8,10], prog:[0,5,3,7], scroll:760, seed:31, introBeats:0, outroBeats:4, palette:["#0f1422","#1b2f46","#314f74","#0b0e16","#4de3ff","#ff9d42"], blurb:"Imported from the original VS Matt Boxing Match chart with the real instrumental and vocals on the boxing ring, while keeping the Sporting noteskins.", chartSource:"boxingMatch"},
@@ -1922,8 +1929,10 @@ function drawChallengeStyleSportingSustain(note, x, topY, tailY, alpha=1){
 function drawSportingSustain(note, x, topY, tailY, alpha=1){
     if(!isHoldNote(note)) return;
     if((state.selectedSong === "oneHit" || state.selectedSong === "shimmy") && drawChallengeStyleSportingSustain(note, x, topY, tailY, alpha)) return;
-    const startY = Math.max(-80, topY + 18);
-    const endY = Math.min(canvas.height + 80, tailY - 10);
+    const upperY = Math.min(topY, tailY);
+    const lowerY = Math.max(topY, tailY);
+    const startY = Math.max(-80, upperY + 18);
+    const endY = Math.min(canvas.height + 80, lowerY - 10);
     if(endY <= startY) return;
     const color = COLORS[note.lane] || "#fff";
     ctx.save();
@@ -2234,7 +2243,9 @@ function perseveranceHeldNote(char, t){
     return activeHoldNoteForCharacter(char, t);
 }
 function drawPerseveranceSustain(note, x, topY, tailY, alpha=1){
-    if(!isHoldNote(note) || tailY <= topY + 12) return;
+    if(!isHoldNote(note) || Math.abs(tailY - topY) <= 12) return;
+    const upperY = Math.min(topY, tailY);
+    const lowerY = Math.max(topY, tailY);
     const skin = perseveranceCurrentSkin();
     if(skin.cell){
         const hold = skin.hold;
@@ -2246,9 +2257,9 @@ function drawPerseveranceSustain(note, x, topY, tailY, alpha=1){
         const sx = (note.lane % 4) * colW;
         const scale = 3.45;
         const bodyW = colW * scale;
-        const bodyTop = topY + 12;
+        const bodyTop = upperY + 12;
         const capPx = capH * scale;
-        const bodyBottom = tailY - capPx * 0.55;
+        const bodyBottom = lowerY - capPx * 0.55;
         if(bodyBottom > bodyTop){
             drawPerseverancePixelSlice(img, sx, 0, colW, bodyH, x - bodyW / 2, bodyTop, bodyW, bodyBottom - bodyTop, alpha * 0.94);
         }
@@ -2259,9 +2270,9 @@ function drawPerseveranceSustain(note, x, topY, tailY, alpha=1){
     const hold = skin.hold && skin.hold[dir];
     if(!hold || !hold.piece || !hold.end) return;
     const bodyScale = 0.68;
-    const bodyTop = topY + 30;
+    const bodyTop = upperY + 30;
     const endH = (hold.end.fh || hold.end.h) * bodyScale;
-    const bodyBottom = tailY - endH * 0.45;
+    const bodyBottom = lowerY - endH * 0.45;
     const bodyW = (hold.piece.fw || hold.piece.w) * bodyScale;
     // glow behind hold trail
     ctx.save();
@@ -2340,7 +2351,7 @@ const state = {
     hitGlow: []
 };
 function copy(v){ return JSON.parse(JSON.stringify(v)); }
-function loadSettings(){ try { const s = JSON.parse(localStorage.getItem(STORAGE)); return s ? { solo:{...DEFAULTS.solo,...s.solo}, p1:{...DEFAULTS.p1,...s.p1}, p2:{...DEFAULTS.p2,...s.p2}, mobile: !!s.mobile, console: !!s.console, performance: !!s.performance, fpsCounter: !!s.fpsCounter, reduceMotion: !!s.reduceMotion, muteVoices: !!s.muteVoices } : copy(DEFAULTS); } catch { return copy(DEFAULTS); } }
+function loadSettings(){ try { const s = JSON.parse(localStorage.getItem(STORAGE)); return s ? { solo:{...DEFAULTS.solo,...s.solo}, p1:{...DEFAULTS.p1,...s.p1}, p2:{...DEFAULTS.p2,...s.p2}, mobile: !!s.mobile, console: !!s.console, performance: !!s.performance, fpsCounter: !!s.fpsCounter, reduceMotion: !!s.reduceMotion, downScroll: !!s.downScroll, muteVoices: !!s.muteVoices } : copy(DEFAULTS); } catch { return copy(DEFAULTS); } }
 function saveSettings(){ localStorage.setItem(STORAGE, JSON.stringify(state.settings)); }
 function keyName(k){ if(k === " ") return "Space"; if(k.startsWith("arrow")) return "Arrow " + k.slice(5,6).toUpperCase() + k.slice(6); return k.length === 1 ? k.toUpperCase() : k.replace(/^\w/, c => c.toUpperCase()); }
 function clamp(v,a,b){ return Math.min(b, Math.max(a, v)); }
@@ -2807,7 +2818,18 @@ function finish(failed=false){
     ui.resultsWrap.classList.add("show");
 }
 function laneX(i){ return 248 + i * 112; }
-function receptorY(){ return 172; }
+function isDownScroll(){ return !!(state?.settings?.downScroll); }
+function scrollDirection(){ return isDownScroll() ? -1 : 1; }
+function receptorY(){ return isDownScroll() ? 548 : 172; }
+function receptorGuideStartY(y){ return y + (isDownScroll() ? -26 : 26); }
+function receptorGuideEndY(offset = 0){ return (isDownScroll() ? 272 : 448) + offset; }
+function noteYFromDiff(diff, scroll, baseY = receptorY()){ return baseY + diff * scroll * scrollDirection(); }
+function notePastViewport(y, tailY, minY = -120, maxY = canvas.height + 120){
+    return isDownScroll() ? (y > maxY && tailY > maxY) : (y < minY && tailY < minY);
+}
+function noteFutureViewport(y, tailY, minY = -120, maxY = canvas.height + 120){
+    return isDownScroll() ? (y < minY && tailY < minY) : (y > maxY && tailY > maxY);
+}
 function arrow(x, y, size, angle, fill, stroke, alpha=1){
     ctx.save();
     ctx.translate(x, y);
@@ -3030,7 +3052,7 @@ function receptors(t){
             const on = !!state.keysDown[lane], fill = on ? COLORS[lane] : "rgba(13,20,36,0.88)", stroke = on ? "#fff" : "rgba(255,255,255,0.18)";
             ctx.save(); ctx.shadowBlur = on ? 18 : 8 + pulse * 4; ctx.shadowColor = COLORS[lane]; arrow(x, y, 48, [Math.PI, Math.PI/2, -Math.PI/2, 0][lane % 4], fill, stroke); ctx.restore();
         }
-        ctx.strokeStyle = "rgba(255,255,255,0.06)"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x, y + 26); ctx.lineTo(x, 448); ctx.stroke();
+        ctx.strokeStyle = "rgba(255,255,255,0.06)"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x, receptorGuideStartY(y)); ctx.lineTo(x, receptorGuideEndY()); ctx.stroke();
     }
 }
 function notes(t){
@@ -3040,10 +3062,10 @@ function notes(t){
         if(n.judged && n.side !== "opp" && (!isHoldNote(n) || n.holdDone || !n.hit)) continue;
         const scroll = state.selectedSong === "perseverance" ? perseveranceScrollBasePx() * perseveranceScrollSpeed(t) : state.currentSong.scroll;
         const diff = n.time - t;
-        const y = receptorY() + diff * scroll;
-        const tailY = receptorY() + (holdEndTime(n) - t) * scroll;
-        if(y < -120 && tailY < -120) continue;
-        if(y > canvas.height + 120 && tailY > canvas.height + 120) continue;
+        const y = noteYFromDiff(diff, scroll);
+        const tailY = noteYFromDiff(holdEndTime(n) - t, scroll);
+        if(notePastViewport(y, tailY)) continue;
+        if(noteFutureViewport(y, tailY)) break;
         // In online mode every note stays at full alpha (no per-song fade or
         // hide effects) so both players can always see the chart.
         const isOnlineMatch = state.mode === "online";
@@ -3258,18 +3280,18 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 </script>
 <script src="online-mode.js?v=20260530e"></script>
 <script src="boxing-fight-mode.js?v=20260322-stage6"></script>
-<script src="combat-mode.js?v=20260601c"></script>
-<script src="ballistic-mode.js?v=20260524i"></script>
-<script src="boxing-match-wg-mode.js?v=20260531k"></script>
+<script src="combat-mode.js?v=20260601g"></script>
+<script src="ballistic-mode.js?v=20260601g"></script>
+<script src="boxing-match-wg-mode.js?v=20260601g"></script>
 <script src="broken-reality-mode.js"></script>
 <script src="broken-reality-soul-data.js"></script>
-<script src="broken-reality-fix.js?v=20260331a"></script>
-<script src="challenge-edd-mode.js"></script>
-<script src="fallen-stars-mode.js"></script>
-<script src="genocide-mode.js?v=genocide-revival-v7"></script>
-<script src="overthrone-mode.js?v=20260530c"></script>
-<script src="silly-billy-mode.js?v=20260531n"></script>
-<script src="universal-stage-parallax.js?v=20260601d"></script>
+<script src="broken-reality-fix.js?v=20260601g"></script>
+<script src="challenge-edd-mode.js?v=20260601g"></script>
+<script src="fallen-stars-mode.js?v=20260601g"></script>
+<script src="genocide-mode.js?v=20260601g"></script>
+<script src="overthrone-mode.js?v=20260601g"></script>
+<script src="silly-billy-mode.js?v=20260601g"></script>
+<script src="universal-stage-parallax.js?v=20260601g"></script>
 <script src="playback-stability-fix.js?v=20260524a"></script>
 <script src="playback-start-fix.js?v=20260524a"></script>
 <script src="desktop-mode.js"></script>
@@ -3745,6 +3767,7 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
     if (S.performance === undefined) S.performance = false;
     if (S.fpsCounter === undefined) S.fpsCounter = false;
     if (S.reduceMotion === undefined) S.reduceMotion = false;
+    if (S.downScroll === undefined) S.downScroll = false;
     if (S.muteVoices === undefined) S.muteVoices = false;
 
     const canvas = document.getElementById("canvas");
@@ -3828,6 +3851,7 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 
     // --- Reduce Motion: gate via window flag; song modes can check ---
     function applyReduceMotion() { window.REDUCE_MOTION = !!S.reduceMotion; }
+    function applyDownScroll() {}
 
     // Wire toggle inputs
     function wire(id, key, applyFn) {
@@ -3843,6 +3867,7 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
     wire("perfModeToggle",     "performance",  applyPerformanceMode);
     wire("fpsCounterToggle",   "fpsCounter",   applyFpsCounter);
     wire("reduceMotionToggle", "reduceMotion", applyReduceMotion);
+    wire("downScrollToggle",   "downScroll",   applyDownScroll);
     wire("muteVoicesToggle",   "muteVoices",   applyMuteVoices);
 
     // Chain into Reset Defaults so the new toggles reset cleanly
@@ -3850,18 +3875,19 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
         const _r = ui.resetBtn.onclick;
         ui.resetBtn.onclick = () => {
             if (_r) _r();
-            S.performance = false; S.fpsCounter = false; S.reduceMotion = false; S.muteVoices = false;
+            S.performance = false; S.fpsCounter = false; S.reduceMotion = false; S.downScroll = false; S.muteVoices = false;
             try { saveSettings(); } catch (e) {}
-            for (const id of ["perfModeToggle","fpsCounterToggle","reduceMotionToggle","muteVoicesToggle"]) {
+            for (const id of ["perfModeToggle","fpsCounterToggle","reduceMotionToggle","downScrollToggle","muteVoicesToggle"]) {
                 const el = document.getElementById(id);
                 if (el) el.checked = false;
             }
-            applyPerformanceMode(); applyFpsCounter(); applyReduceMotion(); applyMuteVoices();
+            applyPerformanceMode(); applyFpsCounter(); applyReduceMotion(); applyDownScroll(); applyMuteVoices();
         };
     }
     applyPerformanceMode();
     applyFpsCounter();
     applyReduceMotion();
+    applyDownScroll();
     applyMuteVoices();
 })();
 
@@ -4016,10 +4042,3 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
