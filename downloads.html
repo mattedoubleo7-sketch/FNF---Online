@@ -728,8 +728,8 @@ body.unlocked .needsTesterProxy { display: none; }
   <img src="assets/icon.ico" alt="Silly Billy app icon">
   <div>
     <span>New update</span>
-    <strong>Wii Camera + Shaders</strong>
-    <small>Combat, One Hit, and Shimmy now carry the Wii Funkin camera nudge, camera shaders, and original shader timelines.</small>
+    <strong>All-Song 3D Parallax</strong>
+    <small>Every active song now gets the shared Combat-style depth/parallax pass. Sansational and Last Reel are removed from the setlist.</small>
   </div>
 </aside>
 <div class="page">
@@ -738,7 +738,7 @@ body.unlocked .needsTesterProxy { display: none; }
     <div>
       <div class="kicker"><span class="liveDot"></span> Live build updated</div>
       <div class="titleWrap"><h1 data-text="FNF Onliine">FNF Onliine</h1></div>
-      <p>This is the download portal for the browser and app builds. Browser play is the easiest route for friends because it avoids Windows SmartScreen warnings on the unsigned `.exe`. The newest build tightens <strong>Combat / Wii Funkin polish</strong>: Combat, One Hit, and Shimmy now use the Wii Funkin section camera, note-direction camera nudges, game/HUD camera shader split, original shader event timelines, real SpeedEffect-style lines, and exact black bar shader behavior.</p>
+      <p>This is the download portal for the browser and app builds. Browser play is the easiest route for friends because it avoids Windows SmartScreen warnings on the unsigned `.exe`. The newest build adds a <strong>shared 3D parallax pass</strong>: every active song now gets Combat-style camera depth on the background and stage, while Sansational and Last Reel have been removed from the live setlist.</p>
       <div class="actions">
         <a class="btn primary needsTester" href="/play">Play Online In Browser</a>
         <a class="btn ghost needsTester" href="/offline">Play Offline In Browser</a>
@@ -762,7 +762,7 @@ body.unlocked .needsTesterProxy { display: none; }
       <h3>Tester Vault</h3>
       <p>Welcome, tester. You can now launch the game and download the desktop apps. These builds may be unstable — report bugs against the latest build only.</p>
       <ul>
-        <li>Latest VFX pass: Wii Funkin section camera, note-direction camera nudges, camera shader split, Combat/One Hit shader timelines, Shimmy SpeedEffect-style lines, and platform camera follow.</li>
+        <li>Latest VFX pass: shared 3D parallax across the active setlist, plus the Wii Funkin section camera, note-direction camera nudges, camera shader split, imported shader timelines, and platform camera follow.</li>
         <li>Hold-note pass: all songs use the fixed sustain behavior while keeping their own hold-note skins.</li>
         <li>Silly Billy build with Test of Time chart, spikes-bf, flashback cutscene, shader speed lines, and power-50 drain.</li>
         <li>Mobile + Console toggles in Settings — touch buttons + Xbox/PlayStation/generic gamepad support.</li>
@@ -775,15 +775,15 @@ body.unlocked .needsTesterProxy { display: none; }
   <section class="statsRow">
     <div class="statChip"><span>Newest song</span><strong>Silly Billy</strong></div>
     <div class="statChip"><span>Now supports</span><strong>Mobile + Gamepad</strong></div>
-    <div class="statChip"><span>Latest polish</span><strong>Wii Shaders</strong></div>
+    <div class="statChip"><span>Latest polish</span><strong>3D Parallax</strong></div>
     <div class="statChip"><span>Best route</span><strong>Browser</strong></div>
   </section>
 
   <section class="panel updatePanel">
     <div class="latestBox">
       <div class="version">Update log - 2026.06.01</div>
-      <h2>Wii Camera + Shader Timelines</h2>
-      <p>Combat, One Hit, and Shimmy now read the Wii Funkin shader event timelines and use the CamMovement-style camera nudge on note directions. Game/HUD camera shader assignment is split out, so mirrorHud, bars, SpeedEffect windows, mirror pulses, bloom, blur, greyscale, and ColorFill support are wired through the shared Wii renderer.</p>
+      <h2>Shared 3D Parallax Pass</h2>
+      <p>All active songs now run through a shared Combat-style background/stage parallax pass after their own stage renderers finish. It reacts to camera focus, active singer side, zoom pulses, and beat sway while respecting Reduce Motion and Performance Mode. Sansational and Last Reel were also removed from the live setlist.</p>
       <div class="actions">
         <a class="btn primary needsTester" href="/play">Jump Into Online</a>
         <a class="btn secondary needsTester" href="/offline">Try Offline</a>
@@ -792,7 +792,11 @@ body.unlocked .needsTesterProxy { display: none; }
     <div class="logList">
       <div class="logItem">
         <div class="logDate">Latest</div>
-        <div><div class="logTitle">Wii camera and shaders</div><p>Combat, One Hit, and Shimmy now draw the unknownnew stage from the original Wii Funkin coordinates, ride Matt's platform height in center/duet camera, nudge the camera 9px by note direction, split game/HUD camera shaders, and run the imported shader timelines instead of the old approximation.</p></div>
+        <div><div class="logTitle">All-song 3D parallax</div><p>Every active song now gets Combat-style background/stage depth after its own renderer finishes. The pass uses camera focus, active singer side, zoom, and beat sway, with lower intensity for songs that already have native depth.</p></div>
+      </div>
+      <div class="logItem">
+        <div class="logDate">Removed</div>
+        <div><div class="logTitle">Indie Cross songs removed</div><p>Sansational and Last Reel are no longer loaded into the browser builds or packaged app file list, and they have been removed from the visible setlist.</p></div>
       </div>
       <div class="logItem">
         <div class="logDate">Previous</div>
@@ -856,7 +860,7 @@ body.unlocked .needsTesterProxy { display: none; }
           <h3>Online App</h3>
           <p>Packaged desktop app for online play. It has the current release files and connects to the hosted online game.</p>
           <div class="actions">
-            <a class="btn primary needsTester" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/ONLINE/FNF-Browser-Jam-1.0.0-portable.exe?cache=20260601c">Download Online App</a>
+            <a class="btn primary needsTester" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/ONLINE/FNF-Browser-Jam-1.0.0-portable.exe?cache=20260601d">Download Online App</a>
           </div>
         </div>
         <div class="dlBlock">
@@ -895,7 +899,7 @@ body.unlocked .needsTesterProxy { display: none; }
           <h3>Offline App</h3>
           <p>Packaged offline download with the current local-play build and bundled assets.</p>
           <div class="actions">
-            <a class="btn primary needsTester" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/fnf/FNF-Browser-Jam-offline-1.0.0-portable.exe?cache=20260601c">Download Offline App</a>
+            <a class="btn primary needsTester" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/fnf/FNF-Browser-Jam-offline-1.0.0-portable.exe?cache=20260601d">Download Offline App</a>
           </div>
         </div>
         <div class="dlBlock">
@@ -939,12 +943,10 @@ body.unlocked .needsTesterProxy { display: none; }
       <div class="songTile"><strong>Challenge Edd</strong><span>Imported backyard layout with updated placement work.</span><div class="tagRow"><span class="tag">Edd</span><span class="tag">Stage</span></div></div>
       <div class="songTile"><strong>Our Broken Constellations</strong><span>Fallen Stars import with space stage work and Challenge Edd note skins.</span><div class="tagRow"><span class="tag">Space</span><span class="tag">Fallen Stars</span></div></div>
       <div class="songTile"><strong>Genocide</strong><span>Tabi import with animated stage, afterimage-style effects, and note work.</span><div class="tagRow"><span class="tag">Tabi</span><span class="tag">VFX</span></div></div>
-      <div class="songTile"><strong>Sansational</strong><span>Indie Cross Nightmare Sans import with dodge and attack prompts.</span><div class="tagRow"><span class="tag">Indie Cross</span><span class="tag">Sans</span></div></div>
-      <div class="songTile"><strong>Last Reel</strong><span>Indie Cross Bendy import with combat mechanics and run sections.</span><div class="tagRow"><span class="tag">Bendy</span><span class="tag">Combat</span></div></div>
     </div>
   </section>
 
-  <div class="footer">FNF Onliine download portal - Wii camera and shader polish - browser recommended, app builds refreshed</div>
+  <div class="footer">FNF Onliine download portal - all-song 3D parallax polish - browser recommended, app builds refreshed</div>
 </div>
 
 <script>

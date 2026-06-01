@@ -51,14 +51,17 @@
     "challenge-edd-bf-data.js",
     "fallen-stars-data.js",
     "fallen-stars-mode.js",
+    "!assets/indie-cross/**",
     "playback-stability-fix.js",
     "playback-start-fix.js",
     "genocide-data.js",
     "genocide-commands.js",
     "genocide-mode.js",
-    "sansational-data.js",
-    "last-reel-data.js",
-    "indie-cross-mode.js"
+    "universal-stage-parallax.js",
+    "!sansational-inst.ogg",
+    "!sansational-voices.ogg",
+    "!last-reel-inst.ogg",
+    "!last-reel-voices.ogg"
   ],
   "directories": {
     "output": "dist-offline"

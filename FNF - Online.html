@@ -1222,8 +1222,6 @@ body.mobile .chatLog { max-height: 130px !important; font-size: 12px !important;
         "challenge-edd-inst.ogg", "challenge-edd-voices.ogg",
         "our-broken-constellations-inst.ogg", "our-broken-constellations-voices.ogg",
         "genocide-inst.ogg", "genocide-voices.ogg",
-        "sansational-inst.ogg", "sansational-voices.ogg",
-        "last-reel-inst.ogg", "last-reel-voices.ogg",
         "overthrone-inst.ogg", "overthrone-voices.ogg",
         "ballistic-inst.ogg", "ballistic-voices-opp.ogg", "ballistic-voices-player.ogg",
     ];
@@ -1545,8 +1543,6 @@ body.mobile .chatLog { max-height: 130px !important; font-size: 12px !important;
 <script src="genocide-data.js?v=genocide-v10"></script>
 <script src="genocide-commands.js?v=genocide-v10"></script>
 <script src="genocide-revival-data.js?v=genocide-revival-v7"></script>
-<script src="sansational-data.js?v=20260524c"></script>
-<script src="last-reel-data.js?v=20260524c"></script>
 <script>
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
@@ -2387,7 +2383,7 @@ const SONG_CATEGORIES = [
     { id: "dustin",  label: "Dustin",       match: /dustin|broken reality|overthrone/i },
     { id: "whitty",  label: "Whitty",       match: /whitty|ballistic/i },
     { id: "indie",   label: "Indie Cross",  match: /indie cross|bendy/i },
-    { id: "sans",    label: "Sans",         match: /\bsans\b|nightmare|sansational|perseverance/i },
+    { id: "sans",    label: "Sans",         match: /\bsans\b|perseverance/i },
     { id: "tabi",    label: "Tabi",         match: /tabi|genocide/i },
     { id: "space",   label: "Space",        match: /fallen stars|constellation/i },
     { id: "edd",     label: "Eddsworld",    match: /eddsworld|challenge edd/i },
@@ -3271,9 +3267,9 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 <script src="challenge-edd-mode.js"></script>
 <script src="fallen-stars-mode.js"></script>
 <script src="genocide-mode.js?v=genocide-revival-v7"></script>
-<script src="indie-cross-mode.js?v=indiecross-v19"></script>
 <script src="overthrone-mode.js?v=20260530c"></script>
 <script src="silly-billy-mode.js?v=20260531n"></script>
+<script src="universal-stage-parallax.js?v=20260601d"></script>
 <script src="playback-stability-fix.js?v=20260524a"></script>
 <script src="playback-start-fix.js?v=20260524a"></script>
 <script src="desktop-mode.js"></script>
@@ -4020,8 +4016,6 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 </script>
 </body>
 </html>
-
-
 
 
 
