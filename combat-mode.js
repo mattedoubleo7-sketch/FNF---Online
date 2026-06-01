@@ -191,14 +191,17 @@
   }
 
   function combatDepth(t){
-    // User wants only the sky/back-back background to drift like it used
-    // to - rocks and platforms stay locked. We compute a slow idle sway
-    // for the `bg` channel here (used by unknownBG via the depth style
-    // below). Everything else stays at zero so the rock/foreground frame
-    // is rock-solid.
-    const tSafe = Number.isFinite(t) ? t : 0;
-    const bgX = Math.sin(tSafe * 0.42) * 22 + Math.sin(tSafe * 0.17) * 8;
-    const bgY = Math.cos(tSafe * 0.31) * 12 + Math.sin(tSafe * 0.09) * 4;
+    // Camera-driven parallax for the sky ONLY - this mirrors how the
+    // original combatDepth worked (focusX pan + slow global sway), but
+    // we apply it just to a `bgX`/`bgY` channel so unknownBG drifts with
+    // the camera while rocks/platforms stay locked.
+    const focus = (typeof state !== "undefined" ? (state.camera?.focusX || 640) : 640) - 640;
+    const pan = Math.max(-1, Math.min(1, focus / 360));
+    const sway = Math.sin((t || 0) * 0.55) * 0.35;
+    // Sky moves OPPOSITE to camera pan (further side becomes more visible),
+    // very small magnitude so it reads as deep distance, not as a slide.
+    const bgX = pan * -14 + sway * 6;
+    const bgY = sway * 3;
     return {
       far: 0,
       mid: 0,
