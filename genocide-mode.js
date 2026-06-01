@@ -17,14 +17,14 @@
       stageScale: 0.5,
       stageX: 0,
       stageY: 10,
-      destroyedAlpha: 0.22,
+      destroyedAlpha: 0.28,
       fireX: 640,
       fireY: 708,
-      fireScale: 0.86,
-      fireAlpha: 0.56,
-      fireGlowAlpha: 0.17,
-      stageGlowAlpha: 0.32,
-      stageGlowPulse: 0.22,
+      fireScale: 0.92,
+      fireAlpha: 0.66,
+      fireGlowAlpha: 0.24,
+      stageGlowAlpha: 0.4,
+      stageGlowPulse: 0.32,
       speakerX: 650,
       speakerY: 594,
       speakerScale: 0.5,
@@ -78,6 +78,7 @@
     const baseStage = stage;
     const baseReceptors = receptors;
     const baseNotes = notes;
+    const baseUpdateCamera = typeof updateCamera === "function" ? updateCamera : null;
     const baseCameraTargets = typeof cameraTargets === "function" ? cameraTargets : null;
     const baseCameraPanProfile = typeof cameraPanProfile === "function" ? cameraPanProfile : null;
     const baseCameraPoseKeys = typeof cameraPoseKeys === "function" ? cameraPoseKeys : null;
@@ -489,6 +490,19 @@
       return phase <= sharpness ? Math.pow(1 - phase / sharpness, 2.35) : 0;
     }
 
+    // VS Tabi Genocide has a much harder beat-driven camera bump than the
+    // engine default - at 213 BPM the camera punches in ~5% on every beat
+    // and snaps back fast. This bump shape is wider than the visual-only
+    // pulse so the camera feels like it lands and recovers cleanly per beat
+    // rather than chattering.
+    function genocideCameraBump(t) {
+      const spb = Math.max(0.001, Number(G.chart?.spb || 60 / Number(G.song?.bpm || 213)));
+      const phase = (t / spb) % 1;
+      const sharpness = 0.42;
+      const bump = phase <= sharpness ? Math.pow(1 - phase / sharpness, 1.6) : 0;
+      return 1 + bump * 0.055;
+    }
+
     function drawBottomCenteredImage(image, x, y, scale, alpha = 1, composite = "source-over") {
       if (!imageReady(image)) return;
       const width = image.naturalWidth * scale;
@@ -747,6 +761,40 @@
       drawAfterimages("boyfriend", t);
       drawRoleRender("boyfriend", bfRender);
       drawStagePostFX(t);
+    };
+
+    // VS Tabi Genocide camera: aggressive beat-driven zoom punches and side
+    // focus follows whoever is singing (matches the original modchart's
+    // beatHit -> camGame.zoom += 0.015 + side-switch behaviour).
+    updateCamera = function(t, dt) {
+      if (baseUpdateCamera) baseUpdateCamera.apply(this, arguments);
+      if (state.selectedSong !== SONG_ID) return;
+      const bump = genocideCameraBump(t);
+      // Side switching using the same chart-window logic the engine uses
+      const side = state.camera?.lastSide || "both";
+      const camCfg = LAYOUT.camera;
+      let targetX, targetY, baseZoom;
+      if (side === "opp") {
+        targetX = camCfg.opponent.x;
+        targetY = camCfg.opponent.y;
+        baseZoom = 1.14;
+      } else if (side === "player") {
+        targetX = camCfg.boyfriend.x;
+        targetY = camCfg.boyfriend.y;
+        baseZoom = 1.14;
+      } else {
+        targetX = canvas.width / 2;
+        targetY = canvas.height * 0.48;
+        baseZoom = 1.00;
+      }
+      const targetZoom = baseZoom * bump;
+      // Smoother lerp for pan, snappier for zoom so beat bumps land hard
+      const dtc = Math.max(0, dt || 0.016);
+      const panLerp = 1 - Math.pow(0.04, dtc);
+      const zoomLerp = 1 - Math.pow(0.005, dtc);
+      state.camera.focusX += (targetX - state.camera.focusX) * panLerp;
+      state.camera.focusY += (targetY - state.camera.focusY) * panLerp;
+      state.camera.zoom += (targetZoom - state.camera.zoom) * zoomLerp;
     };
 
     receptors = function(t) {
