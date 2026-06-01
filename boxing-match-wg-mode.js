@@ -647,37 +647,43 @@
       const bfX = 448 + Math.sin(t * 0.56 + 1.7) * 6;
       const bfY = 506 - flyBob * 0.65;
 
-      // Flight trails - anchor each beam to its character's CENTRE and trail
-      // BEHIND the character (left, with a slight upward fade-into-distance).
-      // The wide near-end sits on the character body, narrow far-end fades
-      // into the background. Previously both beams floated 160-170px above
-      // their characters and both pointed the same direction (right), so
-      // they didn't read as flight trails.
-      drawBeam("beamBlue", bfX - 18, bfY - 20, "rgba(40,232,255,0.98)", t, -1, {
-        length: 560,
-        nearHeight: 150,
-        farHeight: 60,
-        rise: -54,
-        phaseSpeed: 110,
-        textureStretch: 1.05,
+      // Flight trails matching Wii Funkin's perspectiveBeam shader:
+      // - Wide near (175 in WF scaled by our 0.5 = ~225px, then up because
+      //   our characters are scale 0.5 too)
+      // - Sharp perspective vanish to tiny far end
+      // - Texture repeats 25x across the length (matches the WF
+      //   perspectiveBeam.frag `uv.x *= 25.0;` line)
+      // - direction -1 because our characters are mirrored from WF (matt
+      //   on right, bf on left; WF has them swapped). WF's beams extend
+      //   RIGHT toward their respective vanishing points; ours mirror that
+      //   to extend LEFT.
+      drawBeam("beamBlue", bfX, bfY - 6, "rgba(60,220,255,1)", t, -1, {
+        length: 540,
+        nearHeight: 240,
+        farHeight: 28,
+        rise: 0,
+        phaseSpeed: 320,
+        textureStretch: 0.04,
         alpha: 0.96,
-        textureAlpha: 0.22,
-        coreAlpha: 0.5,
-        glowAlpha: 0.55,
-        glowBlur: 36
+        textureAlpha: 0.32,
+        coreAlpha: 0.55,
+        coreHeight: 96,
+        glowAlpha: 0.62,
+        glowBlur: 42
       });
-      drawBeam("beamRed", mattX + 24, mattY - 20, "rgba(255,38,42,0.98)", t, -1, {
-        length: 620,
-        nearHeight: 148,
-        farHeight: 62,
-        rise: -58,
-        phaseSpeed: 105,
-        textureStretch: 1.02,
+      drawBeam("beamRed", mattX, mattY - 6, "rgba(255,55,55,1)", t, -1, {
+        length: 600,
+        nearHeight: 240,
+        farHeight: 30,
+        rise: 0,
+        phaseSpeed: 300,
+        textureStretch: 0.04,
         alpha: 0.98,
-        textureAlpha: 0.2,
-        coreAlpha: 0.5,
-        glowAlpha: 0.55,
-        glowBlur: 36
+        textureAlpha: 0.32,
+        coreAlpha: 0.55,
+        coreHeight: 96,
+        glowAlpha: 0.62,
+        glowBlur: 42
       });
       drawAtlasCharacter("mattFly", "mattFly", "matt", mattX, mattY, 0.5, t, { glow:"rgba(255,70,45,0.5)", glowBlur:16, lean, noBob:true, poseShiftScale:0.2 });
       drawAtlasCharacter("bfFly", "bfFly", "player", bfX, bfY, 0.48, t, { glow:"rgba(80,200,255,0.56)", glowBlur:16, lean:-lean, noBob:true, poseShiftScale:0.2 });
