@@ -760,6 +760,79 @@ body.loaded #loadingScreen { opacity: 0; visibility: hidden; pointer-events: non
     letter-spacing: 0.04em;
 }
 
+/* Device-detect prompt (shown once after the loading screen fades) */
+#deviceDetectPrompt {
+    position: fixed; inset: 0; z-index: 50000;
+    display: none;
+    align-items: center; justify-content: center;
+    padding: 20px;
+    background:
+        radial-gradient(circle at 30% 20%, rgba(70, 197, 255, 0.16), transparent 40%),
+        radial-gradient(circle at 70% 80%, rgba(255, 31, 109, 0.14), transparent 38%),
+        rgba(4, 7, 16, 0.94);
+    backdrop-filter: blur(8px);
+    animation: floatIn 0.45s ease;
+}
+#deviceDetectPrompt.show { display: flex; }
+#deviceDetectPrompt .ddModal {
+    max-width: 460px;
+    width: 100%;
+    padding: 32px 26px;
+    border-radius: 24px;
+    background:
+        linear-gradient(135deg, rgba(70, 197, 255, 0.10), rgba(255, 31, 109, 0.06)),
+        rgba(20, 5, 14, 0.96);
+    border: 1px solid rgba(70, 197, 255, 0.34);
+    box-shadow: 0 24px 64px rgba(0,0,0,0.5), 0 0 40px rgba(70, 197, 255, 0.18);
+    text-align: center;
+    font-family: Impact, Haettenschweiler, sans-serif;
+}
+#deviceDetectPrompt .ddIcon { font-size: 72px; line-height: 1; margin-bottom: 14px; }
+#deviceDetectPrompt h2 { margin: 0 0 10px; font-size: 28px; color: #f9eef3; letter-spacing: -0.01em; }
+#deviceDetectPrompt p {
+    color: #d7dff8; font-size: 14px; line-height: 1.5; margin: 0 0 22px;
+    font-family: Arial, sans-serif;
+}
+#deviceDetectPrompt .ddTag {
+    display: inline-block;
+    padding: 4px 12px;
+    margin: 0 0 16px;
+    background: rgba(70, 197, 255, 0.16);
+    border: 1px solid rgba(70, 197, 255, 0.4);
+    border-radius: 999px;
+    color: #c5f4ff;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-family: Impact, Haettenschweiler, sans-serif;
+}
+#deviceDetectPrompt .ddActions {
+    display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+}
+#deviceDetectPrompt .ddActions button {
+    flex: 1; min-width: 130px;
+    padding: 12px 18px;
+    border-radius: 14px;
+    border: 0;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 900;
+    font-size: 14px;
+    letter-spacing: 0.04em;
+    transition: transform 0.12s, box-shadow 0.12s;
+}
+#deviceDetectPrompt .ddYes {
+    background: linear-gradient(135deg, #46c5ff, #ff3a82 80%);
+    color: #fff;
+    box-shadow: 0 12px 28px rgba(70, 197, 255, 0.32);
+}
+#deviceDetectPrompt .ddNo {
+    background: rgba(255, 255, 255, 0.08);
+    color: #d7dff8;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+#deviceDetectPrompt button:hover { transform: translateY(-2px); }
+
 /* === Online features: presence badge, chat panel, emote bar, emote popups === */
 .onlinePresence {
     display: inline-flex; align-items: center; gap: 8px;
@@ -897,6 +970,137 @@ body.mobile .chatLog { max-height: 130px !important; font-size: 12px !important;
     <div class="loadStatus" id="loadStatus">Booting up...</div>
     <div class="loadHint">Loading every song, sprite, and sound. This only happens once per session.</div>
 </div>
+<div id="deviceDetectPrompt" role="dialog" aria-label="Device detection">
+    <div class="ddModal">
+        <div class="ddIcon" id="ddIcon">🎮</div>
+        <div class="ddTag" id="ddTag">Detected</div>
+        <h2 id="ddTitle">Controller detected</h2>
+        <p id="ddDesc">We found a gamepad connected. Want to enable Console mode so the controller's D-pad and face buttons drive all 4 lanes?</p>
+        <div class="ddActions">
+            <button class="ddYes" id="ddYes">Yes, enable</button>
+            <button class="ddNo" id="ddNo">No, keep keyboard</button>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    // Device detect prompt — runs once after the loading screen reveals.
+    // Picks the strongest signal: gamepad > mobile UA > none.
+    // localStorage flag fnfDeviceDetectAsked prevents re-prompting.
+    if (localStorage.getItem("fnfDeviceDetectAsked") === "1") return;
+    const prompt = document.getElementById("deviceDetectPrompt");
+    const icon = document.getElementById("ddIcon");
+    const tag = document.getElementById("ddTag");
+    const title = document.getElementById("ddTitle");
+    const desc = document.getElementById("ddDesc");
+    const yes = document.getElementById("ddYes");
+    const no = document.getElementById("ddNo");
+    if (!prompt || !yes || !no) return;
+
+    let detected = null;       // "console" | "mobile" | null
+    let detectedName = "";
+
+    function findGamepad() {
+        try {
+            const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+            for (const p of pads) if (p && p.id) return p;
+        } catch (e) {}
+        return null;
+    }
+    function isMobileUA() {
+        const ua = navigator.userAgent || "";
+        if (/iPhone|iPod|Android.*Mobile|BlackBerry|Opera Mini|IEMobile|webOS|Mobile Safari/i.test(ua)) return "phone";
+        if (/iPad/i.test(ua) || (/Macintosh/i.test(ua) && (navigator.maxTouchPoints || 0) >= 2 && !(window.matchMedia && window.matchMedia("(pointer: fine)").matches))) return "tablet";
+        return null;
+    }
+
+    function showPrompt() {
+        if (detected === "console") {
+            icon.textContent = "🎮";
+            tag.textContent = "Controller detected";
+            title.textContent = "Console mode?";
+            const shortName = detectedName ? detectedName.replace(/\s*\([^)]*\)\s*/, " ").trim().slice(0, 36) : "";
+            desc.textContent = (shortName ? `Found "${shortName}". ` : "") + "Want to enable Console mode so the gamepad's D-pad and face buttons drive all 4 lanes?";
+            yes.textContent = "Yes, enable Console";
+        } else if (detected === "mobile") {
+            icon.textContent = "📱";
+            tag.textContent = detectedName === "tablet" ? "Tablet detected" : "Phone detected";
+            title.textContent = "Mobile mode?";
+            desc.textContent = "Want to enable Mobile mode so on-screen touch buttons appear for the 4 lanes?";
+            yes.textContent = "Yes, enable Mobile";
+        } else {
+            return;
+        }
+        prompt.classList.add("show");
+    }
+
+    function waitForLoaded(cb) {
+        if (document.body.classList.contains("loaded")) cb();
+        else setTimeout(() => waitForLoaded(cb), 200);
+    }
+
+    waitForLoaded(() => {
+        // Gamepad first (strongest signal: someone explicitly plugged it in)
+        const pad = findGamepad();
+        if (pad) {
+            detected = "console";
+            detectedName = pad.id || "";
+            showPrompt();
+            return;
+        }
+        // Mobile UA
+        const m = isMobileUA();
+        if (m) {
+            detected = "mobile";
+            detectedName = m;
+            showPrompt();
+            return;
+        }
+        // Listen for a gamepad to connect for ~6 seconds (often only fires
+        // after first button press; some users don't have one plugged at load)
+        const onGp = (e) => {
+            detected = "console";
+            detectedName = (e.gamepad && e.gamepad.id) || "";
+            window.removeEventListener("gamepadconnected", onGp);
+            showPrompt();
+        };
+        window.addEventListener("gamepadconnected", onGp);
+        setTimeout(() => window.removeEventListener("gamepadconnected", onGp), 6000);
+    });
+
+    function close(remember) {
+        if (remember) {
+            try { localStorage.setItem("fnfDeviceDetectAsked", "1"); } catch (e) {}
+        }
+        prompt.classList.remove("show");
+    }
+
+    yes.addEventListener("click", () => {
+        try {
+            if (typeof state !== "undefined" && state.settings) {
+                if (detected === "console") state.settings.console = true;
+                else if (detected === "mobile") state.settings.mobile = true;
+                if (typeof saveSettings === "function") saveSettings();
+            } else {
+                // Engine not initialised yet — write straight to localStorage
+                // so the next-load `loadSettings` picks it up.
+                const STORAGE = "fnf-browser-jam-v1";
+                let saved = {};
+                try { saved = JSON.parse(localStorage.getItem(STORAGE)) || {}; } catch (e) {}
+                if (detected === "console") saved.console = true;
+                if (detected === "mobile") saved.mobile = true;
+                try { localStorage.setItem(STORAGE, JSON.stringify(saved)); } catch (e) {}
+            }
+        } catch (e) {}
+        close(true);
+        // Reload so the toggles actually apply to the live engine state.
+        // (Console mode wires its gamepad polling at IIFE init; mobile mode
+        // toggles body.mobile + the touch overlay; both want a clean start.)
+        setTimeout(() => location.reload(), 80);
+    });
+    no.addEventListener("click", () => close(true));
+})();
+</script>
 <script>
 (function () {
     // Loading screen - REAL preload. Two-phase:
