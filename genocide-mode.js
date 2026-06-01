@@ -3,9 +3,23 @@
     const G = window.GENOCIDE_DATA;
     if (!G || typeof SONGS === "undefined") return;
 
+    // Tabi Revival overlay - if loaded, replaces sprites, stage layers, and
+    // character positions to match the actual VS Tabi Revival mod's
+    // restaurant-fire stage. When absent (older deployments), we fall back to
+    // the original VS Tabi Rework data so nothing breaks.
+    const REVIVAL = window.GENOCIDE_REVIVAL || null;
+    const USING_REVIVAL = !!REVIVAL;
+    if (USING_REVIVAL) {
+      // Splice the Revival sprite tables onto G.sprites so all downstream
+      // helpers (animOffset, frameFromList, etc.) keep working unchanged.
+      G.sprites.tabi = Object.assign({}, G.sprites.tabi, REVIVAL.sprites.tabi);
+      G.sprites.boyfriend = Object.assign({}, G.sprites.boyfriend, REVIVAL.sprites.boyfriend);
+      G.sprites.gf = Object.assign({}, G.sprites.gf, REVIVAL.sprites.gf);
+    }
+
     const SONG_ID = "genocide";
     const SONG_SOURCE = "genocide";
-    const genState = { ready: false, images: {}, groundCache: {}, referenceCache: {}, afterimages: { opponent: [], boyfriend: [] }, clockStart: 0, cacheKey: "genocide-v10" };
+    const genState = { ready: false, images: {}, groundCache: {}, referenceCache: {}, afterimages: { opponent: [], boyfriend: [] }, clockStart: 0, cacheKey: USING_REVIVAL ? "genocide-revival-v1" : "genocide-v10" };
     const clamp01 = value => Math.max(0, Math.min(1, value));
     const DIR_TO_ANIM = {
       left: "singLEFT",
@@ -13,20 +27,33 @@
       up: "singUP",
       right: "singRIGHT"
     };
-    const LAYOUT = {
+    // ============================================================
+    // LAYOUT
+    //
+    // Two profiles live here:
+    //   - The original Tabi-Rework layout (kept verbatim as a fallback so
+    //     nothing breaks if `genocide-revival-data.js` ever fails to load).
+    //   - The Tabi-Revival layout, derived from `restaurant-fire.json`
+    //     (defaultZoom 0.7, stage anchors at opponent[-200,100],
+     //    girlfriend[400,130], boyfriend[970,100]) + the per-character
+    //     position deltas from {tabi,bf,gf}-genocide.json.
+    //
+    // The Revival source ships positions in a flixel coordinate system that
+    // assumes a 1280×720 stage with the camera scaled to defaultZoom (0.7).
+    // We map those to our 1280×720 canvas via `SX = (origX + offset.x) * 0.7
+    // + 640` (centring the stage). The y math is the same but with 360 as
+    // the centre and an extra +90px bias so the floor sits where we draw it.
+    // ============================================================
+    const LAYOUT_REWORK = {
       stageScale: 0.5,
       stageX: 0,
       stageY: 10,
       destroyedAlpha: 0.32,
-      // Main fire at the centre (behind GF / the speaker)
       fireX: 640,
       fireY: 718,
       fireScale: 1.05,
       fireAlpha: 0.72,
       fireGlowAlpha: 0.30,
-      // Two extra fire instances at the room corners for the "room is burning
-      // down" feel from VS Tabi Rework. Slightly smaller, slightly faster
-      // timing so they don't look like duplicates of the centre fire.
       sideFireScale: 0.72,
       sideFireAlpha: 0.58,
       sideFireGlowAlpha: 0.22,
@@ -39,14 +66,7 @@
       speakerY: 594,
       speakerScale: 0.5,
       vignetteAlpha: 0.42,
-      roleScale: {
-        opponent: 0.82,    // a touch larger so Tabi reads as the angry threat
-        girlfriend: 0.58,
-        boyfriend: 0.76
-      },
-      // Tightened triangle: Tabi pulled a bit right, BF a bit left, GF anchored
-      // to the speaker. Y values tuned so feet plant on the floor planks
-      // instead of floating just above them.
+      roleScale: { opponent: 0.82, girlfriend: 0.58, boyfriend: 0.76 },
       roleAnchor: {
         opponent: { x: 222, y: 678, mode: "fixed" },
         boyfriend: { x: 858, y: 638, mode: "fixed" },
@@ -57,6 +77,75 @@
         boyfriend: { x: 808, y: 504 }
       }
     };
+
+    // VS Tabi Revival stage coordinate transform.
+    // Source positions are in a flixel 1280x720 space with origin (0,0) at
+    // the top-left; the camera renders at defaultZoom=0.7. We render straight
+    // to our 1280x720 canvas. We translate the whole stage so the floor
+    // lines up with the camera focus point.
+    const REVIVAL_STAGE_SCALE = 0.7;         // restaurant-fire defaultZoom
+    const REVIVAL_X_OFFSET = 0;              // already centred horizontally
+    const REVIVAL_Y_OFFSET = 80;             // nudge stage down so floor reads
+    function rvX(srcX) { return srcX * REVIVAL_STAGE_SCALE + REVIVAL_X_OFFSET; }
+    function rvY(srcY) { return srcY * REVIVAL_STAGE_SCALE + REVIVAL_Y_OFFSET; }
+    function rvS(srcScale) { return (srcScale || 1) * REVIVAL_STAGE_SCALE; }
+
+    // Build character anchor from stage + character.json position. Psych
+    // stages add the character.position to the stage anchor to get the
+    // top-left of the rendered idle frame.
+    function revivalAnchor(stageXY, charXY, charScale = 1) {
+      const x = stageXY[0] + (charXY?.[0] || 0);
+      const y = stageXY[1] + (charXY?.[1] || 0);
+      return { x: rvX(x), y: rvY(y), scale: rvS(charScale), mode: "psych" };
+    }
+
+    const LAYOUT_REVIVAL = (() => {
+      if (!USING_REVIVAL) return null;
+      const S = REVIVAL.stage;
+      const oppA = revivalAnchor(S.opponent, REVIVAL.sprites.tabi.position, REVIVAL.sprites.tabi.scale);
+      const bfA = revivalAnchor(S.boyfriend, REVIVAL.sprites.boyfriend.position, REVIVAL.sprites.boyfriend.scale);
+      const gfA = revivalAnchor(S.girlfriend, REVIVAL.sprites.gf.position, REVIVAL.sprites.gf.scale);
+
+      // Camera focus uses Psych's midpoint+camera_position formula. Mid of
+      // each character's idle bounding box ≈ anchor + half size; we don't
+      // know the size up-front, so we approximate using a fixed +120/+150
+      // shift in screen space. Plus dad/bf camera offsets get applied
+      // (see Smooth Camera.lua getCharPos).
+      const oppCam = {
+        x: oppA.x + 150 * REVIVAL_STAGE_SCALE + (REVIVAL.sprites.tabi.cameraPosition?.[0] || 0) * REVIVAL_STAGE_SCALE,
+        y: oppA.y + (REVIVAL.sprites.tabi.cameraPosition?.[1] || 0) * REVIVAL_STAGE_SCALE
+      };
+      const bfCam = {
+        x: bfA.x - 100 * REVIVAL_STAGE_SCALE - (REVIVAL.sprites.boyfriend.cameraPosition?.[0] || 0) * REVIVAL_STAGE_SCALE + S.cameraBoyfriend[0] * REVIVAL_STAGE_SCALE,
+        y: bfA.y + (REVIVAL.sprites.boyfriend.cameraPosition?.[1] || 0) * REVIVAL_STAGE_SCALE + S.cameraBoyfriend[1] * REVIVAL_STAGE_SCALE
+      };
+
+      return {
+        // The stage layers are drawn by their own helper, so legacy
+        // stageScale/stageX/stageY/destroyedAlpha aren't used in Revival mode.
+        revival: true,
+        defaultZoom: S.defaultZoom,
+        roleScale: { opponent: 1, girlfriend: 1, boyfriend: 1 },
+        roleAnchor: {
+          opponent: { x: oppA.x, y: oppA.y, scale: oppA.scale, mode: "psych" },
+          boyfriend: { x: bfA.x, y: bfA.y, scale: bfA.scale, mode: "psych" },
+          girlfriend: { x: gfA.x, y: gfA.y, scale: gfA.scale, mode: "psych" }
+        },
+        camera: { opponent: oppCam, boyfriend: bfCam },
+        vignetteAlpha: S.layers.vignette?.alpha ?? 0.4,
+        // Pulse / glow knobs that the original layout used; reused for the
+        // restaurant glow + light wash. Kept conservative so the Revival
+        // stage doesn't read as blown-out.
+        stageGlowPulse: 0.28,
+        // Kept so legacy fire-side helpers don't NaN if called.
+        fireAlpha: 0, fireGlowAlpha: 0, sideFireAlpha: 0, sideFireGlowAlpha: 0,
+        fireScale: 1, sideFireScale: 1,
+        fireX: 640, fireY: 718, sideFireLeftX: 0, sideFireRightX: 1280, sideFireY: 720,
+        destroyedAlpha: 0
+      };
+    })();
+
+    const LAYOUT = LAYOUT_REVIVAL || LAYOUT_REWORK;
     const COMMAND_EVENT_SCALE = [0.18, 0.4, 0.72, 1];
 
     state.poses.tabi = state.poses.tabi || { lane: 1, time: -10, kind: "hit" };
@@ -153,6 +242,17 @@
         gf: G.sprites.gf.image,
         notes: G.sprites.notes.image
       };
+      if (USING_REVIVAL) {
+        // restaurant-fire.lua stage layers
+        Object.assign(sources, {
+          rvBg: REVIVAL.stage.images.bg,
+          rvTables: REVIVAL.stage.images.tables,
+          rvGlow: REVIVAL.stage.images.glow,
+          rvBackFlames: REVIVAL.stage.images.backFlames,
+          rvFrontFlameLeft: REVIVAL.stage.images.frontFlameLeft,
+          rvFrontFlameRight: REVIVAL.stage.images.frontFlameRight
+        });
+      }
       Object.entries(sources).forEach(([key, src]) => {
         if (!src) return;
         const image = new Image();
@@ -350,13 +450,29 @@
       if (!anim?.frames?.length) return null;
       const frame = frameFromList(anim.frames, animState.elapsed, Number(anim.fps || 24), animState.loop);
       if (!frame) return null;
-      const scale = Number(LAYOUT.roleScale[role] || 1) * Number(sprite.scale || 1);
-      const anchor = roleAnchor(role);
+      const anchor = LAYOUT.roleAnchor?.[role] || { x: 0, y: 0, mode: "fixed" };
+      const scale = Number((anchor.mode === "psych" ? anchor.scale : LAYOUT.roleScale[role]) || 1) * (anchor.mode === "psych" ? 1 : Number(sprite.scale || 1));
       let pos;
       if (anchor.mode === "fixed") {
+        pos = { x: anchor.x, y: anchor.y };
+      } else if (anchor.mode === "psych") {
+        // Psych Engine semantics: anchor is the TOP-LEFT of the rendered
+        // idle frame, and per-anim offsets are SUBTRACTED to shift the
+        // current frame relative to idle. drawAtlasFrame expects the
+        // bottom-centre point of the frame (matches drawAtlasBottomCentered
+        // used throughout this file). So we convert.
+        const currentOffset = animOffset(anim);
+        const fw = Number(frame.fw || frame.w || 0);
+        const fh = Number(frame.fh || frame.h || 0);
+        // Top-left of this frame: anchor + (idle.offset - this.offset). We
+        // don't have the idle offset precomputed for the Revival data
+        // because every anim's "offset" is already relative-to-idle in the
+        // source character.json. So just subtract the current offset.
+        const topLeftX = anchor.x - currentOffset.x * scale;
+        const topLeftY = anchor.y - currentOffset.y * scale;
         pos = {
-          x: anchor.x,
-          y: anchor.y
+          x: topLeftX + fw * scale * 0.5,
+          y: topLeftY + fh * scale
         };
       } else {
         const currentOffset = animOffset(anim);
@@ -366,13 +482,13 @@
           y: anchor.y + (Number(frame.fh || frame.h || 0) + Number(frame.fy || 0) - ground.y - currentOffset.y) * scale
         };
       }
-      return {
-        image,
-        frame,
-        scale,
-        pos,
-        flipX: role === "boyfriend" ? false : !!sprite.flipX
-      };
+      // Revival BF has flipX: true in the JSON (he faces left in the atlas,
+      // and the engine flips him to face right). The legacy code force-set
+      // boyfriend flipX=false; respect the sprite metadata in Revival mode.
+      const flipX = USING_REVIVAL
+        ? !!sprite.flipX
+        : (role === "boyfriend" ? false : !!sprite.flipX);
+      return { image, frame, scale, pos, flipX };
     }
 
     function drawShadow(x, y, width, alpha = 0.24) {
@@ -534,6 +650,186 @@
       drawBackdropLayer(genState.images.glow, LAYOUT.stageScale, 0, LAYOUT.stageGlowAlpha + pulse * LAYOUT.stageGlowPulse + fx.command * 0.28 + Math.sin(t * 2.4) * 0.03, "screen");
       drawBackdropLayer(genState.images.destroyed, LAYOUT.stageScale, 0, LAYOUT.destroyedAlpha + pulse * 0.08 + fx.command * 0.1, "screen");
       drawBackdropLayer(genState.images.furniture, LAYOUT.stageScale, 0, 0.96);
+    }
+
+    // ============================================================
+    // Tabi Revival restaurant-fire stage drawing
+    //
+    // Layer order (matches restaurant-fire.lua):
+    //   1. bg                         (fixed, scale 0.825)
+    //   2. backmost flames            (animated, scale 1.3, alpha 0.55, overlay shader)
+    //   3. tables (a.k.a. bg2)        (fixed, scale 0.825)        - on top of back flames
+    //   4. glow                       (scrollFactor 0.1, alpha 0.75)
+    //   5. characters
+    //   6. front flame right          (scrollFactor 1.3, alpha 0.55, overlay shader)
+    //   7. front flame left           (scrollFactor 1.3, alpha 0.55, overlay shader)
+    //   8. vignette (camHUD, alpha 0.4, blend ADD)
+    // ============================================================
+
+    // Cheap approximation of bbpanzu's bloom+overlay shader: an orange
+    // glow halo drawn behind the sprite using a blurred recolour, plus a
+    // softlight pass with the source flame on top. The exact shader is a
+    // 16-direction gaussian blur with overlay-blend orange (#ff8000) tint —
+    // a Canvas2D filter("blur") into a screen-blend orange tint is close
+    // enough for game-frame work without a WebGL fragment pass.
+    function drawFlameOverlayed(image, frame, x, y, scale, alpha) {
+      if (!imageReady(image) || !frame) return;
+      // Layer A: orange-tinted halo behind the flame
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      ctx.filter = "blur(6px)";
+      ctx.globalAlpha = alpha * 0.55;
+      drawAtlasBottomCentered(image, frame, x, y, scale * 1.04, 1);
+      ctx.restore();
+      // Layer B: the flame itself, slightly orange-warmed via colour-burn
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      drawAtlasBottomCentered(image, frame, x, y, scale, 1);
+      ctx.restore();
+      // Layer C: overlay-blend orange wash to mimic the shader's tint
+      ctx.save();
+      ctx.globalCompositeOperation = "overlay";
+      ctx.globalAlpha = alpha * 0.50;
+      ctx.filter = "blur(2px)";
+      drawAtlasBottomCentered(image, frame, x, y, scale, 1, false, "source-over");
+      // tint pass
+      ctx.globalCompositeOperation = "source-atop";
+      ctx.fillStyle = "rgba(255, 128, 0, 0.55)";
+      const fw = Number(frame.fw || frame.w || 0) * scale;
+      const fh = Number(frame.fh || frame.h || 0) * scale;
+      ctx.fillRect(x - fw, y - fh, fw * 2, fh);
+      ctx.restore();
+    }
+
+    function drawTopLeftLayer(image, srcX, srcY, srcScale = 1, alpha = 1, composite = "source-over") {
+      if (!imageReady(image)) return;
+      const w = image.naturalWidth * rvS(srcScale);
+      const h = image.naturalHeight * rvS(srcScale);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.globalCompositeOperation = composite;
+      ctx.drawImage(image, rvX(srcX), rvY(srcY), w, h);
+      ctx.restore();
+    }
+
+    function drawTopLeftAtlas(image, frame, srcX, srcY, srcScale = 1, alpha = 1, composite = "source-over") {
+      if (!imageReady(image) || !frame) return;
+      const fw = Number(frame.fw || frame.w || 0);
+      const fh = Number(frame.fh || frame.h || 0);
+      const fx = Number(frame.fx || 0);
+      const fy = Number(frame.fy || 0);
+      const targetScale = rvS(srcScale);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.globalCompositeOperation = composite;
+      ctx.translate(rvX(srcX), rvY(srcY));
+      if (frame.rotated) {
+        ctx.rotate(-Math.PI / 2);
+        ctx.drawImage(image, frame.x, frame.y, frame.w, frame.h,
+          -frame.h * targetScale - fx * targetScale, -frame.w * targetScale - fy * targetScale,
+          frame.h * targetScale, frame.w * targetScale);
+      } else {
+        ctx.drawImage(image, frame.x, frame.y, frame.w, frame.h,
+          fx * targetScale, fy * targetScale,
+          frame.w * targetScale, frame.h * targetScale);
+      }
+      ctx.restore();
+    }
+
+    function drawTopLeftAtlasOverlay(image, frame, srcX, srcY, srcScale = 1, alpha = 1) {
+      if (!imageReady(image) || !frame) return;
+      // Orange-tinted blurred bloom underneath
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      ctx.filter = "blur(6px) saturate(1.4)";
+      ctx.globalAlpha = alpha * 0.70;
+      drawTopLeftAtlas(image, frame, srcX, srcY, srcScale, 1);
+      ctx.restore();
+      // The flame itself
+      drawTopLeftAtlas(image, frame, srcX, srcY, srcScale, alpha);
+      // Overlay-blend orange tint to approximate vec4(1.0, 0.5, 0.0, 1.0)
+      ctx.save();
+      ctx.globalCompositeOperation = "overlay";
+      ctx.globalAlpha = alpha * 0.60;
+      ctx.filter = "blur(1.5px)";
+      drawTopLeftAtlas(image, frame, srcX, srcY, srcScale, 1);
+      ctx.restore();
+    }
+
+    function drawRevivalBackdrop(t) {
+      const fx = genocideFxProfile(t);
+      const pulse = fx.beat;
+      const layers = REVIVAL.stage.layers;
+      // 1. bg
+      drawTopLeftLayer(genState.images.rvBg, layers.bg.x, layers.bg.y, layers.bg.scale, 1);
+      // 2. backmost flames (animated, overlay shader)
+      const backFr = frameFromList(REVIVAL.stage.backFlameFrames, t * 0.85, 24, true);
+      if (backFr) {
+        // ALPHA pulses on beat: base 0.55 + a beat bump so the room flickers
+        const aBack = (layers.backFlames.alpha + pulse * 0.18 + fx.command * 0.10);
+        ctx.save();
+        ctx.globalAlpha = aBack;
+        drawTopLeftAtlasOverlay(genState.images.rvBackFlames, backFr, layers.backFlames.x, layers.backFlames.y, layers.backFlames.scale, 1);
+        ctx.restore();
+      }
+      // 3. tables (bg2)
+      drawTopLeftLayer(genState.images.rvTables, layers.tables.x, layers.tables.y, layers.tables.scale, 1);
+      // 4. glow (low parallax)
+      drawTopLeftLayer(genState.images.rvGlow, layers.glow.x, layers.glow.y, 1, (layers.glow.alpha + pulse * 0.12 + fx.command * 0.18), "screen");
+    }
+
+    function drawRevivalForeground(t) {
+      const fx = genocideFxProfile(t);
+      const pulse = fx.beat;
+      const layers = REVIVAL.stage.layers;
+      const frR = frameFromList(REVIVAL.stage.frontFlameRightFrames, (t + 0.12) * 0.92, 24, true);
+      const frL = frameFromList(REVIVAL.stage.frontFlameLeftFrames, (t + 0.31) * 0.97, 24, true);
+      const aFront = (layers.frontFlameRight.alpha + pulse * 0.16 + fx.command * 0.08);
+      if (frR) {
+        ctx.save();
+        ctx.globalAlpha = aFront;
+        drawTopLeftAtlasOverlay(genState.images.rvFrontFlameRight, frR, layers.frontFlameRight.x, layers.frontFlameRight.y, 1, 1);
+        ctx.restore();
+      }
+      if (frL) {
+        ctx.save();
+        ctx.globalAlpha = aFront;
+        drawTopLeftAtlasOverlay(genState.images.rvFrontFlameLeft, frL, layers.frontFlameLeft.x, layers.frontFlameLeft.y, 1, 1);
+        ctx.restore();
+      }
+    }
+
+    function drawRevivalPostFX(t) {
+      const fx = genocideFxProfile(t);
+      const pulse = fx.beat;
+      // camHUD vignette (blend ADD = "lighter"). The Lua lerps alpha to 0.4
+      // every update; we mirror that with a beat-driven push above 0.4.
+      const a = (LAYOUT.vignetteAlpha + pulse * 0.10 + fx.command * 0.08);
+      if (imageReady(genState.images.vignette)) {
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        ctx.globalAlpha = Math.min(1, a);
+        ctx.drawImage(genState.images.vignette, 0, 0, canvas.width, canvas.height);
+        ctx.restore();
+      } else {
+        // Fallback radial vignette so the screen still feels enclosed
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, a * 0.8);
+        const grad = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, canvas.height * 0.32, canvas.width / 2, canvas.height / 2, canvas.height * 0.72);
+        grad.addColorStop(0, "rgba(0,0,0,0)");
+        grad.addColorStop(1, "rgba(0,0,0,0.85)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+      }
+      if (fx.command > 0.04) {
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.globalAlpha = Math.min(0.16, fx.command * 0.14);
+        ctx.fillStyle = "#ff5d2a";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+      }
     }
 
     function drawStageFire(t) {
@@ -799,6 +1095,22 @@
     stage = function(t) {
       if (state.selectedSong !== SONG_ID) return baseStage(t);
       initAssets();
+      if (USING_REVIVAL) {
+        drawRevivalBackdrop(t);
+        const gfRender = roleRenderState("girlfriend", "gf", t);
+        const oppRender = roleRenderState("opponent", "tabi", t);
+        const bfRender = roleRenderState("boyfriend", "player", t);
+        recordAfterimage("opponent", oppRender);
+        recordAfterimage("boyfriend", bfRender);
+        drawRoleRender("girlfriend", gfRender);
+        drawAfterimages("opponent", t);
+        drawRoleRender("opponent", oppRender);
+        drawAfterimages("boyfriend", t);
+        drawRoleRender("boyfriend", bfRender);
+        drawRevivalForeground(t);
+        drawRevivalPostFX(t);
+        return;
+      }
       drawStageBackdrop(t);
       drawStageFire(t);
       drawStageForeground();
@@ -815,16 +1127,57 @@
       drawStagePostFX(t);
     };
 
-    // VS Tabi Genocide camera: aggressive beat-driven zoom punches and side
-    // focus follows whoever is singing (matches the original modchart's
-    // beatHit -> camGame.zoom += 0.015 + side-switch behaviour).
+    // VS Tabi Genocide camera. Two regimes:
+    //   - Revival (Smooth Camera.lua port): camBetterFollowLerp = 0.1 +
+    //     per-sing camera displacement (left=-20x, right=+20x, etc.). Base
+    //     zoom is the stage defaultZoom (0.7), but the camHUD-level beat
+    //     bump scales it up by ~5.5% on each beat to mirror the original's
+    //     beatHit -> camGame.zoom += 0.015 behaviour.
+    //   - Rework (legacy): aggressive side-switch close-ups.
     updateCamera = function(t, dt) {
       if (baseUpdateCamera) baseUpdateCamera.apply(this, arguments);
       if (state.selectedSong !== SONG_ID) return;
       const bump = genocideCameraBump(t);
-      // Side switching using the same chart-window logic the engine uses
       const side = state.camera?.lastSide || "both";
       const camCfg = LAYOUT.camera;
+      const dtc = Math.max(0, dt || 0.016);
+
+      if (USING_REVIVAL) {
+        let targetX, targetY;
+        if (side === "opp") {
+          targetX = camCfg.opponent.x;
+          targetY = camCfg.opponent.y;
+        } else if (side === "player") {
+          targetX = camCfg.boyfriend.x;
+          targetY = camCfg.boyfriend.y;
+        } else {
+          // Default: average the two characters with a slight upward bias,
+          // the same trick the Smooth Camera "over" event uses.
+          targetX = (camCfg.opponent.x + camCfg.boyfriend.x) / 2;
+          targetY = (camCfg.opponent.y + camCfg.boyfriend.y) / 2 - 70;
+        }
+        // Per-sing displacement (Smooth Camera.lua getDisplacement)
+        const focusPose = side === "opp" ? state.poses.tabi : state.poses.player;
+        if (focusPose && performance.now() / 1000 - Number(focusPose.time || -10) < 0.18 && focusPose.kind === "hit") {
+          const lane = Number(focusPose.lane || 0) % 4;
+          const D = 20 * REVIVAL_STAGE_SCALE;
+          if (lane === 0) targetX -= D;       // singLEFT
+          else if (lane === 1) targetY += D;  // singDOWN
+          else if (lane === 2) targetY -= D;  // singUP
+          else if (lane === 3) targetX += D;  // singRIGHT
+        }
+        // defaultZoom + small beat punch + close-up when one side is owned.
+        const baseZoom = REVIVAL.stage.defaultZoom * (side === "both" ? 1.32 : 1.46);
+        const targetZoom = baseZoom * bump;
+        const panLerp = 1 - Math.pow(0.04, dtc);
+        const zoomLerp = 1 - Math.pow(0.025, dtc);
+        state.camera.focusX += (targetX - state.camera.focusX) * panLerp;
+        state.camera.focusY += (targetY - state.camera.focusY) * panLerp;
+        state.camera.zoom += (targetZoom - state.camera.zoom) * zoomLerp;
+        return;
+      }
+
+      // Legacy Rework behaviour
       let targetX, targetY, baseZoom;
       if (side === "opp") {
         targetX = camCfg.opponent.x;
@@ -840,8 +1193,6 @@
         baseZoom = 1.00;
       }
       const targetZoom = baseZoom * bump;
-      // Smoother lerp for pan, snappier for zoom so beat bumps land hard
-      const dtc = Math.max(0, dt || 0.016);
       const panLerp = 1 - Math.pow(0.04, dtc);
       const zoomLerp = 1 - Math.pow(0.005, dtc);
       state.camera.focusX += (targetX - state.camera.focusX) * panLerp;
