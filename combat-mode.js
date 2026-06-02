@@ -156,10 +156,11 @@
     if(window.REDUCE_MOTION || !Number.isFinite(camZ) || Math.abs(camZ - 1) < 0.001) return { x, y };
     const focusX = Number.isFinite(state.camera?.focusX) ? state.camera.focusX : 640;
     const focusY = Number.isFinite(state.camera?.focusY) ? state.camera.focusY : 448;
-    const zOffset = camZ - 1;
+    const centerX = Number(canvas?.width || 1280) * 0.5;
+    const centerY = Number(canvas?.height || 720) * 0.5;
     return {
-      x: (x + zOffset * (focusX + scrollX * (x - focusX))) / camZ,
-      y: (y + zOffset * (focusY + scrollY * (y - focusY))) / camZ
+      x: x + (1 - scrollX) * (focusX - centerX) * (camZ - 1) / camZ,
+      y: y + (1 - scrollY) * (focusY - centerY) * (camZ - 1) / camZ
     };
   }
 
