@@ -191,10 +191,10 @@
   }
 
   function combatDepth(t){
-    // Only the back sky drifts. Rocks and platforms stay locked.
-    const tSafe = Number.isFinite(t) ? t : 0;
-    const bgX = Math.sin(tSafe * 0.42) * 22 + Math.sin(tSafe * 0.17) * 8;
-    const bgY = Math.cos(tSafe * 0.31) * 12 + Math.sin(tSafe * 0.09) * 4;
+    // Wiik Z's back sky should read as still; stage scroll factors handle
+    // camera parallax without any autonomous idle drift.
+    const bgX = 0;
+    const bgY = 0;
     return {
       far: 0,
       mid: 0,
