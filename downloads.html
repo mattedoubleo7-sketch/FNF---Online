@@ -538,166 +538,12 @@ p, li {
   text-align: center;
   padding-bottom: 12px;
 }
-/* Tester code panel */
-.testerPanel {
-  position: relative;
-  overflow: hidden;
-  padding: 26px;
-  border-radius: 28px;
-  border: 1px dashed rgba(255, 31, 109, 0.45);
-  background:
-    radial-gradient(circle at 14% 18%, rgba(255, 31, 109, 0.18), transparent 32%),
-    radial-gradient(circle at 88% 80%, rgba(70, 197, 255, 0.12), transparent 36%),
-    rgba(14, 4, 12, 0.95);
-  box-shadow: 0 0 30px rgba(255, 31, 109, 0.18) inset, 0 24px 60px rgba(0,0,0,0.5);
-}
-.testerPanel::before {
-  content: "";
-  position: absolute;
-  top: -1px; left: -1px; right: -1px; bottom: -1px;
-  border-radius: 28px;
-  pointer-events: none;
-  background: linear-gradient(135deg, transparent, rgba(255, 31, 109, 0.2), transparent 60%);
-}
-.testerHead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.testerHead h2 { margin: 0; }
-.testerForm {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 10px;
-  margin-top: 16px;
-  max-width: 520px;
-}
-.testerInput {
-  padding: 12px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 31, 109, 0.35);
-  background: rgba(8, 2, 6, 0.7);
-  color: var(--bone);
-  font-family: "Courier New", monospace;
-  font-size: 17px;
-  letter-spacing: 0.18em;
-  outline: none;
-  transition: border-color 0.14s, box-shadow 0.14s;
-}
-.testerInput:focus {
-  border-color: var(--pink);
-  box-shadow: 0 0 0 3px rgba(255, 31, 109, 0.22);
-}
-.testerInput.bad { animation: shake 0.4s ease; border-color: var(--blood); }
-.testerStatus {
-  margin-top: 12px;
-  font-size: 13px;
-  font-family: Arial, sans-serif;
-  color: var(--muted);
-  min-height: 18px;
-}
-.testerStatus.ok { color: #a3ffcd; }
-.testerStatus.err { color: #ffa3b3; }
-.testerVault {
-  display: none;
-  margin-top: 18px;
-  padding: 18px;
-  border-radius: 20px;
-  border: 1px solid rgba(70, 197, 255, 0.3);
-  background:
-    linear-gradient(135deg, rgba(70, 197, 255, 0.08), rgba(255, 31, 109, 0.06)),
-    rgba(8, 2, 6, 0.78);
-  animation: floatIn 0.5s ease both;
-}
-.testerVault.show { display: block; }
-.testerVault h3 { margin: 0 0 6px; font-size: 26px; color: var(--bone); }
-.testerVault ul { padding-left: 20px; }
-.testerVault li { font-size: 14px; }
-/* Lock banner — shown only while not unlocked */
-.lockBanner {
-  position: relative;
-  z-index: 2;
-  width: min(1240px, 100%);
-  margin: 0 auto 18px;
-  padding: 18px 22px;
-  border-radius: 22px;
-  border: 1px solid rgba(255, 31, 109, 0.55);
-  background:
-    linear-gradient(135deg, rgba(200, 16, 46, 0.32), rgba(255, 31, 109, 0.16)),
-    rgba(20, 5, 14, 0.95);
-  box-shadow: 0 18px 42px rgba(0,0,0,0.5), 0 0 30px rgba(255, 31, 109, 0.25);
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 14px;
-  align-items: center;
-  animation: floatIn 0.55s ease both, pulseGlow 2.4s ease-in-out infinite;
-}
-.lockBanner .lockIcon {
-  font-size: 32px;
-  line-height: 1;
-  filter: drop-shadow(0 0 12px rgba(255, 31, 109, 0.6));
-}
-.lockBanner strong {
-  display: block;
-  font-size: 22px;
-  color: var(--bone);
-  letter-spacing: 0.04em;
-}
-.lockBanner small {
-  display: block;
-  color: var(--muted);
-  font-family: Arial, sans-serif;
-  font-size: 13px;
-  margin-top: 3px;
-  line-height: 1.35;
-}
-.lockBanner .lockCta {
-  white-space: nowrap;
-  text-decoration: none;
-  font-family: inherit;
-}
-body.unlocked .lockBanner { display: none; }
-/* Gated buttons — disabled until tester unlocks */
-body.notTester .needsTester {
-  position: relative;
-  pointer-events: none;
-  opacity: 0.42;
-  filter: grayscale(0.7);
-  cursor: not-allowed;
-}
-body.notTester .needsTester::after {
-  content: "🔒";
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  background: var(--blood);
-  color: #fff;
-  border-radius: 999px;
-  width: 22px;
-  height: 22px;
-  display: grid;
-  place-items: center;
-  font-size: 12px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.4);
-  border: 1px solid rgba(255,255,255,0.25);
-}
-/* Click-anywhere proxy that re-enables pointer events for the scroll-to-tester behavior */
-body.notTester .needsTesterProxy {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  cursor: pointer;
-  background: transparent;
-  border: 0;
-}
-body.unlocked .needsTesterProxy { display: none; }
-.testerPanel.required {
-  border-color: rgba(255, 31, 109, 0.8);
-  box-shadow: 0 0 50px rgba(255, 31, 109, 0.3), inset 0 0 30px rgba(255, 31, 109, 0.12);
-}
 .dlBlockHost { position: relative; }
 @media (max-width: 980px) {
   body { padding: 14px; }
   .hero, .grid, .downloadGrid, .updatePanel, .statsRow, .setlist { grid-template-columns: 1fr; }
   .logoWrap { width: 132px; }
   .logItem { grid-template-columns: 1fr; }
-  .testerForm { grid-template-columns: 1fr; }
 }
 @media (min-width: 1480px) {
   .sideUpdate {
@@ -715,15 +561,7 @@ body.unlocked .needsTesterProxy { display: none; }
 }
 </style>
 </head>
-<body class="notTester">
-<div class="lockBanner" id="lockBanner" role="alert">
-  <div class="lockIcon">🔒</div>
-  <div>
-    <strong>Tester Access Required</strong>
-    <small>This build is in closed testing. Enter your tester code below to unlock the Play buttons and the app downloads. If you don't have a code, ask Matt.</small>
-  </div>
-  <a class="btn primary lockCta" href="#testerPanel">Enter Code</a>
-</div>
+<body>
 <aside class="sideUpdate" aria-label="New update badge">
   <img src="assets/icon.ico" alt="Silly Billy app icon">
   <div>
@@ -740,38 +578,12 @@ body.unlocked .needsTesterProxy { display: none; }
       <div class="titleWrap"><h1 data-text="FNF Onliine">FNF Onliine</h1></div>
       <p>This is the download portal for the browser and app builds. Browser play is the easiest route for friends because it avoids Windows SmartScreen warnings on the unsigned `.exe`. The newest build upgrades the <strong>Wiik Z stage pass</strong>: Combat, One Hit, and Shimmy keep the source-scaled unknownnew platform drift, source scroll factors, Matt/BF anchors, mod-style sprite lighting, and the restored slow moving sky.</p>
       <div class="actions">
-        <a class="btn primary needsTester" href="/play">Play Online In Browser</a>
-        <a class="btn ghost needsTester" href="/offline">Play Offline In Browser</a>
+        <a class="btn primary" href="/play">Play Online In Browser</a>
+        <a class="btn ghost" href="/offline">Play Offline In Browser</a>
         <a class="btn secondary" href="https://github.com/mattedoubleo7-sketch/FNF---Online">View GitHub</a>
       </div>
     </div>
   </section>
-
-  <section class="testerPanel required" id="testerPanel">
-    <div class="testerHead">
-      <div class="eyebrow">Restricted</div>
-      <h2>Tester Access</h2>
-    </div>
-    <p>This build is in closed testing — a tester code is required to launch the game or download the apps. If you were given one, enter it below.</p>
-    <form class="testerForm" id="testerForm" autocomplete="off">
-      <input class="testerInput" id="testerInput" type="password" placeholder="Enter tester code" spellcheck="false" maxlength="40">
-      <button class="btn primary" type="submit">Unlock</button>
-    </form>
-    <div class="testerStatus" id="testerStatus"></div>
-    <div class="testerVault" id="testerVault" aria-hidden="true">
-      <h3>Tester Vault</h3>
-      <p>Welcome, tester. You can now launch the game and download the desktop apps. These builds may be unstable — report bugs against the latest build only.</p>
-      <ul>
-        <li>Latest VFX pass: restored Wiik Z sky drift, Wii Funkin camera events, Better Zoom, Flash Camera, shader-camera motion, source Wiik Z stage anchors, mod-style sprite lighting, and the Downscroll gameplay setting.</li>
-        <li>Hold-note pass: all songs use the fixed sustain behavior while keeping their own hold-note skins.</li>
-        <li>Silly Billy build with Test of Time chart, spikes-bf, flashback cutscene, shader speed lines, and power-50 drain.</li>
-        <li>Mobile + Console toggles in Settings — touch buttons + Xbox/PlayStation/generic gamepad support.</li>
-        <li>Silly Billy's speed-line shader is prewarmed so the post-Count burst does not hitch on first draw.</li>
-        <li>Override the gamepad mapping with <code>localStorage.fnfConsoleMap</code> = JSON map of <code>{buttonIndex:lane}</code>.</li>
-      </ul>
-    </div>
-  </section>
-
   <section class="statsRow">
     <div class="statChip"><span>Newest song</span><strong>Silly Billy</strong></div>
     <div class="statChip"><span>Now supports</span><strong>Mobile + Gamepad</strong></div>
@@ -785,8 +597,8 @@ body.unlocked .needsTesterProxy { display: none; }
       <h2>Wiik Z Sky, Downscroll, Sprite Light</h2>
       <p>Combat, One Hit, and Shimmy now restore the older slow sky drift while keeping the mod's unknownnew scroll factors, source-scaled platform drift, and source-derived Matt/BF anchors. Sprites keep the mod's additive purple-blue lighting amount instead of a heavy tint.</p>
       <div class="actions">
-        <a class="btn primary needsTester" href="/play">Jump Into Online</a>
-        <a class="btn secondary needsTester" href="/offline">Try Offline</a>
+        <a class="btn primary" href="/play">Jump Into Online</a>
+        <a class="btn secondary" href="/offline">Try Offline</a>
       </div>
     </div>
     <div class="logList">
@@ -853,14 +665,14 @@ body.unlocked .needsTesterProxy { display: none; }
           <h3>Play In Browser</h3>
           <p>Recommended for friends. No install, no SmartScreen warning, and the hosted browser build gets the newest updates first.</p>
           <div class="actions">
-            <a class="btn ghost needsTester" href="/play">Open Browser Game</a>
+            <a class="btn ghost" href="/play">Open Browser Game</a>
           </div>
         </div>
         <div class="dlBlock">
           <h3>Online App</h3>
           <p>Packaged desktop app for online play. It has the current release files and connects to the hosted online game.</p>
           <div class="actions">
-            <a class="btn primary needsTester" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/ONLINE/FNF-Browser-Jam-1.0.0-portable.exe?cache=20260601m">Download Online App</a>
+            <a class="btn primary" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/ONLINE/FNF-Browser-Jam-1.0.0-portable.exe?cache=20260601n">Download Online App</a>
           </div>
         </div>
         <div class="dlBlock">
@@ -892,14 +704,14 @@ body.unlocked .needsTesterProxy { display: none; }
           <h3>Play In Browser</h3>
           <p>Open the offline browser build right from the site if you want local play with no install and no room server.</p>
           <div class="actions">
-            <a class="btn ghost needsTester" href="/offline">Open Offline Browser Game</a>
+            <a class="btn ghost" href="/offline">Open Offline Browser Game</a>
           </div>
         </div>
         <div class="dlBlock">
           <h3>Offline App</h3>
           <p>Packaged offline download with the current local-play build and bundled assets.</p>
           <div class="actions">
-            <a class="btn primary needsTester" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/fnf/FNF-Browser-Jam-offline-1.0.0-portable.exe?cache=20260601m">Download Offline App</a>
+            <a class="btn primary" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/fnf/FNF-Browser-Jam-offline-1.0.0-portable.exe?cache=20260601n">Download Offline App</a>
           </div>
         </div>
         <div class="dlBlock">
@@ -948,111 +760,5 @@ body.unlocked .needsTesterProxy { display: none; }
 
   <div class="footer">FNF Onliine download portal - Wii camera and sprite lighting polish - browser recommended, app builds refreshed</div>
 </div>
-
-<script>
-(function () {
-  // Tester gate. The code is required to launch the game or download the apps.
-  // This is a soft gate — the page is public — but server.js also checks the
-  // fnfTester cookie before serving /play and /offline, so direct URL hits
-  // bounce back to here.
-  const EXPECTED_CODE = "9s2143sf21";
-  const STORAGE_KEY = "fnfTesterUnlocked_v1";
-  const COOKIE_NAME = "fnfTester";
-
-  const form = document.getElementById("testerForm");
-  const input = document.getElementById("testerInput");
-  const status = document.getElementById("testerStatus");
-  const vault = document.getElementById("testerVault");
-  const panel = document.getElementById("testerPanel");
-  const banner = document.getElementById("lockBanner");
-  if (!form || !input || !status || !vault || !panel) return;
-
-  function setCookie() {
-    // 30-day cookie, site-wide, so /play and /offline pass the server gate.
-    try {
-      document.cookie = COOKIE_NAME + "=ok; Path=/; Max-Age=" + (60 * 60 * 24 * 30) + "; SameSite=Lax";
-    } catch (e) {}
-  }
-  function hasCookie() {
-    return /(?:^|;\s*)fnfTester=ok(?:;|$)/.test(document.cookie || "");
-  }
-
-  function unlock(reason) {
-    document.body.classList.remove("notTester");
-    document.body.classList.add("unlocked");
-    panel.classList.remove("required");
-    vault.classList.add("show");
-    vault.setAttribute("aria-hidden", "false");
-    setCookie();
-    try { localStorage.setItem(STORAGE_KEY, "1"); } catch (e) {}
-    if (reason === "remembered") {
-      status.textContent = "Tester access remembered on this browser. Play buttons are unlocked.";
-    } else if (reason === "verified") {
-      status.textContent = "Tester verified. Play buttons are unlocked — go have fun.";
-    } else {
-      status.textContent = "Tester access active.";
-    }
-    status.className = "testerStatus ok";
-    input.value = "";
-  }
-
-  // Restore prior unlock from either localStorage or cookie (whichever survived).
-  try {
-    if (localStorage.getItem(STORAGE_KEY) === "1" || hasCookie()) {
-      unlock("remembered");
-    }
-  } catch (e) {
-    if (hasCookie()) unlock("remembered");
-  }
-
-  // If the server redirected here because someone hit /play without the cookie,
-  // surface that as an error message and scroll the panel into view.
-  try {
-    const url = new URL(window.location.href);
-    if (url.searchParams.get("tester") === "required" && !document.body.classList.contains("unlocked")) {
-      status.textContent = "Tester code required to launch the game. Enter your code below.";
-      status.className = "testerStatus err";
-      setTimeout(() => panel.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
-    }
-  } catch (e) {}
-
-  form.addEventListener("submit", function (e) {
-    e.preventDefault();
-    const value = (input.value || "").trim();
-    if (value === EXPECTED_CODE) {
-      unlock("verified");
-    } else {
-      input.classList.remove("bad");
-      void input.offsetWidth; // restart animation
-      input.classList.add("bad");
-      status.textContent = "That code didn't work. Check with whoever invited you.";
-      status.className = "testerStatus err";
-    }
-  });
-
-  // Konami-style: type the code anywhere on the page (not while typing in the input).
-  let buffer = "";
-  document.addEventListener("keydown", function (e) {
-    if (e.target === input) return;
-    if (e.key && e.key.length === 1) {
-      buffer = (buffer + e.key).slice(-40);
-      if (buffer.toLowerCase().endsWith(EXPECTED_CODE.toLowerCase())) unlock("verified");
-    }
-  });
-
-  // While locked, clicks on .needsTester buttons scroll up to the tester panel
-  // instead of navigating to /play (which would server-redirect them back anyway).
-  document.addEventListener("click", function (e) {
-    if (!document.body.classList.contains("notTester")) return;
-    const btn = e.target && e.target.closest ? e.target.closest(".needsTester") : null;
-    if (!btn) return;
-    e.preventDefault();
-    panel.scrollIntoView({ behavior: "smooth", block: "start" });
-    setTimeout(() => { try { input.focus(); } catch (err) {} }, 320);
-    status.textContent = "Enter your tester code first.";
-    status.className = "testerStatus err";
-  });
-})();
-</script>
 </body>
 </html>

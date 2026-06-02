@@ -238,23 +238,6 @@ function createGameServer({ port = Number(process.env.PORT) || 3000, host = proc
     res.json({ ok: true, rooms: rooms.size, queue: matchmakingQueue.length });
   });
 
-  // Tester gate: hosted /play and /offline require the tester cookie.
-  // Cookie is set by downloads.html when the correct code is entered.
-  // Note: this is a SOFT gate (the page is public); it just bounces casual
-  // visitors back to the portal to enter the code.
-  function isTesterUnlocked(req) {
-    const raw = String(req.headers.cookie || "");
-    return /(?:^|;\s*)fnfTester=ok(?:;|$)/.test(raw);
-  }
-  function gateOrServe(filePath) {
-    return (req, res) => {
-      if (!isTesterUnlocked(req)) {
-        return res.redirect(302, "/?tester=required");
-      }
-      res.sendFile(filePath);
-    };
-  }
-
   app.use("/assets", express.static(path.join(ROOT, "assets")));
   app.use("/dist", express.static(path.join(ROOT, "dist")));
   app.use(express.static(ROOT));
@@ -263,8 +246,12 @@ function createGameServer({ port = Number(process.env.PORT) || 3000, host = proc
     res.sendFile(path.join(ROOT, "downloads.html"));
   });
 
-  app.get("/play",    gateOrServe(path.join(ROOT, "FNF - Online.html")));
-  app.get("/offline", gateOrServe(path.join(ROOT, "FNF - Offline.html")));
+  app.get("/play", (_req, res) => {
+    res.sendFile(path.join(ROOT, "FNF - Online.html"));
+  });
+  app.get("/offline", (_req, res) => {
+    res.sendFile(path.join(ROOT, "FNF - Offline.html"));
+  });
 
   io.on("connection", socket => {
     socket.data.user = { id: socket.id, username: makePlayerName() };
