@@ -151,39 +151,21 @@
     ctx.restore();
   }
 
-  const WIIK_Z_PARALLAX_BASE = { x: 640, y: 448 };
   function combatCameraParallaxPoint(x, y, scrollX = 1, scrollY = scrollX){
     const camZ = Number(state.camera?.zoom || 1);
     if(window.REDUCE_MOTION || !Number.isFinite(camZ) || Math.abs(camZ - 1) < 0.001) return { x, y };
-    const focusX = Number.isFinite(state.camera?.focusX) ? state.camera.focusX : WIIK_Z_PARALLAX_BASE.x;
-    const focusY = Number.isFinite(state.camera?.focusY) ? state.camera.focusY : WIIK_Z_PARALLAX_BASE.y;
-    const layerFocusX = WIIK_Z_PARALLAX_BASE.x + (focusX - WIIK_Z_PARALLAX_BASE.x) * scrollX;
-    const layerFocusY = WIIK_Z_PARALLAX_BASE.y + (focusY - WIIK_Z_PARALLAX_BASE.y) * scrollY;
+    const focusX = Number.isFinite(state.camera?.focusX) ? state.camera.focusX : 640;
+    const focusY = Number.isFinite(state.camera?.focusY) ? state.camera.focusY : 448;
+    const zOffset = camZ - 1;
     return {
-      x: x + (layerFocusX - focusX) * (1 - camZ) / camZ,
-      y: y + (layerFocusY - focusY) * (1 - camZ) / camZ
+      x: (x + zOffset * (focusX + scrollX * (x - focusX))) / camZ,
+      y: (y + zOffset * (focusY + scrollY * (y - focusY))) / camZ
     };
   }
 
   function drawImageParallax(key, x, y, scale = 1, alpha = 1, flipX = false, scrollX = 1, scrollY = scrollX){
     const p = combatCameraParallaxPoint(x, y, scrollX, scrollY);
     drawImage(key, p.x, p.y, scale, alpha, flipX);
-  }
-
-  function withCombatScreenLock(drawFn){
-    const highwayX = Number(state.camera?.highwayX || 0);
-    const highwayY = Number(state.camera?.highwayY || 0);
-    const camZ = Number(state.camera?.zoom || 1);
-    ctx.save();
-    if(Number.isFinite(camZ) && camZ > 1.001){
-      const focusX = Number.isFinite(state.camera?.focusX) ? state.camera.focusX : WIIK_Z_PARALLAX_BASE.x;
-      const focusY = Number.isFinite(state.camera?.focusY) ? state.camera.focusY : WIIK_Z_PARALLAX_BASE.y;
-      ctx.scale(1 / camZ, 1 / camZ);
-      ctx.translate(-focusX * (1 - camZ), -focusY * (1 - camZ));
-    }
-    if(highwayX || highwayY) ctx.translate(-highwayX, -highwayY);
-    drawFn();
-    ctx.restore();
   }
 
   function wiiProjectionScale(z){
@@ -207,8 +189,8 @@
   }
 
   function combatDepth(t){
-    // Wiik Z's back sky should read as still. It is screen-locked in
-    // drawWiikZStageSprite so camera zoom/focus does not slide it either.
+    // No custom idle drift here. unknownBG uses the source unknownnew.lua
+    // position/scale/scroll factor: (-450, -100), scale 2, scroll (0, 0.3).
     const bgX = 0;
     const bgY = 0;
     return {
@@ -291,16 +273,14 @@
   }
 
   function wiikZStageDepthStyle(layer, depth){
-    // Only the back sky (`bg`) drifts. Rocks (`far`/`mid`) and the
-    // foreground split cliffs (`near`) stay locked to camera-parallax
-    // only - any motion on those would visibly shear the rock frame.
+    // No custom layer drift. The draw path below applies the source
+    // unknownnew.lua scroll factors for each Wiik Z sprite.
     if(layer === "bg"){
       return {
         x: Number(depth?.bgX || 0),
         y: Number(depth?.bgY || 0),
         scale: 1,
-        angle: 0,
-        screenLocked: true
+        angle: 0
       };
     }
     return { x: 0, y: 0, scale: 1, angle: 0 };
@@ -350,16 +330,6 @@
     const baseY = worldY(spec.y) + yOffset + Number(style.y || 0);
     const scale = worldScale(spec.scale || 1) * scaleMult * Number(style.scale || 1);
     const finalAngle = angle + Number(style.angle || 0);
-    if(style.screenLocked){
-      withCombatScreenLock(() => {
-        if(Math.abs(finalAngle) > 0.0001){
-          drawImageRotated(spec.key, baseX, baseY, scale, finalAngle, alpha, !!spec.flipX);
-        } else {
-          drawImage(spec.key, baseX, baseY, scale, alpha, !!spec.flipX);
-        }
-      });
-      return;
-    }
     const p = combatCameraParallaxPoint(baseX, baseY, spec.scrollX ?? 1, spec.scrollY ?? spec.scrollX ?? 1);
     if(Math.abs(finalAngle) > 0.0001){
       drawImageRotated(spec.key, p.x, p.y, scale, finalAngle, alpha, !!spec.flipX);
