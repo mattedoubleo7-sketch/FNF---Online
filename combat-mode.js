@@ -170,6 +170,22 @@
     drawImage(key, p.x, p.y, scale, alpha, flipX);
   }
 
+  function withCombatScreenLock(drawFn){
+    const highwayX = Number(state.camera?.highwayX || 0);
+    const highwayY = Number(state.camera?.highwayY || 0);
+    const camZ = Number(state.camera?.zoom || 1);
+    ctx.save();
+    if(Number.isFinite(camZ) && camZ > 1.001){
+      const focusX = Number.isFinite(state.camera?.focusX) ? state.camera.focusX : WIIK_Z_PARALLAX_BASE.x;
+      const focusY = Number.isFinite(state.camera?.focusY) ? state.camera.focusY : WIIK_Z_PARALLAX_BASE.y;
+      ctx.scale(1 / camZ, 1 / camZ);
+      ctx.translate(-focusX * (1 - camZ), -focusY * (1 - camZ));
+    }
+    if(highwayX || highwayY) ctx.translate(-highwayX, -highwayY);
+    drawFn();
+    ctx.restore();
+  }
+
   function wiiProjectionScale(z){
     const distance = Math.max(1, z - WII_COMBAT_DEPTH.eyeZ);
     return WII_COMBAT_DEPTH.focalLength / (WII_COMBAT_DEPTH.focalLength + distance);
@@ -191,8 +207,8 @@
   }
 
   function combatDepth(t){
-    // Wiik Z's back sky should read as still; stage scroll factors handle
-    // camera parallax without any autonomous idle drift.
+    // Wiik Z's back sky should read as still. It is screen-locked in
+    // drawWiikZStageSprite so camera zoom/focus does not slide it either.
     const bgX = 0;
     const bgY = 0;
     return {
@@ -283,7 +299,8 @@
         x: Number(depth?.bgX || 0),
         y: Number(depth?.bgY || 0),
         scale: 1,
-        angle: 0
+        angle: 0,
+        screenLocked: true
       };
     }
     return { x: 0, y: 0, scale: 1, angle: 0 };
@@ -333,6 +350,16 @@
     const baseY = worldY(spec.y) + yOffset + Number(style.y || 0);
     const scale = worldScale(spec.scale || 1) * scaleMult * Number(style.scale || 1);
     const finalAngle = angle + Number(style.angle || 0);
+    if(style.screenLocked){
+      withCombatScreenLock(() => {
+        if(Math.abs(finalAngle) > 0.0001){
+          drawImageRotated(spec.key, baseX, baseY, scale, finalAngle, alpha, !!spec.flipX);
+        } else {
+          drawImage(spec.key, baseX, baseY, scale, alpha, !!spec.flipX);
+        }
+      });
+      return;
+    }
     const p = combatCameraParallaxPoint(baseX, baseY, spec.scrollX ?? 1, spec.scrollY ?? spec.scrollX ?? 1);
     if(Math.abs(finalAngle) > 0.0001){
       drawImageRotated(spec.key, p.x, p.y, scale, finalAngle, alpha, !!spec.flipX);
