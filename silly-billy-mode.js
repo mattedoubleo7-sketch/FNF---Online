@@ -1068,13 +1068,40 @@
 
   // Original SpeedEffect-style lines right after "Count Your Seconds!".
   const SPEED_LINES = { start: 283.006, dur: 10.0, fadeIn: 0.5, fadeOut: 0.8 };
-  function speedLinesIntensity(t) {
-    const s = SPEED_LINES.start;
-    const e = s + SPEED_LINES.dur;
-    if (t < s || t >= e) return 0;
-    const inT = (t - s) / SPEED_LINES.fadeIn;
-    const outT = (e - t) / SPEED_LINES.fadeOut;
+  const YOUR_TIME_IS_OVER_BARS = { start: 191.272, dur: 2.2, fadeIn: 0.18, fadeOut: 0.32 };
+  function timedIntensity(t, start, dur, fadeIn, fadeOut) {
+    const end = start + dur;
+    if (t < start || t >= end) return 0;
+    const inT = (t - start) / fadeIn;
+    const outT = (end - t) / fadeOut;
     return Math.max(0, Math.min(1, Math.min(inT, outT)));
+  }
+
+  function speedLinesIntensity(t) {
+    return timedIntensity(t, SPEED_LINES.start, SPEED_LINES.dur, SPEED_LINES.fadeIn, SPEED_LINES.fadeOut);
+  }
+
+  function sillyBarsIntensity(t) {
+    const yourTime = timedIntensity(
+      t,
+      YOUR_TIME_IS_OVER_BARS.start,
+      YOUR_TIME_IS_OVER_BARS.dur,
+      YOUR_TIME_IS_OVER_BARS.fadeIn,
+      YOUR_TIME_IS_OVER_BARS.fadeOut
+    ) * 0.55;
+    const speed = speedLinesIntensity(t) * 0.78;
+    return Math.max(yourTime, speed);
+  }
+
+  function drawSillyBars(t) {
+    const amount = sillyBarsIntensity(t);
+    if (amount <= 0.003) return;
+    const h = canvas.height * (0.055 + amount * 0.125);
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.96)";
+    ctx.fillRect(0, 0, canvas.width, h);
+    ctx.fillRect(0, canvas.height - h, canvas.width, h);
+    ctx.restore();
   }
 
   function compileSillySpeedShader(gl, type, source) {
@@ -1333,6 +1360,7 @@
     drawSillyVideos(t);
     // Speed-lines burst: 10s after "Count Your Seconds!" (283s -> 293s).
     drawSillySpeedLines(t);
+    drawSillyBars(t);
     if (isSingingCutscene(t)) {
       drawSillyReceptors(t, "player");
       drawSillyNotes(t, "player");
