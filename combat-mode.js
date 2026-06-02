@@ -53,6 +53,7 @@
     splitLeft: { key: "split", x: 0, y: -500, scale: 1.2 * 2, scrollX: 1.3, scrollY: 1.3 },
     splitRight: { key: "split", x: 1844 * 1.2, y: -500, scale: 1.2 * 2, scrollX: 1.3, scrollY: 1.3, flipX: true }
   };
+  const WIIK_Z_SOURCE_DEFAULT_ZOOM = 0.85;
   const WIIK_Z_MATT_SCALE = 0.5;
   const WIIK_Z_BF_SCALE = 0.5;
   const WIIK_Z_DEFAULT_OPPONENT = { x: 500, y: 250 };
@@ -169,6 +170,36 @@
     drawImage(key, p.x, p.y, scale, alpha, flipX);
   }
 
+  function drawImageAtScreenPoint(key, screenX, screenY, screenScale = 1, alpha = 1, flipX = false){
+    const camZ = Number(state.camera?.zoom || 1);
+    if(!Number.isFinite(camZ) || Math.abs(camZ - 1) < 0.001){
+      drawImage(key, screenX, screenY, screenScale, alpha, flipX);
+      return;
+    }
+    const focusX = Number.isFinite(state.camera?.focusX) ? state.camera.focusX : 640;
+    const focusY = Number.isFinite(state.camera?.focusY) ? state.camera.focusY : 448;
+    drawImage(
+      key,
+      (screenX - focusX * (1 - camZ)) / camZ,
+      (screenY - focusY * (1 - camZ)) / camZ,
+      screenScale / camZ,
+      alpha,
+      flipX
+    );
+  }
+
+  function drawWiikZSourceSky(){
+    const spec = WIIK_Z_STAGE.unknownBG;
+    drawImageAtScreenPoint(
+      spec.key,
+      spec.x * WIIK_Z_SOURCE_DEFAULT_ZOOM,
+      spec.y * WIIK_Z_SOURCE_DEFAULT_ZOOM,
+      spec.scale * WIIK_Z_SOURCE_DEFAULT_ZOOM,
+      1,
+      !!spec.flipX
+    );
+  }
+
   function wiiProjectionScale(z){
     const distance = Math.max(1, z - WII_COMBAT_DEPTH.eyeZ);
     return WII_COMBAT_DEPTH.focalLength / (WII_COMBAT_DEPTH.focalLength + distance);
@@ -190,8 +221,8 @@
   }
 
   function combatDepth(t){
-    // No custom idle drift here. unknownBG uses the source unknownnew.lua
-    // position/scale/scroll factor: (-450, -100), scale 2, scroll (0, 0.3).
+    // No custom idle drift here. unknownBG is drawn at unknownnew.json's
+    // source defaultZoom so it does not ride the close-up gameplay camera.
     const bgX = 0;
     const bgY = 0;
     return {
@@ -1499,7 +1530,7 @@
     const depth = combatDepth(t);
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    drawWiikZStageSprite(WIIK_Z_STAGE.unknownBG, 0, 0, 1, 1, 0, wiikZStageDepthStyle("bg", depth));
+    drawWiikZSourceSky();
     drawCombatDust("far", t, depth);
     if(isOneHit() && t >= ONE_HIT_MOVING_ROCK_START){
       drawOneHitBackgroundRockField(t, depth);
