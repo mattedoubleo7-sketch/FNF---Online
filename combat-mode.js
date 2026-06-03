@@ -21,7 +21,7 @@
   const ONE_HIT_BLUR_STEPS = [2560, 2568, 2576, 2584, 2624, 2632, 2640, 2648, 2688, 2696, 2704, 2712, 2752, 2760, 2768, 2776];
   const ONE_HIT_WARP_STEPS = [2048, 2080, 2112, 2144, 2176, 2208, 2240, 2272, 2560, 2568, 2576, 2584, 2624, 2632, 2640, 2648, 2688, 2696, 2704, 2712, 2752, 2760, 2768, 2776];
   const ONE_HIT_GREYSCALE_WINDOWS = [[1024, 256, 1], [1392, 32, 0.55], [2304, 64, 0.55], [3840, 256, 1], [4208, 32, 0.55], [4320, 32, 1], [4848, 16, 0.55]];
-  const ONE_HIT_SPACE_DRIFT_START = 191;
+  const ONE_HIT_SPACE_DRIFT_START = 192;
   const ONE_HIT_MOVING_ROCK_START = 192;
 
   function clampValue(value, min, max){
@@ -1399,6 +1399,7 @@
 
   function drawCombatInsanePostFx(t){
     if(!isCombat() || !state.playing || !Number.isFinite(t)) return;
+    const cameraShadersEnabled = !window.PERFORMANCE_MODE;
     const chartShaderFx = shimmyShaderFxState(t);
     const useChartShaders = !!chartShaderFx?.hasEvents;
     const zeroFx = { step: combatSongStep(t), bloom: 0, speed: 0, burst: 0, bars: 0, mirror: 0, angle: 0, chrom: 1.2 };
@@ -1408,22 +1409,31 @@
     const oneHitCameraFx = isOneHit() ? oneHitCameraState(t) : null;
     const shimmyFx = useChartShaders || isShimmy() ? chartShaderFx : null;
     const active = fx.mirror + fx.bloom + fx.speed + fx.burst + (oneHitFx?.active || 0) + (shimmyFx?.active || 0) + (oneHitCameraFx?.flash || 0);
-    if(active <= 0.015 && fx.chrom <= 1.21 && (!oneHitFx || oneHitFx.active <= 0.015) && (!shimmyFx || shimmyFx.active <= 0.015) && (oneHitCameraFx?.flash || 0) <= 0.015) return;
-    let source = ensureCombatFxCanvas();
-    if(drawWiiGameCameraShaders(shimmyFx, fx, oneHitFx, source, t)){
+    const bars = Math.max(
+      Math.min(0.24, (fx.bars || 0) * 0.15),
+      Math.min(0.24, (oneHitFx?.bars || 0) * 0.15),
+      Math.min(0.45, shimmyFx?.bars || 0)
+    );
+    const flash = oneHitCameraFx?.flash || 0;
+    if(cameraShadersEnabled && active <= 0.015 && fx.chrom <= 1.21 && (!oneHitFx || oneHitFx.active <= 0.015) && (!shimmyFx || shimmyFx.active <= 0.015) && flash <= 0.015) return;
+    if(!cameraShadersEnabled && bars <= 0.003 && flash <= 0.01) return;
+    let source = cameraShadersEnabled ? ensureCombatFxCanvas() : null;
+    if(cameraShadersEnabled && drawWiiGameCameraShaders(shimmyFx, fx, oneHitFx, source, t)){
       source = ensureCombatFxCanvas();
     }
     const cx = canvas.width / 2, cy = canvas.height / 2;
-    const speedEffect = Math.max(
-      shimmyFx?.speed || 0,
-      Math.min(0.24, (fx.speed || 0) * 0.22),
-      Math.min(0.24, (oneHitFx?.speed || 0) * 0.22)
-    );
-    drawShimmyOriginalSpeedEffect(speedEffect, t);
+    if(cameraShadersEnabled){
+      const speedEffect = Math.max(
+        shimmyFx?.speed || 0,
+        Math.min(0.24, (fx.speed || 0) * 0.22),
+        Math.min(0.24, (oneHitFx?.speed || 0) * 0.22)
+      );
+      drawShimmyOriginalSpeedEffect(speedEffect, t);
+    }
 
     const greyscale = Math.max(oneHitFx?.greyscale || 0, shimmyFx?.greyscale || 0);
     const blur = Math.max(oneHitFx?.blur || 0, shimmyFx?.blur || 0);
-    if(greyscale > 0.01 || blur > 0.01){
+    if(cameraShadersEnabled && (greyscale > 0.01 || blur > 0.01)){
       ctx.save();
       ctx.globalAlpha = Math.min(0.86, 0.2 + greyscale * 0.58 + blur * 0.18);
       ctx.filter = "grayscale(" + greyscale.toFixed(3) + ") contrast(" + (1 + greyscale * 0.22).toFixed(3) + ") blur(" + (blur * 4.5).toFixed(2) + "px)";
@@ -1432,7 +1442,7 @@
       ctx.restore();
     }
 
-    if(fx.mirror > 0.01 || (oneHitFx?.warp || 0) > 0.01 || (shimmyFx?.mirror || 0) > 0.01 || (shimmyFx?.gameWarp || 0) > 0.01){
+    if(cameraShadersEnabled && (fx.mirror > 0.01 || (oneHitFx?.warp || 0) > 0.01 || (shimmyFx?.mirror || 0) > 0.01 || (shimmyFx?.gameWarp || 0) > 0.01)){
       const mirror = Math.max(fx.mirror, (oneHitFx?.warp || 0) * 0.86, shimmyFx?.mirror || 0, (shimmyFx?.gameWarp || 0) * 1.35);
       const shaderWarp = shimmyFx?.gameWarp || 0;
       const shaderAngle = shimmyFx?.gameAngle || 0;
@@ -1451,10 +1461,10 @@
       ctx.drawImage(source, -cx + 7 + shaderWarp * 14, -cy - 2);
       ctx.restore();
     }
-    drawWiiHudCameraShaders(shimmyFx, source, t);
+    if(cameraShadersEnabled) drawWiiHudCameraShaders(shimmyFx, source, t);
 
     const chrom = Math.max(fx.chrom, oneHitFx?.chrom || 0, shimmyFx?.chrom || 0);
-    if(chrom > 1.4){
+    if(cameraShadersEnabled && chrom > 1.4){
       const offset = Math.min(18, chrom);
       ctx.save();
       ctx.globalCompositeOperation = "screen";
@@ -1468,7 +1478,7 @@
     }
 
     const bloom = Math.max(fx.bloom, oneHitFx?.bloom || 0, shimmyFx?.bloom || 0);
-    if(bloom > 0.01){
+    if(cameraShadersEnabled && bloom > 0.01){
       ctx.save();
       ctx.globalCompositeOperation = "screen";
       ctx.globalAlpha = Math.min(0.7, 0.18 + bloom * 0.46);
@@ -1482,7 +1492,7 @@
     }
 
     const colorFill = shimmyFx?.colorFill;
-    if(colorFill && colorFill.amount > 0.01){
+    if(cameraShadersEnabled && colorFill && colorFill.amount > 0.01){
       ctx.save();
       ctx.globalAlpha = Math.min(1, colorFill.amount);
       ctx.fillStyle = "rgb(" + Math.round(colorFill.red) + "," + Math.round(colorFill.green) + "," + Math.round(colorFill.blue) + ")";
@@ -1490,13 +1500,8 @@
       ctx.restore();
     }
 
-    drawCombatSpeedLines(Math.max(fx.burst * 0.7, (fx.speed || 0) * 0.45, (oneHitFx?.speed || 0) * 0.45), t);
+    if(cameraShadersEnabled) drawCombatSpeedLines(Math.max(fx.burst * 0.7, (fx.speed || 0) * 0.45, (oneHitFx?.speed || 0) * 0.45), t);
 
-    const bars = Math.max(
-      Math.min(0.24, (fx.bars || 0) * 0.15),
-      Math.min(0.24, (oneHitFx?.bars || 0) * 0.15),
-      Math.min(0.45, shimmyFx?.bars || 0)
-    );
     if(bars > 0.003){
       ctx.save();
       const h = canvas.height * bars;
@@ -1506,9 +1511,9 @@
       ctx.restore();
     }
 
-    if((oneHitCameraFx?.flash || 0) > 0.01){
+    if(flash > 0.01){
       ctx.save();
-      ctx.globalAlpha = Math.min(0.9, oneHitCameraFx.flash);
+      ctx.globalAlpha = Math.min(0.9, flash);
       ctx.fillStyle = "#fff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.restore();
@@ -1733,17 +1738,17 @@
 
   function wiiShaderCameraMotion(t){
     if(window.REDUCE_MOTION) return { x: 0, y: 0, zoom: 0, active: 0 };
+    if(window.PERFORMANCE_MODE) return { x: 0, y: 0, zoom: 0, active: 0 };
     const fx = shimmyShaderFxState(t);
     if(!fx?.hasEvents) return { x: 0, y: 0, zoom: 0, active: 0 };
-    const perf = window.PERFORMANCE_MODE ? 0.55 : 1;
     const zoomDeviation = Math.abs((fx.gameZoom || 1) - 1) + Math.abs((fx.hudZoom || 1) - 1) * 0.35;
     const xyIntensity = Math.abs(fx.gameX || 0) + Math.abs(fx.gameY || 0) + Math.abs(fx.hudX || 0) * 0.35 + Math.abs(fx.hudY || 0) * 0.35;
-    const intensity = clampValue((fx.mirror + fx.hudMirror + fx.gameWarp + fx.hudWarp + fx.speed + fx.bloom + zoomDeviation * 1.7 + xyIntensity) * 0.24, 0, 1) * perf;
+    const intensity = clampValue((fx.mirror + fx.hudMirror + fx.gameWarp + fx.hudWarp + fx.speed + fx.bloom + zoomDeviation * 1.7 + xyIntensity) * 0.24, 0, 1);
     const step = fx.step || combatSongStep(t);
     return {
-      x: (Math.sin(t * 7.2 + step * 0.035) * 12 * intensity) + (fx.gameAngle || 0) * 0.68 * perf + ((fx.gameX || 0) * 18 + (fx.hudX || 0) * 6) * perf,
-      y: (Math.cos(t * 6.4 + step * 0.025) * 8 * intensity) + Math.sin(step * 0.12) * (fx.gameWarp || 0) * 18 * perf + ((fx.gameY || 0) * 14 + (fx.hudY || 0) * 5) * perf,
-      zoom: ((fx.cameraZoomPulse || 0) * 1.45 + clampValue(zoomDeviation * 0.18, 0, 0.08) + Math.min(0.07, (fx.bloom || 0) * 0.02 + (fx.speed || 0) * 0.04)) * perf,
+      x: (Math.sin(t * 7.2 + step * 0.035) * 12 * intensity) + (fx.gameAngle || 0) * 0.68 + ((fx.gameX || 0) * 18 + (fx.hudX || 0) * 6),
+      y: (Math.cos(t * 6.4 + step * 0.025) * 8 * intensity) + Math.sin(step * 0.12) * (fx.gameWarp || 0) * 18 + ((fx.gameY || 0) * 14 + (fx.hudY || 0) * 5),
+      zoom: (fx.cameraZoomPulse || 0) * 1.45 + clampValue(zoomDeviation * 0.18, 0, 0.08) + Math.min(0.07, (fx.bloom || 0) * 0.02 + (fx.speed || 0) * 0.04),
       active: intensity
     };
   }
