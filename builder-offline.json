@@ -15,6 +15,7 @@
     "FNF - Online.html",
     "FNF - Offline.html",
     "online-mode.js",
+    "webgl-renderer.js",
     "sprite-data.js",
     "sporting-chart.js",
     "boxing-match-chart.js",

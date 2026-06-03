@@ -968,9 +968,12 @@
     const mirrorHudYRaw = shimmyShaderValue(step, "mirrorHud", "y", 0);
     const mirrorOtherXRaw = shimmyShaderValue(step, "mirrorOther", "x", 0);
     const mirrorOtherYRaw = shimmyShaderValue(step, "mirrorOther", "y", 0);
-    const mirrorWarpRaw = Math.abs(shimmyShaderValue(step, "mirror", "warp", 0));
-    const mirrorHudWarpRaw = Math.abs(shimmyShaderValue(step, "mirrorHud", "warp", 0));
-    const mirrorOtherWarpRaw = Math.abs(shimmyShaderValue(step, "mirrorOther", "warp", 0));
+    const mirrorWarpValue = shimmyShaderValue(step, "mirror", "warp", 0);
+    const mirrorHudWarpValue = shimmyShaderValue(step, "mirrorHud", "warp", 0);
+    const mirrorOtherWarpValue = shimmyShaderValue(step, "mirrorOther", "warp", 0);
+    const mirrorWarpRaw = Math.abs(mirrorWarpValue);
+    const mirrorHudWarpRaw = Math.abs(mirrorHudWarpValue);
+    const mirrorOtherWarpRaw = Math.abs(mirrorOtherWarpValue);
     const mirrorGameZoom = Math.abs(mirrorZoomRaw - 1);
     const mirrorHudZoom = Math.abs(mirrorHudZoomRaw - 1);
     const mirrorOtherZoom = Math.abs(mirrorOtherZoomRaw - 1);
@@ -1017,13 +1020,21 @@
       gameZoom: mirrorZoomRaw,
       otherZoom: mirrorOtherZoomRaw,
       hudZoom: mirrorHudZoomRaw,
+      mirrorAngle: mirrorAngleRaw,
       gameAngle: signedGameAngle,
       otherAngle: mirrorOtherAngleRaw,
       hudAngle: mirrorHudAngleRaw,
+      mirrorX: mirrorXRaw,
+      mirrorY: mirrorYRaw,
+      otherX: mirrorOtherXRaw,
+      otherY: mirrorOtherYRaw,
       gameX: mirrorXRaw + mirrorOtherXRaw,
       gameY: mirrorYRaw + mirrorOtherYRaw,
       hudX: mirrorHudXRaw,
       hudY: mirrorHudYRaw,
+      mirrorWarp: mirrorWarpValue,
+      otherWarp: mirrorOtherWarpValue,
+      hudWarpRaw: mirrorHudWarpValue,
       gameWarp,
       hudWarp,
       cameraZoomPulse,
@@ -1124,6 +1135,11 @@
 
   function drawCombatSpeedLines(amount, t){
     if(amount <= 0.01) return;
+    if(window.FNF_WEBGL?.drawSpeedLines(Math.min(0.25, amount * 0.22), t, {
+      centerX: 0.5,
+      centerY: 0.5,
+      alpha: 0.72
+    })) return;
     ctx.save();
     ctx.globalCompositeOperation = "screen";
     ctx.lineWidth = 2.5;
@@ -1293,6 +1309,11 @@
   function drawShimmyOriginalSpeedEffect(effect, t){
     const amount = Math.max(0, Math.min(0.25, effect || 0));
     if(amount <= 0.005) return;
+    if(window.FNF_WEBGL?.drawSpeedLines(amount, t, {
+      centerX: 0.5,
+      centerY: 0.5,
+      alpha: 1
+    })) return;
     const fx = ensureShimmySpeedFx();
     if(!fx) return;
     if(fx.canvas.width !== canvas.width || fx.canvas.height !== canvas.height){
@@ -1336,7 +1357,9 @@
   function drawWiiGameCameraShaders(shaderFx, fallbackFx, oneHitFx, source, t){
     const gameZoom = Number(shaderFx?.gameZoom || 1);
     const otherZoom = Number(shaderFx?.otherZoom || 1);
-    const zoomRaw = Math.abs(otherZoom - 1) > Math.abs(gameZoom - 1) ? otherZoom : gameZoom;
+    const zoomRaw = shaderFx?.hasEvents
+      ? clampValue(gameZoom * otherZoom, 0.45, 1.9)
+      : (Math.abs(otherZoom - 1) > Math.abs(gameZoom - 1) ? otherZoom : gameZoom);
     const zoomDeviation = Math.abs(zoomRaw - 1);
     const mirror = Math.max(
       shaderFx?.mirror || 0,
@@ -1344,17 +1367,32 @@
       fallbackFx?.mirror || 0,
       (oneHitFx?.warp || 0) * 0.9
     );
-    const warp = Math.max(shaderFx?.gameWarp || 0, (oneHitFx?.warp || 0) * 0.72);
-    const angle = Number(shaderFx?.gameAngle || shaderFx?.otherAngle || fallbackFx?.angle || 0)
+    const signedWarp = shaderFx?.hasEvents
+      ? clampValue(Number(shaderFx.mirrorWarp || 0) + Number(shaderFx.otherWarp || 0), -0.85, 0.85)
+      : Math.max(shaderFx?.gameWarp || 0, (oneHitFx?.warp || 0) * 0.72);
+    const warp = Math.abs(signedWarp);
+    const angle = (shaderFx?.hasEvents
+      ? Number(shaderFx.mirrorAngle || 0) + Number(shaderFx.otherAngle || 0)
+      : Number(shaderFx?.gameAngle || shaderFx?.otherAngle || fallbackFx?.angle || 0))
       + (oneHitFx?.warp || 0) * Math.sin(t * 8) * 7;
-    const x = Number(shaderFx?.gameX || 0) * 24;
-    const y = Number(shaderFx?.gameY || 0) * 20;
+    const x = shaderFx?.hasEvents ? -Number(shaderFx?.gameX || 0) * canvas.width : Number(shaderFx?.gameX || 0) * 24;
+    const y = shaderFx?.hasEvents ? -Number(shaderFx?.gameY || 0) * canvas.height : Number(shaderFx?.gameY || 0) * 20;
     const amount = clampValue(mirror * 0.42 + warp * 0.55 + zoomDeviation * 3.2 + Math.abs(angle) * 0.035, 0, 1);
     if(amount <= 0.012) return false;
 
     const cx = canvas.width * 0.5;
     const cy = canvas.height * 0.5;
-    const mainScale = clampValue(zoomRaw || 1, 0.72, 1.46);
+    const mainScale = shaderFx?.hasEvents ? clampValue(1 / (zoomRaw || 1), 0.54, 1.82) : clampValue(zoomRaw || 1, 0.72, 1.46);
+    if(shaderFx?.hasEvents && window.FNF_WEBGL?.drawCameraPass(source, {
+      zoom: clampValue(zoomRaw || 1, 0.45, 1.9),
+      angle: -angle,
+      offsetX: clampValue(x / Math.max(1, canvas.width), -1, 1),
+      offsetY: clampValue(y / Math.max(1, canvas.height), -1, 1),
+      warp: signedWarp,
+      mirror: amount
+    })){
+      return true;
+    }
     ctx.save();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = "#000";
@@ -1364,8 +1402,9 @@
     // repeat flipped camera copies around the edge instead of exposing black.
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.globalAlpha = Math.min(0.42, 0.16 + amount * 0.24);
-    ctx.scale(1 + amount * 0.2, 1 + amount * 0.16);
+    ctx.globalAlpha = shaderFx?.hasEvents ? 1 : Math.min(0.42, 0.16 + amount * 0.24);
+    ctx.rotate((shaderFx?.hasEvents ? -angle : angle * 0.24) * Math.PI / 180);
+    ctx.scale(mainScale * (1 - signedWarp * 0.08), mainScale * (1 - signedWarp * 0.045));
     const edgeShift = canvas.width * (0.12 + amount * 0.08);
     ctx.drawImage(source, -cx, -cy);
     ctx.scale(-1, 1);
@@ -1374,20 +1413,20 @@
     ctx.restore();
 
     ctx.translate(cx, cy);
-    ctx.rotate(angle * Math.PI / 180 * 0.72);
+    ctx.rotate((shaderFx?.hasEvents ? -angle : angle * 0.72) * Math.PI / 180);
     ctx.transform(
-      1 + warp * 0.026,
-      Math.sin(t * 5.5) * warp * 0.022,
-      Math.sin(t * 7.5) * warp * 0.052,
-      1 + warp * 0.022,
-      x + Math.sin(t * 10.5) * mirror * 10,
-      y + Math.cos(t * 8.5) * warp * 12
+      1 - signedWarp * 0.035,
+      shaderFx?.hasEvents ? 0 : Math.sin(t * 5.5) * warp * 0.022,
+      shaderFx?.hasEvents ? 0 : Math.sin(t * 7.5) * warp * 0.052,
+      1 - signedWarp * 0.022,
+      x + (shaderFx?.hasEvents ? 0 : Math.sin(t * 10.5) * mirror * 10),
+      y + (shaderFx?.hasEvents ? 0 : Math.cos(t * 8.5) * warp * 12)
     );
     ctx.scale(mainScale, mainScale);
     ctx.globalAlpha = 1;
     ctx.drawImage(source, -cx, -cy);
 
-    if(mirror > 0.02 || warp > 0.02){
+    if(!shaderFx?.hasEvents && (mirror > 0.02 || warp > 0.02)){
       ctx.globalCompositeOperation = "screen";
       ctx.globalAlpha = Math.min(0.18, amount * 0.13);
       ctx.drawImage(source, -cx - 9 - warp * 18, -cy + 2);
@@ -1418,7 +1457,9 @@
     if(cameraShadersEnabled && active <= 0.015 && fx.chrom <= 1.21 && (!oneHitFx || oneHitFx.active <= 0.015) && (!shimmyFx || shimmyFx.active <= 0.015) && flash <= 0.015) return;
     if(!cameraShadersEnabled && bars <= 0.003 && flash <= 0.01) return;
     let source = cameraShadersEnabled ? ensureCombatFxCanvas() : null;
+    let cameraShaderRedrawn = false;
     if(cameraShadersEnabled && drawWiiGameCameraShaders(shimmyFx, fx, oneHitFx, source, t)){
+      cameraShaderRedrawn = true;
       source = ensureCombatFxCanvas();
     }
     const cx = canvas.width / 2, cy = canvas.height / 2;
@@ -1442,7 +1483,7 @@
       ctx.restore();
     }
 
-    if(cameraShadersEnabled && (fx.mirror > 0.01 || (oneHitFx?.warp || 0) > 0.01 || (shimmyFx?.mirror || 0) > 0.01 || (shimmyFx?.gameWarp || 0) > 0.01)){
+    if(cameraShadersEnabled && !cameraShaderRedrawn && (fx.mirror > 0.01 || (oneHitFx?.warp || 0) > 0.01 || (shimmyFx?.mirror || 0) > 0.01 || (shimmyFx?.gameWarp || 0) > 0.01)){
       const mirror = Math.max(fx.mirror, (oneHitFx?.warp || 0) * 0.86, shimmyFx?.mirror || 0, (shimmyFx?.gameWarp || 0) * 1.35);
       const shaderWarp = shimmyFx?.gameWarp || 0;
       const shaderAngle = shimmyFx?.gameAngle || 0;

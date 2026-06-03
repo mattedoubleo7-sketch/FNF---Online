@@ -566,8 +566,8 @@ p, li {
   <img src="assets/icon.ico" alt="Silly Billy app icon">
   <div>
     <span>New update</span>
-    <strong>One Hit Sync + Perf</strong>
-    <small>One Hit's 3:12 drift is synced, and Performance Mode now skips the heavy Wiik Z camera shaders.</small>
+    <strong>WG WebGL Flight Fix</strong>
+    <small>Boxing Match WG now uses the WebGL bridge for camera shaders, parallax, speed lines, and corrected fly-section trail anchors.</small>
   </div>
 </aside>
 <div class="page">
@@ -576,7 +576,7 @@ p, li {
     <div>
       <div class="kicker"><span class="liveDot"></span> Live build updated</div>
       <div class="titleWrap"><h1 data-text="FNF Onliine">FNF Onliine</h1></div>
-      <p>This is the download portal for the browser and app builds. Browser play is the easiest route for friends because it avoids Windows SmartScreen warnings on the unsigned `.exe`. The newest browser build upgrades <strong>One Hit</strong>: the late space/platform drift now starts with the 3:12 moving-rock section, and Performance Mode skips the heavy Wiik Z camera shader passes.</p>
+      <p>This is the download portal for the browser and app builds. Browser play is the easiest route for friends because it avoids Windows SmartScreen warnings on the unsigned `.exe`. The newest browser build adds a reusable <strong>WebGL shader bridge</strong>, plus a Boxing Match WG pass for the fly-section beams, speed lines, camera shaders, and parallax.</p>
       <div class="actions">
         <a class="btn primary" href="/play">Play Online In Browser</a>
         <a class="btn ghost" href="/offline">Play Offline In Browser</a>
@@ -587,15 +587,15 @@ p, li {
   <section class="statsRow">
     <div class="statChip"><span>Newest song</span><strong>Silly Billy</strong></div>
     <div class="statChip"><span>Now supports</span><strong>Mobile + Gamepad</strong></div>
-    <div class="statChip"><span>Latest polish</span><strong>Perf + Sync</strong></div>
+    <div class="statChip"><span>Latest polish</span><strong>WG WebGL</strong></div>
     <div class="statChip"><span>Best route</span><strong>Browser</strong></div>
   </section>
 
   <section class="panel updatePanel">
     <div class="latestBox">
       <div class="version">Update log - 2026.06.02</div>
-      <h2>One Hit Sync, Performance Mode</h2>
-      <p>One Hit's custom platform drift now starts at 3:12 with the moving background rocks. Performance Mode now skips Wiik Z camera-shader redraws, shader camera wobble, and full-screen shader overlays.</p>
+      <h2>Boxing Match WG WebGL</h2>
+      <p>The game now loads an engine-level WebGL post-process bridge. Wiik Z and Boxing Match WG camera events can use GPU camera, parallax, and speed-line passes, while Performance Mode and WebGL failures fall back to the existing Canvas path.</p>
       <div class="actions">
         <a class="btn primary" href="/play">Jump Into Online</a>
         <a class="btn secondary" href="/offline">Try Offline</a>
@@ -604,6 +604,14 @@ p, li {
     <div class="logList">
       <div class="logItem">
         <div class="logDate">Latest</div>
+        <div><div class="logTitle">WG shader + flight pass</div><p>Boxing Match WG now routes camera shaders, parallax, and speed lines through the shared WebGL bridge. The fly section uses the Wii Funkin trail offsets, with Matt and BF camera anchors synced to the corrected layout.</p></div>
+      </div>
+      <div class="logItem">
+        <div class="logDate">Previous</div>
+        <div><div class="logTitle">Engine WebGL shader bridge</div><p>Added a shared WebGL post-processing layer for camera shaders, wired Combat/One Hit/Shimmy chart events through it, and included the bridge in browser plus desktop build file lists.</p></div>
+      </div>
+      <div class="logItem">
+        <div class="logDate">Previous</div>
         <div><div class="logTitle">One Hit sync + Performance Mode</div><p>The custom space/platform drift was moved from 191s to 192s, and Performance Mode no longer applies the heavy Wiik Z camera shader redraws or shader-driven camera wobble.</p></div>
       </div>
       <div class="logItem">

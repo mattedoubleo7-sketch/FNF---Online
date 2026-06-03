@@ -1321,9 +1321,11 @@ body.gamepadOn.gameRunning #consoleHud { display: none; }
 <script src="genocide-data.js?v=genocide-v10"></script>
 <script src="genocide-commands.js?v=genocide-v10"></script>
 <script src="genocide-revival-data.js?v=genocide-revival-v8"></script>
+<script src="webgl-renderer.js?v=20260602b"></script>
 <script>
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
+window.FNF_WEBGL = window.FNFWebGLBridge ? window.FNFWebGLBridge.create(canvas, ctx) : null;
 const DUSTIN_SHADER_SOURCES = Object.freeze({ bloom: "shaders/dustin-bloom.frag", bloomNew: "shaders/dustin-bloom_new.frag" });
 const postFxCanvas = document.createElement("canvas");
 const postFxCtx = postFxCanvas.getContext("2d");
@@ -3157,9 +3159,9 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 })();
 </script>
 <script src="boxing-fight-mode.js?v=20260322-stage6"></script>
-<script src="combat-mode.js?v=20260602i"></script>
+<script src="combat-mode.js?v=20260602l"></script>
 <script src="ballistic-mode.js?v=20260601h"></script>
-<script src="boxing-match-wg-mode.js?v=20260601h"></script>
+<script src="boxing-match-wg-mode.js?v=20260602b"></script>
 <script src="broken-reality-mode.js"></script>
 <script src="broken-reality-soul-data.js"></script>
 <script src="broken-reality-fix.js?v=20260601h"></script>
