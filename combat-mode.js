@@ -21,7 +21,7 @@
   const ONE_HIT_BLUR_STEPS = [2560, 2568, 2576, 2584, 2624, 2632, 2640, 2648, 2688, 2696, 2704, 2712, 2752, 2760, 2768, 2776];
   const ONE_HIT_WARP_STEPS = [2048, 2080, 2112, 2144, 2176, 2208, 2240, 2272, 2560, 2568, 2576, 2584, 2624, 2632, 2640, 2648, 2688, 2696, 2704, 2712, 2752, 2760, 2768, 2776];
   const ONE_HIT_GREYSCALE_WINDOWS = [[1024, 256, 1], [1392, 32, 0.55], [2304, 64, 0.55], [3840, 256, 1], [4208, 32, 0.55], [4320, 32, 1], [4848, 16, 0.55]];
-  const ONE_HIT_SIDE_SPEED_START = 191;
+  const ONE_HIT_SPACE_DRIFT_START = 191;
   const ONE_HIT_MOVING_ROCK_START = 192;
 
   function clampValue(value, min, max){
@@ -775,7 +775,7 @@
     }
   }
 
-  function oneHitSectionAmount(t, start = ONE_HIT_SIDE_SPEED_START){
+  function oneHitSectionAmount(t, start = ONE_HIT_SPACE_DRIFT_START){
     if(!isOneHit() || t < start) return 0;
     return easeOutCubic((t - start) / 1.35);
   }
@@ -893,7 +893,6 @@
       if(age >= 0 && age <= win[1]) greyscale = Math.max(greyscale, win[2] * (1 - Math.max(0, age - win[1] * 0.82) / Math.max(1, win[1] * 0.18)));
     }
     const speed = maxStepPulse(step, ONE_HIT_SPEED_STEPS, 16);
-    const sideSpeed = oneHitSideSpeedAmount(t);
     const bloom = maxStepPulse(step, ONE_HIT_BLOOM_STEPS, 16);
     const bars = maxStepPulse(step, ONE_HIT_BARS_STEPS, 16);
     const blur = maxStepPulse(step, ONE_HIT_BLUR_STEPS, 8);
@@ -904,11 +903,10 @@
       blur,
       warp,
       speed,
-      sideSpeed,
       bloom,
       bars,
-      chrom: bloom * 10 + speed * 9 + sideSpeed * 7 + warp * 8 + blur * 7,
-      active: greyscale + blur + warp + speed + sideSpeed + bloom + bars
+      chrom: bloom * 10 + speed * 9 + warp * 8 + blur * 7,
+      active: greyscale + blur + warp + speed + bloom + bars
     };
   }
 
@@ -1124,15 +1122,6 @@
     ctx.restore();
   }
 
-  function oneHitSideSpeedAmount(t){
-    if(!isOneHit() || t < ONE_HIT_SIDE_SPEED_START) return 0;
-    const end = ONE_HIT_SIDE_SPEED_START + 9.6;
-    if(t >= end) return 0;
-    const fadeIn = easeOutCubic((t - ONE_HIT_SIDE_SPEED_START) / 0.45);
-    const fadeOut = 1 - easeOutCubic((t - (end - 1.4)) / 1.4);
-    return Math.max(0, Math.min(1, fadeIn, fadeOut));
-  }
-
   function drawCombatSpeedLines(amount, t){
     if(amount <= 0.01) return;
     ctx.save();
@@ -1318,40 +1307,6 @@
     ctx.restore();
   }
 
-  function drawOneHitSideSpeedLines(amount, t){
-    if(amount <= 0.01) return;
-    ctx.save();
-    ctx.globalCompositeOperation = "screen";
-    ctx.lineCap = "round";
-    for(let side = -1; side <= 1; side += 2){
-      for(let i = 0; i < 24; i++){
-        const seed = i * 61 + (side > 0 ? 19 : 0);
-        const y = ((seed + t * (520 + (i % 5) * 28)) % (canvas.height + 160)) - 80;
-        const reach = 100 + (i % 7) * 18 + Math.sin(t * 2 + i) * 14;
-        const x1 = side < 0 ? -42 : canvas.width + 42;
-        const x2 = side < 0 ? reach : canvas.width - reach;
-        const y2 = y + Math.sin(t * 2.7 + i) * 16;
-        const grad = ctx.createLinearGradient(x1, y, x2, y2);
-        if(side < 0){
-          grad.addColorStop(0, "rgba(255,255,255,0)");
-          grad.addColorStop(0.35, "rgba(196,224,255," + (0.34 * amount).toFixed(3) + ")");
-          grad.addColorStop(1, "rgba(130,90,255,0)");
-        } else {
-          grad.addColorStop(0, "rgba(255,255,255,0)");
-          grad.addColorStop(0.65, "rgba(196,224,255," + (0.34 * amount).toFixed(3) + ")");
-          grad.addColorStop(1, "rgba(130,90,255,0)");
-        }
-        ctx.strokeStyle = grad;
-        ctx.lineWidth = (2 + (i % 4) * 0.9) * amount;
-        ctx.beginPath();
-        ctx.moveTo(x1, y);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
-      }
-    }
-    ctx.restore();
-  }
-
   function drawWiiHudCameraShaders(fx, source, t){
     const mirror = Math.max(fx?.hudMirror || 0, fx?.hudWarp || 0);
     if(mirror <= 0.01) return;
@@ -1452,8 +1407,8 @@
     const oneHitFx = !useChartShaders && isOneHit() ? oneHitMotionFx : null;
     const oneHitCameraFx = isOneHit() ? oneHitCameraState(t) : null;
     const shimmyFx = useChartShaders || isShimmy() ? chartShaderFx : null;
-    const active = fx.mirror + fx.bloom + fx.speed + fx.burst + (oneHitFx?.active || 0) + (shimmyFx?.active || 0) + (oneHitMotionFx?.sideSpeed || 0) + (oneHitCameraFx?.flash || 0);
-    if(active <= 0.015 && fx.chrom <= 1.21 && (!oneHitFx || oneHitFx.active <= 0.015) && (!shimmyFx || shimmyFx.active <= 0.015) && (oneHitMotionFx?.sideSpeed || 0) <= 0.015 && (oneHitCameraFx?.flash || 0) <= 0.015) return;
+    const active = fx.mirror + fx.bloom + fx.speed + fx.burst + (oneHitFx?.active || 0) + (shimmyFx?.active || 0) + (oneHitCameraFx?.flash || 0);
+    if(active <= 0.015 && fx.chrom <= 1.21 && (!oneHitFx || oneHitFx.active <= 0.015) && (!shimmyFx || shimmyFx.active <= 0.015) && (oneHitCameraFx?.flash || 0) <= 0.015) return;
     let source = ensureCombatFxCanvas();
     if(drawWiiGameCameraShaders(shimmyFx, fx, oneHitFx, source, t)){
       source = ensureCombatFxCanvas();
@@ -1462,8 +1417,7 @@
     const speedEffect = Math.max(
       shimmyFx?.speed || 0,
       Math.min(0.24, (fx.speed || 0) * 0.22),
-      Math.min(0.24, (oneHitFx?.speed || 0) * 0.22),
-      Math.min(0.2, (oneHitMotionFx?.sideSpeed || 0) * 0.18)
+      Math.min(0.24, (oneHitFx?.speed || 0) * 0.22)
     );
     drawShimmyOriginalSpeedEffect(speedEffect, t);
 
@@ -1537,7 +1491,6 @@
     }
 
     drawCombatSpeedLines(Math.max(fx.burst * 0.7, (fx.speed || 0) * 0.45, (oneHitFx?.speed || 0) * 0.45), t);
-    drawOneHitSideSpeedLines(oneHitMotionFx?.sideSpeed || 0, t);
 
     const bars = Math.max(
       Math.min(0.24, (fx.bars || 0) * 0.15),
