@@ -6,7 +6,7 @@
 
   const baseStage = stage;
   const baseBg = bg;
-  const nativeDepthSongs = new Set();
+  const nativeDepthSongs = new Set(["combat", "oneHit", "shimmy"]);
   const strengthBySong = {
     combat: 0.68,
     oneHit: 0.68,
@@ -41,6 +41,7 @@
   function songStrength(t){
     if(window.REDUCE_MOTION) return 0;
     const id = selectedSongId();
+    if(nativeDepthSongs.has(id)) return 0;
     let strength = strengthBySong[id] ?? 0.5;
     if(window.PERFORMANCE_MODE) strength *= 0.48;
     if(id === "perseverance" && typeof perseveranceIsPixelPhase === "function" && perseveranceIsPixelPhase(t)) strength *= 0.38;
@@ -94,7 +95,7 @@
     const beat = t * songTempo() / 60 * Math.PI * 2;
     const naturalSway = Math.sin(t * 0.52 + cam.side * 0.7);
     const beatSway = Math.sin(beat * 0.25);
-    const native = nativeDepthSongs.has(selectedSongId()) ? 0.45 : 1;
+    const native = nativeDepthSongs.has(selectedSongId()) ? 0 : 1;
     const layerScale = layer === "bg" ? 0.42 : 1;
     const direction = layer === "bg" ? -1 : 1;
     const sidePush = cam.side * 22 * layerScale;

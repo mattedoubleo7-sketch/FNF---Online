@@ -35,11 +35,19 @@
     eyeZ: -150,
     maxZ: 900,
     layers: {
-      far: { z: 900, scrollX: 0.03, travel: 16, sway: 4, floatY: -3, floatRate: 0.26, phase: 0.2, angle: 0.004 },
-      mid: { z: 430, scrollX: 0.2, travel: 42, sway: 8, floatY: 5, floatRate: 0.34, phase: 1.15, angle: 0.009 },
-      near: { z: 150, scrollX: 0.6, travel: 70, sway: 12, floatY: 9, floatRate: 0.42, phase: 2.3, angle: 0.015 },
+      far: { z: 900, scrollX: 0.2, travel: 16, sway: 4, floatY: -3, floatRate: 0.26, phase: 0.2, angle: 0.004 },
+      mid: { z: 430, scrollX: 0.6, travel: 42, sway: 8, floatY: 5, floatRate: 0.34, phase: 1.15, angle: 0.009 },
+      near: { z: 150, scrollX: 1.4, travel: 70, sway: 12, floatY: 9, floatRate: 0.42, phase: 2.3, angle: 0.015 },
       platform: { z: 35, scrollX: 1, travel: 86, sway: 15, floatY: 0, floatRate: 0.42, phase: 0, angle: 0.018 }
     }
+  };
+  const WIIK_Z_LAYER_SCROLL = {
+    far: 0.2,
+    back4: 0.4,
+    mid: 0.6,
+    platform: 1,
+    split: 1.3,
+    near: 1.4
   };
   const WIIK_Z_LIGHT_COLOR = "rgb(8,0,20)";
   const WIIK_Z_LIGHT_FILTER = "brightness(0) saturate(100%) invert(7%) sepia(58%) saturate(3478%) hue-rotate(246deg) brightness(92%) contrast(112%)";
@@ -48,8 +56,8 @@
     unknownBG: { key: "unknownBG", x: -450, y: -100, scale: 2, scrollX: 0, scrollY: 0.3 },
     back4: { key: "back4", x: -250 + 273, y: -100 + 250, scale: 2, scrollX: 0.4, scrollY: 0.4 },
     back5: { key: "back5", x: -600 + 118 * 1.2, y: -200 + 378 * 1.2, scale: 1.2 * 2, scrollX: 0.6, scrollY: 0.6 },
-    platformLeft: { key: "platform", x: 207, y: -150 + 1074, scale: 1 },
-    platformRight: { key: "platform", x: 1471, y: -150 + 1074, scale: 1, flipX: true },
+    platformLeft: { key: "platform", x: 207, y: -150 + 1074, scale: 1, scrollX: WIIK_Z_LAYER_SCROLL.platform, scrollY: WIIK_Z_LAYER_SCROLL.platform },
+    platformRight: { key: "platform", x: 1471, y: -150 + 1074, scale: 1, scrollX: WIIK_Z_LAYER_SCROLL.platform, scrollY: WIIK_Z_LAYER_SCROLL.platform, flipX: true },
     splitLeft: { key: "split", x: 0, y: -500, scale: 1.2 * 2, scrollX: 1.3, scrollY: 1.3 },
     splitRight: { key: "split", x: 1844 * 1.2, y: -500, scale: 1.2 * 2, scrollX: 1.3, scrollY: 1.3, flipX: true }
   };
@@ -693,8 +701,7 @@
 
   function drawCombatDust(layer, t, depth){
     const depthStyle = combatDustDepthStyle(layer, depth || combatDepth(t));
-    const scrollFactors = { far: 0.2, mid: 0.6, near: 1.4 };
-    const scroll = scrollFactors[layer] || 1;
+    const scroll = WIIK_Z_LAYER_SCROLL[layer] || 1;
     combatState.dust.forEach(p => {
       if(p.layer !== layer) return;
       const image = combatState.images[p.layer];
@@ -722,12 +729,12 @@
     const elapsed = t - ONE_HIT_MOVING_ROCK_START;
     const warmup = easeOutCubic(elapsed / 2.4);
     const rocks = [
-      { key: "back4", delay: 0.0, duration: 4.7, sx: 0.46, sy: 0.27, ex: -0.28, ey: 0.48, s0: 0.24, s1: 0.98, alpha: 0.72, rot: -0.1, drift: 34, flip: false },
-      { key: "back5", delay: 0.55, duration: 5.3, sx: 0.58, sy: 0.32, ex: 0.93, ey: 0.55, s0: 0.18, s1: 1.05, alpha: 0.62, rot: 0.13, drift: 42, flip: true },
-      { key: "back4", delay: 1.15, duration: 4.2, sx: 0.51, sy: 0.2, ex: 0.78, ey: 0.34, s0: 0.16, s1: 0.72, alpha: 0.52, rot: 0.2, drift: 28, flip: true },
-      { key: "back5", delay: 1.75, duration: 5.8, sx: 0.42, sy: 0.36, ex: -0.18, ey: 0.62, s0: 0.22, s1: 0.92, alpha: 0.56, rot: -0.18, drift: 38, flip: false },
-      { key: "back4", delay: 2.45, duration: 4.9, sx: 0.63, sy: 0.24, ex: 1.02, ey: 0.46, s0: 0.2, s1: 0.84, alpha: 0.5, rot: -0.04, drift: 30, flip: false },
-      { key: "back5", delay: 3.1, duration: 5.1, sx: 0.37, sy: 0.25, ex: 0.12, ey: 0.43, s0: 0.15, s1: 0.68, alpha: 0.46, rot: 0.16, drift: 24, flip: true }
+      { key: "back4", layer: "mid", delay: 0.0, duration: 4.7, sx: 0.46, sy: 0.27, ex: -0.28, ey: 0.48, s0: 0.24, s1: 0.98, alpha: 0.72, rot: -0.1, drift: 34, flip: false },
+      { key: "back5", layer: "mid", delay: 0.55, duration: 5.3, sx: 0.58, sy: 0.32, ex: 0.93, ey: 0.55, s0: 0.18, s1: 1.05, alpha: 0.62, rot: 0.13, drift: 42, flip: true },
+      { key: "back4", layer: "far", delay: 1.15, duration: 4.2, sx: 0.51, sy: 0.2, ex: 0.78, ey: 0.34, s0: 0.16, s1: 0.72, alpha: 0.52, rot: 0.2, drift: 28, flip: true },
+      { key: "back5", layer: "near", delay: 1.75, duration: 5.8, sx: 0.42, sy: 0.36, ex: -0.18, ey: 0.62, s0: 0.22, s1: 0.92, alpha: 0.56, rot: -0.18, drift: 38, flip: false },
+      { key: "back4", layer: "split", delay: 2.45, duration: 4.9, sx: 0.63, sy: 0.24, ex: 1.02, ey: 0.46, s0: 0.2, s1: 0.84, alpha: 0.5, rot: -0.04, drift: 30, flip: false },
+      { key: "back5", layer: "far", delay: 3.1, duration: 5.1, sx: 0.37, sy: 0.25, ex: 0.12, ey: 0.43, s0: 0.15, s1: 0.68, alpha: 0.46, rot: 0.16, drift: 24, flip: true }
     ];
     const queue = [];
     for(const spec of rocks){
@@ -742,7 +749,7 @@
       const centerX = canvas.width * (spec.sx + (spec.ex - spec.sx) * p) + depth.mid * 0.16 + Math.sin(t * 1.1 + spec.delay * 3) * spec.drift * (0.25 + p);
       const centerY = canvas.height * (spec.sy + (spec.ey - spec.sy) * p) + depth.midY * 0.52 + Math.cos(t * 0.9 + spec.delay * 4) * spec.drift * 0.22;
       const scale = spec.s0 + (spec.s1 - spec.s0) * p;
-      const scroll = 0.28 + p * 0.64;
+      const scroll = WIIK_Z_LAYER_SCROLL[spec.layer] || WIIK_Z_LAYER_SCROLL.mid;
       const pos = combatCameraParallaxPoint(centerX - image.naturalWidth * scale * 0.5, centerY - image.naturalHeight * scale * 0.5, scroll, scroll);
       queue.push({
         p,
