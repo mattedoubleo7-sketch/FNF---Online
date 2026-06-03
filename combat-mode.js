@@ -305,10 +305,17 @@
   function wiikZPlatformMotion(t, depth){
     const leftBob = wiikZPlatformBob(t, 0.5);
     const rightBob = wiikZPlatformBob(t, 0.3);
+    const oneHitMotion = oneHitPlatformMotion(t, depth || combatDepth(t));
     return {
-      left: leftBob,
-      right: rightBob,
-      angle: 0
+      left: {
+        x: leftBob.x + oneHitMotion.x - oneHitMotion.spread,
+        y: leftBob.y + oneHitMotion.y + oneHitMotion.leftY
+      },
+      right: {
+        x: rightBob.x + oneHitMotion.x + oneHitMotion.spread,
+        y: rightBob.y + oneHitMotion.y + oneHitMotion.rightY
+      },
+      angle: oneHitMotion.angle
     };
   }
 
@@ -1010,8 +1017,10 @@
       hudMirror,
       colorFill,
       gameZoom: mirrorZoomRaw,
+      otherZoom: mirrorOtherZoomRaw,
       hudZoom: mirrorHudZoomRaw,
       gameAngle: signedGameAngle,
+      otherAngle: mirrorOtherAngleRaw,
       hudAngle: mirrorHudAngleRaw,
       gameX: mirrorXRaw + mirrorOtherXRaw,
       gameY: mirrorYRaw + mirrorOtherYRaw,
@@ -1369,6 +1378,70 @@
     ctx.restore();
   }
 
+  function drawWiiGameCameraShaders(shaderFx, fallbackFx, oneHitFx, source, t){
+    const gameZoom = Number(shaderFx?.gameZoom || 1);
+    const otherZoom = Number(shaderFx?.otherZoom || 1);
+    const zoomRaw = Math.abs(otherZoom - 1) > Math.abs(gameZoom - 1) ? otherZoom : gameZoom;
+    const zoomDeviation = Math.abs(zoomRaw - 1);
+    const mirror = Math.max(
+      shaderFx?.mirror || 0,
+      (shaderFx?.gameWarp || 0) * 1.3,
+      fallbackFx?.mirror || 0,
+      (oneHitFx?.warp || 0) * 0.9
+    );
+    const warp = Math.max(shaderFx?.gameWarp || 0, (oneHitFx?.warp || 0) * 0.72);
+    const angle = Number(shaderFx?.gameAngle || shaderFx?.otherAngle || fallbackFx?.angle || 0)
+      + (oneHitFx?.warp || 0) * Math.sin(t * 8) * 7;
+    const x = Number(shaderFx?.gameX || 0) * 24;
+    const y = Number(shaderFx?.gameY || 0) * 20;
+    const amount = clampValue(mirror * 0.42 + warp * 0.55 + zoomDeviation * 3.2 + Math.abs(angle) * 0.035, 0, 1);
+    if(amount <= 0.012) return false;
+
+    const cx = canvas.width * 0.5;
+    const cy = canvas.height * 0.5;
+    const mainScale = clampValue(zoomRaw || 1, 0.72, 1.46);
+    ctx.save();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // MirrorRepeatWarp-style safety fill: when the modchart zooms below 1,
+    // repeat flipped camera copies around the edge instead of exposing black.
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.globalAlpha = Math.min(0.42, 0.16 + amount * 0.24);
+    ctx.scale(1 + amount * 0.2, 1 + amount * 0.16);
+    const edgeShift = canvas.width * (0.12 + amount * 0.08);
+    ctx.drawImage(source, -cx, -cy);
+    ctx.scale(-1, 1);
+    ctx.drawImage(source, -cx - edgeShift, -cy);
+    ctx.drawImage(source, -cx + edgeShift, -cy);
+    ctx.restore();
+
+    ctx.translate(cx, cy);
+    ctx.rotate(angle * Math.PI / 180 * 0.72);
+    ctx.transform(
+      1 + warp * 0.026,
+      Math.sin(t * 5.5) * warp * 0.022,
+      Math.sin(t * 7.5) * warp * 0.052,
+      1 + warp * 0.022,
+      x + Math.sin(t * 10.5) * mirror * 10,
+      y + Math.cos(t * 8.5) * warp * 12
+    );
+    ctx.scale(mainScale, mainScale);
+    ctx.globalAlpha = 1;
+    ctx.drawImage(source, -cx, -cy);
+
+    if(mirror > 0.02 || warp > 0.02){
+      ctx.globalCompositeOperation = "screen";
+      ctx.globalAlpha = Math.min(0.18, amount * 0.13);
+      ctx.drawImage(source, -cx - 9 - warp * 18, -cy + 2);
+      ctx.drawImage(source, -cx + 9 + warp * 18, -cy - 2);
+    }
+    ctx.restore();
+    return true;
+  }
+
   function drawCombatInsanePostFx(t){
     if(!isCombat() || !state.playing || !Number.isFinite(t)) return;
     const chartShaderFx = shimmyShaderFxState(t);
@@ -1381,7 +1454,10 @@
     const shimmyFx = useChartShaders || isShimmy() ? chartShaderFx : null;
     const active = fx.mirror + fx.bloom + fx.speed + fx.burst + (oneHitFx?.active || 0) + (shimmyFx?.active || 0) + (oneHitMotionFx?.sideSpeed || 0) + (oneHitCameraFx?.flash || 0);
     if(active <= 0.015 && fx.chrom <= 1.21 && (!oneHitFx || oneHitFx.active <= 0.015) && (!shimmyFx || shimmyFx.active <= 0.015) && (oneHitMotionFx?.sideSpeed || 0) <= 0.015 && (oneHitCameraFx?.flash || 0) <= 0.015) return;
-    const source = ensureCombatFxCanvas();
+    let source = ensureCombatFxCanvas();
+    if(drawWiiGameCameraShaders(shimmyFx, fx, oneHitFx, source, t)){
+      source = ensureCombatFxCanvas();
+    }
     const cx = canvas.width / 2, cy = canvas.height / 2;
     const speedEffect = Math.max(
       shimmyFx?.speed || 0,
@@ -1553,8 +1629,8 @@
     const rightPlatformX = worldX(WIIK_Z_STAGE.platformRight.x) + platformMotion.right.x;
     const leftPlatformY = worldY(WIIK_Z_STAGE.platformLeft.y) + platformMotion.left.y;
     const rightPlatformY = worldY(WIIK_Z_STAGE.platformRight.y) + platformMotion.right.y;
-    drawImageRotated("platform", leftPlatformX, leftPlatformY, platformScale, 0);
-    drawImageRotated("platform", rightPlatformX, rightPlatformY, platformScale, 0, 1, true);
+    drawImageRotated("platform", leftPlatformX, leftPlatformY, platformScale, platformMotion.angle);
+    drawImageRotated("platform", rightPlatformX, rightPlatformY, platformScale, -platformMotion.angle, 1, true);
     drawWiikZStageSprite(WIIK_Z_STAGE.splitLeft, 0, 0, 1, 1, 0, wiikZStageDepthStyle("near", depth));
     drawWiikZStageSprite(WIIK_Z_STAGE.splitRight, 0, 0, 1, 1, 0, wiikZStageDepthStyle("near", depth));
 
