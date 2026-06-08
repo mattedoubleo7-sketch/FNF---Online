@@ -15,6 +15,7 @@
       fxCanvas: null,
       fxCtx: null,
       camera: { x: 640, y: 330, zoom: 1 },
+      cameraLock: null,
       lastSync: 0
     };
 
@@ -60,7 +61,11 @@
       defaultZoom: 0.6,
       browserZoom: 1,
       focusedZoom: 1.035,
-      finalZoom: 1.02
+      finalZoom: 1.02,
+      landingZoom: 1.006,
+      finalLandingZoom: 1.012,
+      landingFocus: { x: 640, y: 498 },
+      finalLandingFocus: { x: 640, y: 438 }
     };
 
     function isWg(){
@@ -893,6 +898,23 @@
     function cameraTargetFor(t){
       const step = stepAtTime(t);
       const phase = phaseForStep(step);
+      const landingEnd = DATA.meta.phaseSteps.splash + 48;
+      if(step >= DATA.meta.phaseSteps.endFly && step < landingEnd){
+        return {
+          x: WG_SOURCE_STAGE.landingFocus.x,
+          y: WG_SOURCE_STAGE.landingFocus.y,
+          zoom: WG_SOURCE_STAGE.landingZoom,
+          lock: "arenaLanding"
+        };
+      }
+      if(step >= DATA.meta.phaseSteps.final && step < DATA.meta.phaseSteps.final + 32){
+        return {
+          x: WG_SOURCE_STAGE.finalLandingFocus.x,
+          y: WG_SOURCE_STAGE.finalLandingFocus.y,
+          zoom: WG_SOURCE_STAGE.finalLandingZoom,
+          lock: "finalLanding"
+        };
+      }
       const side = activeSideAt(t);
       let opp = { x: 392, y: 420 };
       let player = { x: 890, y: 420 };
@@ -1272,6 +1294,7 @@
       wgState.camera.x = state.camera.focusX;
       wgState.camera.y = state.camera.focusY;
       wgState.camera.zoom = state.camera.zoom;
+      wgState.cameraLock = null;
       if(ui.p1Box) ui.p1Box.style.display = state.mode === "versus" ? "block" : "none";
       ui.songTitle.textContent = state.currentSong.title;
       ui.songSub.textContent = state.currentSong.subtitle;
@@ -1313,16 +1336,24 @@
       if(!isWg()) return originalUpdateCamera(t, dt);
       if(!state.camera) state.camera = {};
       const target = cameraTargetFor(t);
-      const speed = 1 - Math.exp(-Math.max(0.001, dt) * 5.2);
-      wgState.camera.x = lerp(wgState.camera.x, target.x, speed);
-      wgState.camera.y = lerp(wgState.camera.y, target.y, speed);
-      wgState.camera.zoom = lerp(wgState.camera.zoom, target.zoom, speed);
+      const lockChanged = target.lock && target.lock !== wgState.cameraLock;
+      const speed = 1 - Math.exp(-Math.max(0.001, dt) * (target.lock ? 10.5 : 5.2));
+      if(lockChanged){
+        wgState.camera.x = target.x;
+        wgState.camera.y = target.y;
+        wgState.camera.zoom = target.zoom;
+      } else {
+        wgState.camera.x = lerp(wgState.camera.x, target.x, speed);
+        wgState.camera.y = lerp(wgState.camera.y, target.y, speed);
+        wgState.camera.zoom = lerp(wgState.camera.zoom, target.zoom, speed);
+      }
+      wgState.cameraLock = target.lock || null;
       state.camera.focusX = wgState.camera.x;
       state.camera.focusY = wgState.camera.y;
       state.camera.zoom = wgState.camera.zoom;
       state.camera.highwayX = 0;
       state.camera.highwayY = 0;
-      state.camera.lastSide = activeSideAt(t);
+      state.camera.lastSide = target.lock ? "both" : activeSideAt(t);
       syncWgVideos(t);
     };
 
