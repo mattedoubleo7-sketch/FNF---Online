@@ -181,7 +181,7 @@
     const originalPerseveranceCharacter = perseveranceCharacter;
     perseveranceCharacter = function(kind, time) {
       const data = originalPerseveranceCharacter(kind, time);
-      if (kind === "boyfriend" && data?.sprite) data.flipX = !!data.sprite.flipX;
+      if (kind === "boyfriend") data.flipX = false;
       return data;
     };
 
