@@ -1322,7 +1322,7 @@ body.gamepadOn.gameRunning #consoleHud { display: none; }
 <script src="genocide-data.js?v=genocide-v10"></script>
 <script src="genocide-commands.js?v=genocide-v10"></script>
 <script src="genocide-revival-data.js?v=genocide-revival-v8"></script>
-<script src="webgl-renderer.js?v=20260608c"></script>
+<script src="webgl-renderer.js?v=20260608d"></script>
 <script>
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
@@ -1340,7 +1340,8 @@ const DUSTIN_SHADER_SOURCES = Object.freeze({
     fog: "shaders/dustin-fog.frag",
     gradient: "shaders/dustin-gradient.frag",
     glitching2: "shaders/dustin-glitching2.frag",
-    cine: "shaders/dustin-br_cine.frag"
+    cine: "shaders/dustin-br_cine.frag",
+    snow: "shaders/dustin-snow.frag"
 });
 const postFxCanvas = document.createElement("canvas");
 const postFxCtx = postFxCanvas.getContext("2d");
@@ -3369,7 +3370,7 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 <script src="combat-mode.js?v=20260608c"></script>
 <script src="ballistic-mode.js?v=20260601h"></script>
 <script src="boxing-match-wg-mode.js?v=20260608b"></script>
-<script src="perseverance-source-mode.js?v=20260608b"></script>
+<script src="perseverance-source-mode.js?v=20260608d"></script>
 <script src="broken-reality-mode.js"></script>
 <script src="broken-reality-soul-data.js"></script>
 <script src="broken-reality-fix.js?v=20260601h"></script>

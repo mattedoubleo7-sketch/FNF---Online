@@ -22,7 +22,8 @@
       return Number.isFinite(n) ? n : fallback;
     }
     function sourceEvents(name) {
-      const events = window.PERSEVERANCE_DATA?.events || window.PERSEVERANCE_SOURCE_EVENTS || [];
+      const source = window.PERSEVERANCE_DATA?.events || window.PERSEVERANCE_SOURCE_EVENTS || [];
+      const events = Array.isArray(source) ? source : (Array.isArray(window.PERSEVERANCE_SOURCE_EVENTS) ? window.PERSEVERANCE_SOURCE_EVENTS : []);
       return name ? events.filter(e => e.name === name) : events;
     }
     function baseEase(name, p) {
@@ -110,17 +111,19 @@
 
     function sourceStageZoom(time, side) {
       const fallback = side === "player" ? STAGE.playerZoom : STAGE.zoom;
+      const appliesToSide = event => {
+        const p = event.params || [];
+        if (side === "player") return !!p[1];
+        if (side === "gf") return !!p[3];
+        return !!p[2] || !!p[0];
+      };
       return eventTween(
         "Change Stage Zoom",
         time,
         fallback,
         e => num(e.params?.[5], fallback),
         6,
-        e => {
-          const p = e.params || [];
-          if (side === "player") return !!p[1] || (!!p[4] && !p[0]);
-          return !!p[0] || (!!p[4] && !p[1]);
-        }
+        appliesToSide
       );
     }
     function sourceCameraSide(time) {
@@ -224,33 +227,75 @@
         h: (current.frame.fh || current.frame.h) * scale
       };
     }
-    function sourceCamera(time) {
+    function sourceCameraFollowLerp(time) {
+      const t = s => timeForStep(s);
+      let follow = 0.007;
+      if (time >= t(128)) follow = 0.02;
+      if (time >= t(656)) follow = 0.035;
+      if (time >= t(2528) && time < t(2536)) follow = 2;
+      if (time >= t(2536)) follow = 0.04;
+      for (const event of sourceEvents("Camera Speed").sort((a, b) => a.time - b.time)) {
+        if (event.time > time) break;
+        follow = num(event.params?.[0], follow);
+      }
+      return Math.max(0, follow);
+    }
+    function sourceCameraBlend(follow, dt) {
+      const frameLerp = follow >= 1 ? 0.035 : Math.min(0.25, follow);
+      return clamp01(1 - Math.pow(1 - frameLerp, dt * 60));
+    }
+    function sourceCameraOffset(side, time) {
+      const positions = window.PERSEVERANCE_DATA.stage.positions;
+      if (perseveranceIsPixelPhase(time)) return { x: -310, y: 30 };
+      if (side === "player") {
+        const p = positions.player;
+        return { x: num(p.camxoffset, -180), y: num(p.camyoffset, -40) };
+      }
+      if (side === "gf") {
+        const p = positions.gf;
+        return { x: num(p.camxoffset, 0), y: num(p.camyoffset, 0) };
+      }
+      const p = positions.opponent;
+      return { x: num(p.camxoffset, 200), y: num(p.camyoffset, 40) };
+    }
+    function sourceCameraTarget(time) {
       const side = perseveranceIsPixelPhase(time) ? "opp" : sourceCameraSide(time);
       const box = characterBox(side === "player" ? "boyfriend" : "sans", time);
-      let camX = 0;
-      let camY = 0;
-      if (side === "player") {
-        camX = -180;
-        camY = -40;
-      } else if (perseveranceIsPixelPhase(time)) {
-        camX = -310;
-        camY = 30;
-      } else {
-        camX = 200;
-        camY = -10;
-      }
+      const offset = sourceCameraOffset(side, time);
       const idle = sourceIdleCamera(time);
       const zoomBase = sourceStageZoom(time, side);
       const fit = Math.min(canvas.width / SOURCE_W, canvas.height / SOURCE_H) || 1;
       const zoom = Math.max(0.05, zoomBase * fit);
-      const focusX = box.x + box.w / 2 + camX + idle.x;
-      const focusY = box.y + box.h / 2 + camY + idle.y;
+      const focusX = box.x + box.w / 2 + offset.x + idle.x;
+      const focusY = box.y + box.h / 2 + offset.y + idle.y;
       return {
         side,
         zoom,
         scrollX: focusX - canvas.width / (2 * zoom),
         scrollY: focusY - canvas.height / (2 * zoom)
       };
+    }
+    let sourceCameraState = null;
+    function sourceCamera(time) {
+      const target = sourceCameraTarget(time);
+      const follow = sourceCameraFollowLerp(time);
+      const last = sourceCameraState;
+      const canvasChanged = !last || last.width !== canvas.width || last.height !== canvas.height;
+      const jumped = !last || time < last.time - 0.01 || Math.abs(time - last.time) > 0.45 || canvasChanged;
+      if (jumped) {
+        sourceCameraState = { time, width: canvas.width, height: canvas.height, camera: target };
+      } else if (Math.abs(time - last.time) > 0.00001) {
+        const dt = Math.max(0, Math.min(0.25, time - last.time));
+        const blend = sourceCameraBlend(follow, dt);
+        const camera = {
+          side: target.side,
+          zoom: lerp(last.camera.zoom, target.zoom, blend),
+          scrollX: lerp(last.camera.scrollX, target.scrollX, blend),
+          scrollY: lerp(last.camera.scrollY, target.scrollY, blend)
+        };
+        sourceCameraState = { time, width: canvas.width, height: canvas.height, camera };
+      }
+      return sourceCameraState.camera;
     }
     function sourceIdleCamera(time) {
       let amp = 0;
@@ -359,6 +404,16 @@
       else if (flashAge >= 0 && flashAge < 0.18) drawImageWorld(perseveranceSpriteState.images.impact2, 425, 510, 0.9, camera, 1);
     }
 
+    function usesOfficialPerseveranceSnow() {
+      if (window.PERFORMANCE_MODE || state?.settings?.performance) return false;
+      const webgl = window.FNF_WEBGL;
+      const status = typeof webgl?.status === "function" ? webgl.status() : null;
+      return !!webgl?.drawDustinPostStack && !status?.failed;
+    }
+    function drawFallbackSnow(time) {
+      if (!usesOfficialPerseveranceSnow()) drawSnow(time);
+    }
+
     function drawPerseveranceSourceStage(time) {
       ensureSourceImages();
       window.__perseveranceLastDrawTime = time;
@@ -369,7 +424,7 @@
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         drawSourceLayer(STAGE.pillars, camera, 1);
         drawSourceCharacter("sans", camera, time);
-        drawSnow(time);
+        drawFallbackSnow(time);
         ctx.restore();
         return;
       }
@@ -382,7 +437,7 @@
       drawSourceCharacter("boyfriend", camera, time);
       drawSourceMechanics(camera, time);
       drawSourceLayer(STAGE.foreground, camera, 0.98);
-      drawSnow(time);
+      drawFallbackSnow(time);
     }
 
     function sourceBloomRaw(time) {
@@ -534,18 +589,115 @@
       if (time >= s2288) intensity = 1.85;
       return intensity;
     }
+    function quadOutIntegral(p) {
+      const t = clamp01(p);
+      return t * t - (t * t * t) / 3;
+    }
+    function integrateConstantSpeed(time, start, end, speed) {
+      if (time <= start) return 0;
+      return Math.max(0, Math.min(time, end) - start) * speed;
+    }
+    function integrateQuadOutSpeed(time, start, steps, from, to) {
+      const duration = secondsForSteps(start, steps);
+      if (time <= start || duration <= 0) return 0;
+      const p = clamp01((Math.min(time, start + duration) - start) / duration);
+      return duration * (from * p + (to - from) * quadOutIntegral(p));
+    }
+    function sourceSnowClock(time) {
+      const t = s => timeForStep(s);
+      const s128 = t(128);
+      const d128 = secondsForSteps(s128, 8);
+      const s1696 = t(1696);
+      const s1840 = t(1840);
+      const d1840 = secondsForSteps(s1840, 32);
+      const s2128 = t(2128);
+      const s2288 = t(2288);
+      const s2536 = t(2536);
+      let clock = 0;
+      clock += integrateConstantSpeed(time, 0, s128, 7);
+      clock += integrateQuadOutSpeed(time, s128, 8, 7, 1.3);
+      clock += integrateConstantSpeed(time, s128 + d128, s1696, 1.3);
+      clock += integrateConstantSpeed(time, s1696, s1840, 3);
+      clock += integrateQuadOutSpeed(time, s1840, 32, 3, 2.7);
+      clock += integrateConstantSpeed(time, s1840 + d1840, s2128, 2.7);
+      clock += integrateConstantSpeed(time, s2128, s2288, 0.7);
+      clock += integrateConstantSpeed(time, s2288, s2536, 4);
+      if (time > s2536) clock += (time - s2536) * 7;
+      return clock;
+    }
     function sourceSnowState(time) {
       const t = s => timeForStep(s);
-      let speed = time < t(128) ? 7 : 1.3;
-      let layers = perseveranceIsPixelPhase(time) ? 7 : 13;
-      let bright = 1;
-      if (time >= t(1696)) { speed = 3; layers = 13; }
-      if (time >= t(1840)) { speed = 2.7; layers = 31; bright = 2.4; }
-      if (time >= t(2128)) { speed = 0.7; layers = 13; bright = 1; }
-      if (time >= t(2288)) { speed = 4; layers = 37; bright = 2.8; }
-      if (time >= t(2536)) { speed = 7; layers = 37; bright = 2.9; }
-      if ((time >= t(1432) && time < t(1440)) || (time >= t(1568) && time < t(1572))) layers = 0;
-      return { speed, layers, bright };
+      const s128 = t(128);
+      const s1696 = t(1696);
+      const s1840 = t(1840);
+      const s2128 = t(2128);
+      const s2280 = t(2280);
+      const s2288 = t(2288);
+      const s2536 = t(2536);
+      let speed = time < s128 ? 7 : 1.3;
+      if (time >= s128 && time < s128 + secondsForSteps(s128, 8)) {
+        speed = lerp(7, 1.3, sourceEase("quad", "Out", (time - s128) / secondsForSteps(s128, 8)));
+      }
+      let gameLayers = perseveranceIsPixelPhase(time) ? 0 : 14;
+      let charLayers = perseveranceIsPixelPhase(time) ? 7 : 13;
+      let gameBright = 1;
+      let charBright = 1;
+      let pixely = perseveranceIsPixelPhase(time);
+      let charMelts = true;
+      let meltRect = pixely ? [1000, 1430, 1700, 70] : [1000, 1220, 1500, 100];
+      if (time >= s1696) {
+        speed = 3;
+        gameLayers = 14;
+        charLayers = 13;
+        pixely = false;
+        meltRect = [1000, 1220, 1500, 100];
+      }
+      if (time >= s1840) {
+        const speedDur = secondsForSteps(s1840, 32);
+        const brightDur = secondsForSteps(s1840, 34);
+        speed = time < s1840 + speedDur ? lerp(3, 2.7, sourceEase("quad", "Out", (time - s1840) / speedDur)) : 2.7;
+        gameLayers = 31;
+        charLayers = 30;
+        gameBright = time < s1840 + brightDur ? lerp(1, 2.4, sourceEase("quad", "Out", (time - s1840) / brightDur)) : 2.4;
+        charBright = time < s1840 + brightDur ? lerp(1, 2.8, sourceEase("quad", "Out", (time - s1840) / brightDur)) : 2.8;
+        charMelts = false;
+      }
+      if (time >= s2128) {
+        speed = 0.7;
+        gameBright = 1;
+        charBright = 1;
+        charMelts = true;
+      }
+      if (time >= s2280) {
+        gameLayers = 37;
+        charLayers = 36;
+        charMelts = false;
+      }
+      if (time >= s2288) {
+        speed = 4;
+        gameBright = 2.8;
+        charBright = 3.5;
+      }
+      if (time >= s2536) {
+        speed = 7;
+        gameBright = 2.9;
+        charBright = 4;
+      }
+      if ((time >= t(1432) && time < t(1440)) || (time >= t(1568) && time < t(1572))) charLayers = 0;
+      return {
+        speed,
+        layers: Math.max(gameLayers, charLayers),
+        bright: Math.max(gameBright, charBright),
+        gameLayers,
+        charLayers,
+        gameBright,
+        charBright,
+        pixely,
+        gameMelts: true,
+        charMelts,
+        meltRect,
+        clock: sourceSnowClock(time)
+      };
     }
     perseveranceShaderState = function(time) {
       return sourceScriptShaderState(time);
@@ -573,6 +725,7 @@
     const originalDustShader = drawPerseveranceDustShader;
     drawPerseveranceDustShader = function(time) {
       if (state?.selectedSong !== "perseverance" || !perseveranceSpritesReady()) return originalDustShader(time);
+      if (usesOfficialPerseveranceSnow()) return;
       const fx = perseveranceShaderState(time);
       if (fx.snow <= 0.01) return;
       const stride = (window.PERFORMANCE_MODE || state?.settings?.performance) ? 4 : 2;
@@ -601,6 +754,7 @@
       window.__perseveranceOfficialBloomTime = -999;
       if (state?.selectedSong !== "perseverance" || window.PERFORMANCE_MODE || state?.settings?.performance) return;
       const fx = perseveranceShaderState(time);
+      const snow = sourceSnowState(time);
       const camera = sourceCamera(time);
       const warpCtx = typeof syncPerseveranceWarpCanvas === "function" ? syncPerseveranceWarpCanvas() : null;
       if (warpCtx && window.FNF_WEBGL?.drawDustinPostStack) {
@@ -624,7 +778,16 @@
           fogApplyRange: perseveranceIsPixelPhase(time) ? 0 : 900,
           cameraZoom: camera.zoom,
           cameraX: camera.scrollX,
-          cameraY: camera.scrollY
+          cameraY: camera.scrollY,
+          snowTime: snow.clock * 3,
+          snowLayersA: snow.gameLayers,
+          snowLayersB: snow.charLayers,
+          snowBrightA: snow.gameBright,
+          snowBrightB: snow.charBright,
+          snowPixely: snow.pixely,
+          snowMeltsA: snow.gameMelts,
+          snowMeltsB: snow.charMelts,
+          snowMeltRect: snow.meltRect
         });
         if (usedOfficial) {
           window.__perseveranceOfficialBloomTime = time;

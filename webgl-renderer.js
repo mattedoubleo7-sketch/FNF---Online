@@ -76,6 +76,7 @@
           stencil: false
         });
         if(!gl) return markFailed("WebGL context unavailable");
+        gl.getExtension("OES_standard_derivatives");
         state.fxCanvas.addEventListener("webglcontextlost", event => {
           event.preventDefault();
           markFailed("WebGL context lost");
@@ -351,6 +352,7 @@
             gl_Position = vec4(aPosition, 0.0, 1.0);
           }
         `, `
+          #extension GL_OES_standard_derivatives : enable
           precision mediump float;
           uniform sampler2D uTexture;
           uniform vec2 uTextureSize;
@@ -370,6 +372,15 @@
           uniform float uFogApplyRange;
           uniform float uCameraZoom;
           uniform vec2 uCameraPosition;
+          uniform float uSnowTime;
+          uniform float uSnowBrightA;
+          uniform float uSnowBrightB;
+          uniform float uSnowLayersA;
+          uniform float uSnowLayersB;
+          uniform float uSnowPixely;
+          uniform float uSnowMeltsA;
+          uniform float uSnowMeltsB;
+          uniform vec4 uSnowMeltRect;
           varying vec2 vUv;
 
           #define PI 3.1415926535897932384626433832795
@@ -452,6 +463,99 @@
             return (color.r + color.g + color.b) / 3.0;
           }
 
+          float ns;
+          float sFract(float x, float sm){
+            const float sf = 1.0;
+            vec2 u = vec2(x, fwidth(x) * sf * sm);
+            u.x = fract(u.x);
+            u += (1.0 - 2.0 * u) * step(u.y, u.x);
+            return clamp(1.0 - u.x / u.y, 0.0, 1.0);
+          }
+
+          float sFloor(float x){
+            return x - sFract(x, 1.0);
+          }
+
+          vec3 hash33(vec3 p){
+            float n = sin(dot(p, vec3(7.0, 157.0, 113.0)));
+            return fract(vec3(2097152.0, 262144.0, 32768.0) * n) * 2.0 - 1.0;
+          }
+
+          float tetraNoise(vec3 p){
+            vec3 i = floor(p + dot(p, vec3(1.0 / 3.0)));
+            p -= i - dot(i, vec3(1.0 / 6.0));
+            vec3 i1 = step(p.yzx, p);
+            vec3 i2 = max(i1, 1.0 - i1.zxy);
+            i1 = min(i1, 1.0 - i1.zxy);
+            vec3 p1 = p - i1 + 1.0 / 6.0;
+            vec3 p2 = p - i2 + 1.0 / 3.0;
+            vec3 p3 = p - 0.5;
+            vec4 v = max(0.5 - vec4(dot(p, p), dot(p1, p1), dot(p2, p2), dot(p3, p3)), 0.0);
+            vec4 d = vec4(dot(p, hash33(i)), dot(p1, hash33(i + i1)), dot(p2, hash33(i + i2)), dot(p3, hash33(i + 1.0)));
+            return clamp(dot(d, v * v * v * 8.0) * 1.732 + 0.5, 0.0, 2.0);
+          }
+
+          float snowFunc(vec2 p){
+            float n = tetraNoise(vec3(p.x * 4.0, p.y * 4.0, 0.0) - vec3(0.0, 0.25, 0.5) * uSnowTime);
+            float taper = dot(p, p * vec2(0.35, 1.0));
+            n = max(n - taper, 0.0) / max(1.0 - taper, 0.0001);
+            ns = n;
+            const float palNum = 100.0;
+            return n * 0.25 + clamp(sFloor(n * (palNum - 0.001)) / (palNum - 1.0), 0.0, 1.0) * 0.75;
+          }
+
+          float coolSnowNoise(){
+            vec2 u = (gl_FragCoord.xy - uTextureSize.xy * 0.4) / uTextureSize.y;
+            float f = snowFunc(u);
+            return f * 0.4 + ns * 0.6;
+          }
+
+          vec3 officialSnowPass(vec2 pixel, float startingLayers, float layers, float depth, float width, float speed, float bright, float melts){
+            if(bright <= 0.0 || layers <= startingLayers) return vec3(0.0);
+            vec2 uvCentered = (2.0 * pixel) / uRes.y;
+            uvCentered.y *= -1.0;
+            if(uSnowPixely > 0.5) uvCentered = floor(uvCentered / 0.009) * 0.009;
+
+            float meltiness = abs(1.0 - ((pixel.y - uSnowMeltRect.y) / max(0.001, uSnowMeltRect.w)));
+            if(pixel.y >= uSnowMeltRect.y + uSnowMeltRect.w) meltiness = 0.0;
+
+            vec3 acc = vec3(0.0);
+            float dof = 5.0 * sin(uSnowTime * 0.1);
+            for(int i = 1; i < 40; i++){
+              float fi = float(i);
+              if(fi >= startingLayers && fi < layers){
+                vec2 q = uvCentered * (1.0 + fi * depth);
+                q += vec2(
+                  q.y * ((width * (uSnowPixely > 0.5 ? 1.5 : 1.0)) * mod(fi * 7.238917, 1.0) - (width * (uSnowPixely > 0.5 ? 1.5 : 1.0)) * 0.5) + (((speed * ((layers - fi) * 0.2)) * (uSnowTime * 0.4))),
+                  speed * uSnowTime / (1.0 + fi * depth * 0.03)
+                );
+                vec3 n = vec3(floor(q), 31.189 + fi);
+                vec3 m = floor(n) * 0.00001 + fract(n);
+                vec3 mp = (31415.9 + m) / fract(mat3(13.323122, 23.5112, 21.71123, 21.1212, 28.7312, 11.9312, 21.8112, 14.7212, 61.3934) * m);
+                vec3 r = fract(mp);
+                vec2 s = abs(mod(q, 1.0) - 0.5 + 0.9 * r.xy - 0.45);
+                s += 0.01 * abs(2.0 * fract(10.0 * q.yx) - 1.0);
+                float d = 0.6 * max(s.x - s.y, s.x + s.y) + max(s.x, s.y) - 0.01;
+                float edge = 0.005 + 0.05 * min(0.5 * abs(fi - 5.0 - dof), 1.0);
+                acc += vec3(smoothstep(edge, -edge, d) * (r.x / (1.0 + 0.02 * fi * depth)));
+              }
+            }
+
+            vec4 rect = vec4(
+              (uSnowMeltRect.x / uTextureSize.x) * uRes.x,
+              (uSnowMeltRect.y / uTextureSize.y) * uRes.y,
+              (uSnowMeltRect.z / uTextureSize.x) * uRes.x,
+              (uSnowMeltRect.w / uTextureSize.y) * uRes.y
+            );
+            rect.xy += uTextureSize.xy - uRes.xy;
+            if(melts > 0.5 && pixel.x >= rect.x && pixel.x < rect.x + rect.z && pixel.y >= rect.y){
+              acc *= meltiness;
+            }
+
+            vec3 effect = acc * 0.8 * (0.6 + coolSnowNoise() * 0.4);
+            return effect * (uSnowPixely > 0.5 ? 1.6 : 1.0) * bright;
+          }
+
           vec4 sampleDustin(vec2 uv){
             uv = clamp(uv, vec2(0.0), vec2(1.0));
             if(uChromDistortion > 0.0001){
@@ -469,6 +573,13 @@
             ndc /= max(0.001, uCameraZoom);
             vec2 zoomedScreenCoord = (ndc + 1.0) * 0.5 * uRes;
             return zoomedScreenCoord + uCameraPosition;
+          }
+
+          vec2 snowPixelFor(){
+            vec2 trueFragCoord = gl_FragCoord.xy * (uRes / uTextureSize);
+            vec2 centeredPixel = trueFragCoord - uRes.xy * 0.5;
+            vec2 zoomedCenteredPixel = centeredPixel * (1.0 / (uCameraZoom + 1.0));
+            return zoomedCenteredPixel + uRes.xy * 0.5 + uCameraPosition.xy;
           }
 
           void main(){
@@ -510,6 +621,13 @@
             }
 
             vec2 worldCoord = worldCoordFor(uv);
+            vec2 snowPixel = snowPixelFor();
+            vec3 snowA = officialSnowPass(snowPixel, 7.0, uSnowLayersA, 1.2, 0.13, 0.6, uSnowBrightA, uSnowMeltsA);
+            vec3 snowB = officialSnowPass(snowPixel, 1.0, uSnowLayersB, 1.5, 0.13, 0.3, uSnowBrightB, uSnowMeltsB);
+            vec3 snowEffect = snowA + snowB;
+            color.rgb += snowEffect;
+            if(color.a == 0.0 && brightness(snowEffect) > 0.0) color.a = brightness(snowEffect);
+
             if(uFogIntensity > 0.0001 && uFogApplyRange > 0.0){
               vec2 st = worldCoord.xy / uRes.xy;
               st *= uRes.xy / uRes.y;
@@ -600,7 +718,16 @@
           uFogApplyY: gl.getUniformLocation(program, "uFogApplyY"),
           uFogApplyRange: gl.getUniformLocation(program, "uFogApplyRange"),
           uCameraZoom: gl.getUniformLocation(program, "uCameraZoom"),
-          uCameraPosition: gl.getUniformLocation(program, "uCameraPosition")
+          uCameraPosition: gl.getUniformLocation(program, "uCameraPosition"),
+          uSnowTime: gl.getUniformLocation(program, "uSnowTime"),
+          uSnowBrightA: gl.getUniformLocation(program, "uSnowBrightA"),
+          uSnowBrightB: gl.getUniformLocation(program, "uSnowBrightB"),
+          uSnowLayersA: gl.getUniformLocation(program, "uSnowLayersA"),
+          uSnowLayersB: gl.getUniformLocation(program, "uSnowLayersB"),
+          uSnowPixely: gl.getUniformLocation(program, "uSnowPixely"),
+          uSnowMeltsA: gl.getUniformLocation(program, "uSnowMeltsA"),
+          uSnowMeltsB: gl.getUniformLocation(program, "uSnowMeltsB"),
+          uSnowMeltRect: gl.getUniformLocation(program, "uSnowMeltRect")
         };
         return state.dustinPost;
       } catch(error) {
@@ -760,6 +887,22 @@
         gl.uniform1f(pass.uFogApplyRange, clamp(params?.fogApplyRange ?? 0, 0, 4096));
         gl.uniform1f(pass.uCameraZoom, clamp(params?.cameraZoom ?? 1, 0.05, 4));
         gl.uniform2f(pass.uCameraPosition, clamp(params?.cameraX ?? 0, -999999, 999999), clamp(params?.cameraY ?? 0, -999999, 999999));
+        const snowMeltRect = Array.isArray(params?.snowMeltRect) ? params.snowMeltRect : [1000, 1220, 1500, 100];
+        gl.uniform1f(pass.uSnowTime, Number(params?.snowTime || 0));
+        gl.uniform1f(pass.uSnowBrightA, clamp(params?.snowBrightA ?? 0, 0, 6));
+        gl.uniform1f(pass.uSnowBrightB, clamp(params?.snowBrightB ?? 0, 0, 6));
+        gl.uniform1f(pass.uSnowLayersA, clamp(params?.snowLayersA ?? 0, 0, 39));
+        gl.uniform1f(pass.uSnowLayersB, clamp(params?.snowLayersB ?? 0, 0, 39));
+        gl.uniform1f(pass.uSnowPixely, params?.snowPixely ? 1 : 0);
+        gl.uniform1f(pass.uSnowMeltsA, params?.snowMeltsA === false ? 0 : 1);
+        gl.uniform1f(pass.uSnowMeltsB, params?.snowMeltsB === false ? 0 : 1);
+        gl.uniform4f(
+          pass.uSnowMeltRect,
+          clamp(snowMeltRect[0] ?? 1000, -4096, 8192),
+          clamp(snowMeltRect[1] ?? 1220, -4096, 8192),
+          clamp(snowMeltRect[2] ?? 1500, 0, 8192),
+          clamp(snowMeltRect[3] ?? 100, 0.001, 8192)
+        );
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         const error = gl.getError();
         if(error !== gl.NO_ERROR) throw new Error("WebGL error " + error);
