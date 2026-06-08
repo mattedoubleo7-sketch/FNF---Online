@@ -1543,6 +1543,7 @@ body.mobile .chatLog { max-height: 130px !important; font-size: 12px !important;
 <script src="shimmy-visual-data.js?v=20260525a"></script>
 <script src="ballistic-data.js?v=20260524e"></script>
 <script src="perseverance-data.js"></script>
+<script src="perseverance-source-events.js?v=20260608a"></script>
 <script src="broken-reality-data.js"></script>
 <script src="challenge-edd-data.js"></script>
 <script src="challenge-edd-bf-data.js"></script>
@@ -3327,8 +3328,11 @@ function renderScene(songT, previewT){
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 try {
                     state._flashWhiteSilhouette = true;
-                    drawPerseveranceCharacter("sans", 486, 630, 0.43, t);
-                    drawPerseveranceCharacter("boyfriend", 854, 638, 0.47, t);
+                    if(typeof drawPerseveranceSourceFlashSilhouettes === "function") drawPerseveranceSourceFlashSilhouettes(t);
+                    else {
+                        drawPerseveranceCharacter("sans", 486, 630, 0.43, t);
+                        drawPerseveranceCharacter("boyfriend", 854, 638, 0.47, t);
+                    }
                 } finally { state._flashWhiteSilhouette = false; }
                 ctx.restore();
                 break;
@@ -3482,6 +3486,7 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 <script src="combat-mode.js?v=20260608c"></script>
 <script src="ballistic-mode.js?v=20260601h"></script>
 <script src="boxing-match-wg-mode.js?v=20260608b"></script>
+<script src="perseverance-source-mode.js?v=20260608a"></script>
 <script src="broken-reality-mode.js"></script>
 <script src="broken-reality-soul-data.js"></script>
 <script src="broken-reality-fix.js?v=20260601h"></script>

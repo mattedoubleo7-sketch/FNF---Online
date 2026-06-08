@@ -55,6 +55,8 @@
       "boxing-fight-mode.js",
       "boxing-fight-data.js",
       "perseverance-data.js",
+      "perseverance-source-events.js",
+      "perseverance-source-mode.js",
       "assets/**/*",
       "*.ogg",
       "package.json",
