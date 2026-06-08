@@ -130,6 +130,7 @@
         if (event.time > time) break;
         advance(event.time);
         const target = num(p[5], current);
+        if (key !== "default" && current === -1 && target !== -1) current = sourceZoomValue(event.time, "default");
         const duration = secondsForSteps(event.time, p[6] || 0);
         if (p[4] && duration > 0) {
           active = { start: event.time, duration, from: current, to: target, ease: p[7], mode: p[8] };
@@ -420,7 +421,7 @@
       return { x: 0, y: move };
     }
     function sourceCameraTarget(time) {
-      const side = sourceCharacterName(0, time) === "sans_pixel" ? "opp" : sourceCameraSide(time);
+      const side = sourceCameraSide(time);
       const kind = side === "player" ? "boyfriend" : side === "gf" ? "gf" : "sans";
       const box = characterBox(kind, time);
       const offset = sourceCameraOffset(side, time);
