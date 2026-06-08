@@ -14,7 +14,7 @@
       shaderEventIndex: null,
       fxCanvas: null,
       fxCtx: null,
-      camera: { x: 640, y: 330, zoom: 1.05 },
+      camera: { x: 640, y: 330, zoom: 1 },
       lastSync: 0
     };
 
@@ -54,6 +54,13 @@
         cameraX: 486,
         cameraY: 380
       }
+    };
+
+    const WG_SOURCE_STAGE = {
+      defaultZoom: 0.6,
+      browserZoom: 1,
+      focusedZoom: 1.035,
+      finalZoom: 1.02
     };
 
     function isWg(){
@@ -167,10 +174,6 @@
       if(wgState.initialized) return;
       wgState.initialized = true;
       Object.entries(DATA.stage.images).forEach(([key, src]) => loadImage(key, src));
-      loadImage("stars1", "assets/boxing-match-wg/eclipsewg_/stars1.png");
-      loadImage("stars2", "assets/boxing-match-wg/eclipsewg_/stars2.png");
-      loadImage("planets", "assets/boxing-match-wg/eclipsewg_/planets.png");
-      loadImage("spacewithsun", "assets/boxing-match-wg/eclipsewg_/spacewithsun.png");
       Object.entries(DATA.sprites).forEach(([key, sprite]) => loadImage(key, sprite.image));
       DATA.stage.finalObjects.forEach(obj => loadImage(obj.image, obj.image));
     }
@@ -424,81 +427,6 @@
       ctx.restore();
     }
 
-    function projectScale(z){
-      const focal = 250;
-      const eyeZ = -150;
-      return focal / (focal + Math.max(1, z - eyeZ));
-    }
-
-    function drawPerspectiveLayer(key, x, y, scale, z, pan, t, alpha = 1){
-      const p = projectScale(z);
-      const depth = 1 + (1 - p) * 0.24;
-      drawImageKey(key, x - pan * (1 - p) * 210, y + Math.sin(t * 0.75 + z) * (1 - p) * 22, scale * depth, alpha, { angle: pan * (1 - p) * 0.018 });
-    }
-
-    function drawTiledDepthImage(key, y, scale, z, pan, t, alpha = 1, speed = 0){
-      const image = wgState.images[key];
-      if(!imgReady(image)) return;
-      const p = projectScale(z);
-      const depthScale = scale * (1 + (1 - p) * 0.18);
-      const w = image.naturalWidth * depthScale;
-      const h = image.naturalHeight * depthScale;
-      const travel = ((t * speed) + pan * (1 - p) * 260) % w;
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
-      for(let x = -w - travel; x < canvas.width + w; x += w){
-        ctx.drawImage(image, x, y, w, h);
-      }
-      ctx.restore();
-    }
-
-    function drawWgDepthSky(t, pan, phase){
-      ctx.save();
-      ctx.globalCompositeOperation = "screen";
-      drawTiledDepthImage("stars2", -90 + Math.sin(t * 0.12) * 5, 0.7, 980, pan, t, phase === "final" ? 0.2 : 0.3, 5);
-      drawTiledDepthImage("stars1", 12 + Math.cos(t * 0.16) * 7, 0.82, 680, pan, t, phase === "final" ? 0.22 : 0.34, 10);
-      drawPerspectiveLayer("planets", 110 - pan * 20, 60, 0.28, 620, pan, t, phase === "fly" ? 0.34 : 0.18);
-      ctx.restore();
-    }
-
-    function drawWgShaderStageWash(t, step, phase){
-      const pulse = Math.max(
-        Math.max(0, 1 - Math.abs(step - 288) / 28),
-        Math.max(0, 1 - Math.abs(step - 544) / 34),
-        Math.max(0, 1 - Math.abs(step - 2816) / 48)
-      );
-      ctx.save();
-      ctx.globalCompositeOperation = "screen";
-      const speedGrad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-      speedGrad.addColorStop(0, `rgba(77,177,255,${0.04 + pulse * 0.08})`);
-      speedGrad.addColorStop(0.48, "rgba(255,255,255,0)");
-      speedGrad.addColorStop(1, `rgba(255,127,59,${0.04 + pulse * 0.07})`);
-      ctx.fillStyle = speedGrad;
-      ctx.fillRect(-120, -120, canvas.width + 240, canvas.height + 240);
-      for(let i = 0; i < 18; i++){
-        const x = ((i * 181 + t * (phase === "fly" ? 380 : 180)) % (canvas.width + 260)) - 130;
-        const y = ((i * 83 + t * 42) % (canvas.height + 180)) - 90;
-        ctx.globalAlpha = 0.035 + pulse * 0.05;
-        ctx.strokeStyle = i % 2 ? "#72ddff" : "#ff8b4a";
-        ctx.lineWidth = 1 + (i % 3);
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x + 120 + pulse * 80, y - 26);
-        ctx.stroke();
-      }
-      ctx.restore();
-      ctx.save();
-      const vignette = ctx.createRadialGradient(canvas.width * 0.5, canvas.height * 0.5, 130, canvas.width * 0.5, canvas.height * 0.5, 780);
-      vignette.addColorStop(0, "rgba(0,0,0,0)");
-      vignette.addColorStop(0.62, "rgba(0,0,0,0.12)");
-      vignette.addColorStop(1, "rgba(0,0,0,0.46)");
-      ctx.fillStyle = vignette;
-      ctx.fillRect(-200, -200, canvas.width + 400, canvas.height + 400);
-      ctx.restore();
-    }
-
     function drawMoonSurface(t, step, pan, forceProgress = 1){
       const image = wgState.images.moon;
       if(!imgReady(image)) return;
@@ -599,27 +527,10 @@
       return ((state.camera?.focusX || canvas.width / 2) - canvas.width / 2) / 360;
     }
 
-    function cameraPulseAtStep(step){
-      return Math.max(
-        pulse(step, 288, 18),
-        pulse(step, 512, 12),
-        pulse(step, 528, 18),
-        pulse(step, 544, 24),
-        pulse(step, 2784, 22),
-        pulse(step, 2816, 34)
-      );
-    }
-
     function drawFlyPhase(t, step){
       const pan = wgPan();
 
-      // Wii Funkin mirror.zoom oscillates on a 32-step cycle during the fly
-      // intro (0.95 -> 1 -> 0.9 -> 1 -> ...). Mimic that with a background
-      // zoom pulse + slight rotation drift so the camera feels like it's
-      // rushing forward instead of sitting still.
-      const cycle = (step % 32) / 32;
-      const bgPulse = 1 + Math.sin(cycle * Math.PI * 2) * 0.04;
-      drawCover("spaceEmpty", -pan * 8, -14, 1.18 * bgPulse);
+      drawCover("spaceEmpty", -pan * 2, -10, 1.1);
 
       // Greyscale-fade-in at the very start of the intro (matches WF's
       // greyscale shader tweening from 1.0 to 0 over the first beats).
@@ -633,16 +544,15 @@
         ctx.restore();
       }
 
-      // Radial hyperspace fallback. WebGL uses the shared SpeedEffect-style
-      // pass; canvas only draws this when WebGL is unavailable.
-      if (!window.PERFORMANCE_MODE && !window.REDUCE_MOTION) {
+      const shader = shaderSnapshot(step);
+      if (shader.speed > 0.01 && !window.PERFORMANCE_MODE && !window.REDUCE_MOTION) {
         let speedDone = false;
         ctx.save();
         ctx.setTransform(1, 0, 0, 1, 0, 0);
-        speedDone = window.FNF_WEBGL?.drawSpeedLines(0.18 + Math.max(0, shaderSnapshot(step).speed) * 0.45, t, {
+        speedDone = window.FNF_WEBGL?.drawSpeedLines(Math.min(0.25, shader.speed), t, {
           centerX: 0.5 + Math.max(-0.08, Math.min(0.08, pan * 0.04)),
           centerY: 0.46,
-          alpha: 0.78
+          alpha: 0.68
         });
         if(!speedDone){
           const cx = canvas.width / 2;
@@ -671,7 +581,7 @@
             const x0 = cx + cos * r0, y0 = cy + sin * r0;
             const x1 = cx + cos * rEnd, y1 = cy + sin * rEnd;
             const radialBoost = Math.min(1, (r0 - minR) / span + 0.2);
-            const alpha = 0.45 * radialBoost;
+            const alpha = Math.min(0.26, shader.speed * 0.26) * radialBoost;
             ctx.strokeStyle = "rgba(220,235,255," + alpha.toFixed(3) + ")";
             ctx.lineWidth = 1.1 + r2 * 1.8;
             ctx.beginPath();
@@ -732,10 +642,9 @@
 
     function drawArenaPhase(t, step){
       const pan = wgPan();
-      drawCover("space", -pan * 40, -22, 1.1);
-      drawWgDepthSky(t, pan, "arena");
-      drawPerspectiveLayer("wiikz", -112, 365, 0.34, 300, pan, t, 0.82);
-      drawPerspectiveLayer("bluematt", 1014 + Math.sin(t * 1.5) * 2, 368 + Math.cos(t * 1.5) * 2, 0.34, 300, pan, t, 0.82);
+      drawCover("space", -pan * 8, -18, 1.04);
+      drawImageKey("wiikz", -112 - pan * 14, 365, 0.34, 0.82);
+      drawImageKey("bluematt", 1014 - pan * 14 + Math.sin(t * 1.5) * 0.5, 368 + Math.cos(t * 1.5) * 0.5, 0.34, 0.82);
       drawMoonSurface(t, step, pan, step < DATA.meta.phaseSteps.splash ? clamp01((step - DATA.meta.phaseSteps.endFly) / 16) : 1);
       if(step >= DATA.meta.phaseSteps.endFly && step < DATA.meta.phaseSteps.splash) return;
       const splashAge = step - DATA.meta.phaseSteps.splash;
@@ -771,8 +680,7 @@
 
     function drawFinalPhase(t){
       const pan = wgPan();
-      drawCover("spaceEmpty", -pan * 18, -8, 1.12);
-      drawWgDepthSky(t, pan, "final");
+      drawCover("spaceEmpty", -pan * 3, -8, 1.08);
       ctx.save();
       ctx.globalCompositeOperation = "screen";
       drawImageKey("sunF", 80 - pan * 12, -130, 0.7, 0.9);
@@ -804,14 +712,12 @@
       if(phase === "fly") drawFlyPhase(t, step);
       else if(phase === "arena") drawArenaPhase(t, step);
       else drawFinalPhase(t);
-      drawWgShaderStageWash(t, step, phase);
       const haze = ctx.createRadialGradient(canvas.width * 0.5, canvas.height * 0.54, 80, canvas.width * 0.5, canvas.height * 0.54, 760);
       haze.addColorStop(0, "rgba(255,255,255,0.05)");
       haze.addColorStop(0.55, "rgba(76,100,190,0.04)");
       haze.addColorStop(1, "rgba(0,0,0,0.34)");
       ctx.fillStyle = haze;
       ctx.fillRect(-300, -200, canvas.width + 600, canvas.height + 400);
-      applyWgWebglStageParallax(t, step, phase);
     }
 
     function activeVideoForTime(t){
@@ -990,32 +896,32 @@
       const side = activeSideAt(t);
       let opp = { x: 392, y: 420 };
       let player = { x: 890, y: 420 };
-      let zoom = 1.12;
+      let zoom = WG_SOURCE_STAGE.browserZoom;
       if(phase === "fly"){
         opp = { x: WG_FLY_LAYOUT.matt.cameraX, y: WG_FLY_LAYOUT.matt.cameraY };
         player = { x: WG_FLY_LAYOUT.bf.cameraX, y: WG_FLY_LAYOUT.bf.cameraY };
-        zoom = 1.18;
+        zoom = WG_SOURCE_STAGE.browserZoom;
       } else if(phase === "final"){
         opp = { x: 640, y: 268 };
         player = { x: 640, y: 620 };
-        zoom = 1.26;
+        zoom = WG_SOURCE_STAGE.finalZoom;
       } else {
         opp = { x: 392, y: 454 };
         player = { x: 890, y: 456 };
-        zoom = step < DATA.meta.phaseSteps.splash ? 1.02 : 1.18;
+        zoom = step < DATA.meta.phaseSteps.splash ? WG_SOURCE_STAGE.browserZoom : WG_SOURCE_STAGE.focusedZoom;
       }
       const target = side === "opp" ? opp : side === "player" ? player : { x:(opp.x + player.x) / 2, y:(opp.y + player.y) / 2 };
       const dirBump = phase === "arena" ? { x:0, y:0 } : recentDirectionBump(t);
       const shader = shaderSnapshot(step);
       const mirrorPush = Math.max(
-        cameraPulseAtStep(step),
         Math.abs(1 - shader.mirrorZoom) * 1.6,
         Math.abs(1 - shader.mirrorHudZoom) * 1.2,
         Math.max(0, shader.mirrorOtherZoom - 1) * 0.25,
         Math.abs(shader.mirrorOtherAngle) / 120
       );
-      const pulseZoom = 1 + Math.min(0.28, mirrorPush * 0.055);
-      return { x: target.x + dirBump.x, y: target.y + dirBump.y, zoom: (side === "both" ? zoom * 0.94 : zoom) * pulseZoom };
+      const pulseZoom = 1 + Math.min(0.08, mirrorPush * 0.02);
+      const sideZoom = side === "both" ? Math.max(WG_SOURCE_STAGE.browserZoom, zoom * 0.96) : zoom;
+      return { x: target.x + dirBump.x, y: target.y + dirBump.y, zoom: sideZoom * pulseZoom };
     }
 
     function recentDirectionBump(t){
@@ -1047,86 +953,39 @@
       return wgState.fxCanvas;
     }
 
-    function pulse(step, center, width){
-      return Math.max(0, 1 - Math.abs(step - center) / width);
-    }
-
     function fxValues(t){
       const step = stepAtTime(t);
       const shader = shaderSnapshot(step);
       const flyWhiteIn = clamp01((step - 512) / 16);
       const flyWhiteOut = 1 - clamp01((step - 528) / 16);
       const whiteBg = step < 512 ? 0 : step < 528 ? Math.pow(flyWhiteIn, 2.4) : step < 544 ? flyWhiteOut : 0;
-      const bloom = Math.max(
-        shader.bloom,
-        pulse(step, 288, 18),
-        pulse(step, 416, 12),
-        pulse(step, 544, 22),
-        pulse(step, 2784, 20),
-        pulse(step, 2816, 28)
-      );
-      const warp = Math.max(
-        pulse(step, 264, 28),
-        pulse(step, 540, 16),
-        pulse(step, 2816, 36),
-        Math.abs(1 - shader.mirrorZoom) * 2,
-        Math.abs(1 - shader.mirrorHudZoom) * 1.4,
-        Math.max(0, shader.mirrorOtherZoom - 1) * 0.2,
-        Math.abs(shader.mirrorOtherAngle) / 110,
-        Math.abs(shader.mirrorOtherWarp) * 4,
-        shader.speed * 0.5
-      );
-      const invert = Math.max(
-        pulse(step, 512, 10) * 0.24,
-        pulse(step, 528, 18) * 0.38,
-        pulse(step, 2816, 28) * 0.2,
-        shader.vhs * 0.08,
-        Math.abs(shader.mirrorOtherWarp) * 0.8
-      );
-      const greyscale = Math.max(shader.greyscale, Math.max(0, 0.5 * pulse(step, 540, 12)));
-      const bars = Math.max(shader.bars, 0.08 * pulse(step, 288, 300), 0.12 * pulse(step, 2816, 400), 0.2 * pulse(step, 540, 16));
-      const cameraPulse = Math.max(cameraPulseAtStep(step), Math.abs(1 - shader.mirrorZoom) * 1.5, Math.max(0, shader.mirrorOtherZoom - 1) * 0.25);
+      const mirrorWarp = Math.abs(shader.mirrorWarp)
+        + Math.abs(shader.mirrorHudWarp) * 0.35
+        + Math.abs(shader.mirrorOtherWarp) * 1.6;
+      const mirrorAngle = Math.abs(shader.mirrorAngle) / 180
+        + Math.abs(shader.mirrorHudAngle) / 260
+        + Math.abs(shader.mirrorOtherAngle) / 180;
+      const mirrorZoom = Math.abs(1 - shader.mirrorZoom)
+        + Math.abs(1 - shader.mirrorHudZoom) * 0.55
+        + Math.max(0, shader.mirrorOtherZoom - 1) * 0.12;
+      const warp = mirrorWarp + mirrorAngle * 0.45 + mirrorZoom * 0.7 + shader.speed * 0.25;
+      const cameraPulse = mirrorZoom + mirrorAngle * 0.25 + mirrorWarp * 0.2;
       return {
         ...shader,
         step,
-        whiteBg,
-        bloom:clamp01(bloom),
+        whiteBg: clamp01(whiteBg),
+        bloom:clamp01(shader.bloom),
         warp:clamp01(warp),
-        invert:clamp01(invert),
-        greyscale:clamp01(greyscale),
-        bars:clamp01(bars),
+        invert:0,
+        greyscale:clamp01(shader.greyscale),
+        bars:clamp01(shader.bars),
         cameraPulse:clamp01(cameraPulse)
       };
     }
 
-    function applyWgWebglStageParallax(t, step, phase){
-      if(!window.FNF_WEBGL?.drawParallaxPass) return false;
-      const fx = fxValues(t);
-      const pan = wgPan();
-      const amount = clamp01(
-        0.18
-        + (phase === "fly" ? 0.22 : phase === "final" ? 0.28 : 0.14)
-        + fx.cameraPulse * 0.24
-        + fx.speed * 0.2
-        + Math.abs(fx.mirrorWarp + fx.mirrorOtherWarp) * 0.45
-      );
-      const src = ensureFxCanvas();
-      ctx.save();
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      const ok = window.FNF_WEBGL.drawParallaxPass(src, {
-        amount,
-        time: t,
-        cameraX: clamp01(Math.abs(pan)) * Math.sign(pan),
-        cameraY: Math.max(-1, Math.min(1, ((state.camera?.focusY || canvas.height * 0.5) - canvas.height * 0.5) / canvas.height)),
-        zoom: Math.max(0, (state.camera?.zoom || 1) - 1)
-      });
-      ctx.restore();
-      return ok;
-    }
-
     function drawWgFx(t){
       const fx = fxValues(t);
-      let src = ensureFxCanvas();
+      if(window.PERFORMANCE_MODE) return;
       const mirrorAmount = Math.max(
         Math.abs(1 - fx.mirrorZoom),
         Math.abs(1 - fx.mirrorHudZoom) * 0.7,
@@ -1136,9 +995,21 @@
         Math.abs(fx.mirrorX + fx.mirrorOtherX) * 0.04,
         Math.abs(fx.mirrorY + fx.mirrorOtherY) * 0.04
       );
+      const chroma = Math.max(fx.ca, fx.vhs > 0.01 ? Math.abs(fx.vhsChroma) * 18 : 0, fx.vhs * 0.018, fx.warp * 0.012);
+      const needsCanvasFx = mirrorAmount > 0.01
+        || fx.greyscale > 0.01
+        || fx.bloom > 0.01
+        || fx.warp > 0.01
+        || fx.blur > 0.01
+        || fx.vhs > 0.01
+        || fx.cameraPulse > 0.01
+        || chroma > 0.001;
+      const needsOverlayFx = fx.speed > 0.01 || fx.smoke > 0.01 || fx.bars > 0.01 || fx.whiteBg > 0.001;
+      if(!needsCanvasFx && !needsOverlayFx) return;
+      let src = needsCanvasFx ? ensureFxCanvas() : null;
       const mirrorWaveX = Math.sin(t * Math.max(0.1, fx.mirrorSpeed) * 2.4) * (fx.mirrorXRange || 0) * 0.12;
       const mirrorWaveY = Math.cos(t * Math.max(0.1, fx.mirrorSpeed) * 2.1) * (fx.mirrorYRange || 0) * 0.1;
-      const cameraPassDone = mirrorAmount > 0.01 && window.FNF_WEBGL?.drawCameraPass(src, {
+      const cameraPassDone = !!src && mirrorAmount > 0.01 && window.FNF_WEBGL?.drawCameraPass(src, {
         zoom: Math.max(0.35, Math.min(2.4, (fx.mirrorZoom || 1) * (fx.mirrorOtherZoom || 1))),
         angle: -(fx.mirrorAngle + fx.mirrorHudAngle * 0.28 + fx.mirrorOtherAngle),
         offsetX: Math.max(-1.5, Math.min(1.5, -((fx.mirrorX + fx.mirrorOtherX) * 0.03 + mirrorWaveX))),
@@ -1176,7 +1047,6 @@
         ctx.drawImage(src, -canvas.width / 2 + 7 * fx.cameraPulse, -canvas.height / 2 - 2);
         ctx.restore();
       }
-      const chroma = Math.max(fx.ca, Math.abs(fx.vhsChroma) * 18, fx.vhs * 0.018, fx.warp * 0.012);
       if(chroma > 0.001){
         const off = Math.min(16, 3 + chroma * 220);
         ctx.save();
@@ -1206,7 +1076,7 @@
         ctx.drawImage(src, -canvas.width / 2 - 8 * fx.warp, -canvas.height / 2);
         ctx.restore();
       }
-      if(fx.speed > 0.01){
+      if(fx.speed > 0.01 && !window.REDUCE_MOTION){
         const speedDone = window.FNF_WEBGL?.drawSpeedLines(Math.min(0.25, fx.speed), t, {
           centerX: 0.5 + Math.max(-0.18, Math.min(0.18, wgPan() * 0.12)),
           centerY: phaseForStep(fx.step) === "final" ? 0.58 : 0.48,
@@ -1229,20 +1099,6 @@
           ctx.restore();
         }
       }
-      if(fx.step >= 288){
-        ctx.save();
-        ctx.globalCompositeOperation = "screen";
-        for(let i = 0; i < 22; i++){
-          const x = ((i * 251 + t * (18 + i % 4 * 9)) % (canvas.width + 180)) - 90;
-          const y = ((i * 137 + t * (9 + i % 5 * 4)) % (canvas.height + 160)) - 80;
-          ctx.globalAlpha = 0.045 + (i % 5) * 0.009;
-          ctx.fillStyle = i % 2 ? "#9ad8ff" : "#ffffff";
-          ctx.beginPath();
-          ctx.arc(x, y, 1.5 + (i % 4), 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.restore();
-      }
       if(fx.smoke > 0.01){
         ctx.save();
         ctx.globalCompositeOperation = "screen";
@@ -1258,13 +1114,15 @@
         }
         ctx.restore();
       }
-      ctx.save();
-      ctx.globalCompositeOperation = "screen";
-      ctx.globalAlpha = 0.08 + fx.bloom * 0.08;
-      ctx.drawImage(src, -2 - fx.warp * 3, 0);
-      ctx.globalAlpha = 0.06 + fx.bloom * 0.06;
-      ctx.drawImage(src, 2 + fx.warp * 3, 0);
-      ctx.restore();
+      if(chroma > 0.001 || fx.bloom > 0.01 || fx.warp > 0.01){
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.globalAlpha = 0.04 + fx.bloom * 0.06;
+        ctx.drawImage(src, -2 - fx.warp * 2, 0);
+        ctx.globalAlpha = 0.035 + fx.bloom * 0.05;
+        ctx.drawImage(src, 2 + fx.warp * 2, 0);
+        ctx.restore();
+      }
       if(fx.whiteBg > 0.001){
         ctx.save();
         ctx.globalAlpha = fx.whiteBg;
@@ -1410,7 +1268,10 @@
       state.feeds.opp.time = -10;
       Object.values(state.poses).forEach(p => { p.time = -10; p.kind = "hit"; });
       state.receptorFx.forEach(fx => fx.time = -10);
-      state.camera = { zoom:1.05, focusX:canvas.width / 2, focusY:canvas.height * 0.45, sideTime:0, lastSide:"both", highwayX:0, highwayY:0 };
+      state.camera = { zoom:WG_SOURCE_STAGE.browserZoom, focusX:canvas.width / 2, focusY:canvas.height * 0.45, sideTime:0, lastSide:"both", highwayX:0, highwayY:0 };
+      wgState.camera.x = state.camera.focusX;
+      wgState.camera.y = state.camera.focusY;
+      wgState.camera.zoom = state.camera.zoom;
       if(ui.p1Box) ui.p1Box.style.display = state.mode === "versus" ? "block" : "none";
       ui.songTitle.textContent = state.currentSong.title;
       ui.songSub.textContent = state.currentSong.subtitle;
