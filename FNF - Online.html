@@ -1555,7 +1555,15 @@ body.mobile .chatLog { max-height: 130px !important; font-size: 12px !important;
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 window.FNF_WEBGL = window.FNFWebGLBridge ? window.FNFWebGLBridge.create(canvas, ctx) : null;
-const DUSTIN_SHADER_SOURCES = Object.freeze({ bloom: "shaders/dustin-bloom.frag", bloomNew: "shaders/dustin-bloom_new.frag" });
+const DUSTIN_SHADER_SOURCES = Object.freeze({
+    bloom: "shaders/dustin-bloom.frag",
+    bloomNew: "shaders/dustin-bloom_new.frag",
+    dust: "shaders/dustin-dust.frag",
+    lightPreprocess: "shaders/dustin-light_preprocess.frag",
+    chromaticWarp: "shaders/dustin-chromaticWarp.frag",
+    waterDistortion: "shaders/dustin-waterDistortion.frag",
+    cine: "shaders/dustin-br_cine.frag"
+});
 const postFxCanvas = document.createElement("canvas");
 const postFxCtx = postFxCanvas.getContext("2d");
 const bloomMaskCanvas = document.createElement("canvas");
@@ -1584,6 +1592,7 @@ function importedBloomStrength(t){
     return 0;
 }
 function applyDustinBloom(t){
+    if(typeof applyPerseveranceScreenShaders === "function") applyPerseveranceScreenShaders(t);
     const strength = importedBloomStrength(t);
     if(strength <= 0.02) return;
     syncPostFxCanvas();
@@ -1670,7 +1679,36 @@ const SPORTING_BEAT = {
     ]
 };
 const spriteState = { images:{}, initialized:false };
-const perseveranceSpriteState = { images:{}, initialized:false };
+function seededUnit(index, salt){
+    const raw = Math.sin(index * 12.9898 + salt * 78.233) * 43758.5453;
+    return raw - Math.floor(raw);
+}
+const PERSEVERANCE_DUST_LAYERS = [
+    { key:"back", count:48, depth:0.28, speed:28, size:0.7, alpha:0.22, color:"180,210,255" },
+    { key:"mid", count:36, depth:0.62, speed:44, size:1.0, alpha:0.34, color:"225,221,255" },
+    { key:"front", count:24, depth:1.05, speed:72, size:1.35, alpha:0.42, color:"255,235,230" }
+];
+const perseveranceSpriteState = {
+    images:{},
+    initialized:false,
+    dust: PERSEVERANCE_DUST_LAYERS.flatMap((layer, layerIndex) => Array.from({length: layer.count}, (_, i) => {
+        const id = layerIndex * 100 + i;
+        return {
+            layer: layer.key,
+            depth: layer.depth,
+            x: seededUnit(id, 1) * 1380 - 50,
+            y: seededUnit(id, 2) * 820,
+            size: layer.size * (0.65 + seededUnit(id, 3) * 0.75),
+            speed: layer.speed * (0.7 + seededUnit(id, 4) * 0.65),
+            drift: (seededUnit(id, 5) - 0.5) * (28 + layer.depth * 38),
+            phase: seededUnit(id, 6) * Math.PI * 2,
+            alpha: layer.alpha * (0.68 + seededUnit(id, 7) * 0.5),
+            color: layer.color
+        };
+    }))
+};
+const perseveranceWarpCanvas = document.createElement("canvas");
+const perseveranceWarpCtx = perseveranceWarpCanvas.getContext("2d");
 const introSnow = Array.from({length: 120}, () => ({
     x: Math.random() * 1400, y: Math.random() * 800,
     r: Math.random() * 2 + 0.5, speed: Math.random() * 30 + 10,
@@ -2011,10 +2049,165 @@ function easeCurve(name, p){
 function perseveranceScrollBasePx(){ return 405; }
 function perseveranceBloomStrength(t){
     if(perseveranceIsPixelPhase(t)) return 0;
-    if(t >= 198.895349 && t < 221.795349) return 0.62;
-    if(t >= perseveranceSlowdownStart()) return 0.52;
-    if(t >= 163.195349) return 0.42;
-    return 0.28;
+    if(t >= 198.895349 && t < 221.795349) return 0.72;
+    if(t >= perseveranceSlowdownStart()) return 0.58;
+    if(t >= 163.195349) return 0.48;
+    if(t >= 74.995349) return 0.36;
+    return 0.3;
+}
+function perseveranceFadeWindow(t, start, end, fade=0.75){
+    if(t < start || t > end) return 0;
+    return Math.min(clamp((t - start) / fade, 0, 1), clamp((end - t) / fade, 0, 1));
+}
+function perseveranceShaderState(t){
+    const pixel = perseveranceIsPixelPhase(t);
+    const blaster = perseveranceFadeWindow(t, 198.895349, 222.395349, 0.9);
+    const late = t >= 163.195349 ? clamp((t - 163.195349) / 1.6, 0, 1) : 0;
+    const mid = t >= 74.995349 ? clamp((t - 74.995349) / 1.4, 0, 1) : 0;
+    const slow = t >= perseveranceSlowdownStart() ? clamp((t - perseveranceSlowdownStart()) / 1.6, 0, 1) : 0;
+    const snow = Math.max(pixel ? 0.72 : 0, perseveranceFadeWindow(t, 184.645349, 193.395349, 0.7) * 0.65);
+    return {
+        heat: pixel ? 0.014 : 0.012 + mid * 0.012 + late * 0.02 + blaster * 0.078 + slow * 0.028,
+        chrom: pixel ? 0.025 : 0.01 + mid * 0.018 + late * 0.024 + blaster * 0.09 + slow * 0.04,
+        dust: Math.max(0.44, mid * 0.72, late * 0.82, blaster, slow * 0.78, snow * 0.58),
+        light: pixel ? 0.12 : 0.26 + late * 0.14 + blaster * 0.24 + slow * 0.12,
+        radial: pixel ? 0.08 : 0.06 + mid * 0.09 + blaster * 0.26 + slow * 0.12,
+        snow
+    };
+}
+function syncPerseveranceWarpCanvas(){
+    if(perseveranceWarpCanvas.width !== canvas.width || perseveranceWarpCanvas.height !== canvas.height){
+        perseveranceWarpCanvas.width = canvas.width;
+        perseveranceWarpCanvas.height = canvas.height;
+    }
+    if(typeof setRenderQuality === "function") setRenderQuality(perseveranceWarpCtx);
+    return perseveranceWarpCtx;
+}
+function drawPerseveranceLightShader(t){
+    if(!perseveranceSpritesReady()) return;
+    const fx = perseveranceShaderState(t);
+    if(fx.light <= 0.01) return;
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    const rays = window.PERFORMANCE_MODE ? 3 : 6;
+    for(let i = 0; i < rays; i++){
+        const x = canvas.width * (0.22 + i * 0.13) + Math.sin(t * 0.18 + i * 1.7) * 28;
+        const width = 110 + i * 18;
+        ctx.globalAlpha = Math.min(0.18, fx.light * (0.045 + i * 0.006));
+        const ray = ctx.createLinearGradient(x, 0, x + width * 0.35, canvas.height);
+        ray.addColorStop(0, "rgba(255,245,255,0.55)");
+        ray.addColorStop(0.58, "rgba(190,170,255,0.14)");
+        ray.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = ray;
+        ctx.beginPath();
+        ctx.moveTo(x - width * 0.5, 0);
+        ctx.lineTo(x + width * 0.5, 0);
+        ctx.lineTo(x + width * 1.25, canvas.height);
+        ctx.lineTo(x - width * 0.85, canvas.height);
+        ctx.closePath();
+        ctx.fill();
+    }
+    ctx.globalAlpha = Math.min(0.38, fx.radial * 0.55 + fx.light * 0.12);
+    const center = ctx.createRadialGradient(canvas.width * 0.52, canvas.height * 0.5, 80, canvas.width * 0.52, canvas.height * 0.5, 560);
+    center.addColorStop(0, "rgba(255,240,255,0.2)");
+    center.addColorStop(0.48, "rgba(110,80,210,0.08)");
+    center.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = center;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+}
+function drawPerseveranceDustShader(t){
+    if(!perseveranceSpritesReady()) return;
+    const fx = perseveranceShaderState(t);
+    if(fx.dust <= 0.02) return;
+    const camX = Number(state?.camera?.focusX || 640) - 640;
+    const camY = Number(state?.camera?.focusY || 420) - 420;
+    const spanY = canvas.height + 100;
+    const spanX = canvas.width + 140;
+    const stride = window.PERFORMANCE_MODE ? 3 : 1;
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    ctx.lineCap = "round";
+    for(let i = 0; i < perseveranceSpriteState.dust.length; i += stride){
+        const p = perseveranceSpriteState.dust[i];
+        const speed = p.speed * (0.75 + fx.snow * 0.8);
+        const drift = Math.sin(t * (0.36 + p.depth * 0.2) + p.phase) * p.drift;
+        const rawX = p.x + drift + camX * p.depth * 0.055;
+        const rawY = p.y - t * speed + camY * p.depth * 0.04;
+        const x = ((rawX % spanX) + spanX) % spanX - 70;
+        const y = ((rawY % spanY) + spanY) % spanY - 50;
+        const alpha = Math.min(0.62, p.alpha * fx.dust * (p.layer === "front" ? 1.15 : 1));
+        const size = p.size * (1 + p.depth * 0.42);
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = "rgba(" + p.color + ",0.85)";
+        ctx.lineWidth = Math.max(0.8, size * 0.85);
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + drift * 0.08, y + 5 + size * (3.5 + fx.snow * 4));
+        ctx.stroke();
+        if(p.layer === "front"){
+            ctx.fillStyle = "rgba(" + p.color + ",0.42)";
+            ctx.beginPath();
+            ctx.arc(x, y, size * 0.8, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+}
+function applyPerseveranceScreenShaders(t){
+    if(typeof state === "undefined" || state.selectedSong !== "perseverance" || window.PERFORMANCE_MODE) return;
+    const fx = perseveranceShaderState(t);
+    const amount = Math.max(fx.heat, fx.chrom, fx.radial);
+    if(amount <= 0.01) return;
+    const warpCtx = syncPerseveranceWarpCanvas();
+    warpCtx.clearRect(0, 0, perseveranceWarpCanvas.width, perseveranceWarpCanvas.height);
+    warpCtx.drawImage(canvas, 0, 0, perseveranceWarpCanvas.width, perseveranceWarpCanvas.height);
+    const camX = clamp((Number(state.camera?.focusX || 640) - 640) / 640, -1, 1);
+    const camY = clamp((Number(state.camera?.focusY || 420) - 420) / 420, -1, 1);
+    const usedWebGl = window.FNF_WEBGL?.drawCameraPass(perseveranceWarpCanvas, {
+        zoom: 1 + fx.heat * 0.18 + fx.radial * 0.035,
+        angle: Math.sin(t * 1.35) * fx.chrom * 1.35,
+        offsetX: camX * fx.radial * 0.08 + Math.sin(t * 1.7) * fx.heat * 0.03,
+        offsetY: camY * fx.radial * 0.06 + Math.cos(t * 1.25) * fx.heat * 0.02,
+        warp: fx.heat * 1.65 + fx.radial * 0.2,
+        mirror: fx.chrom * 0.42
+    });
+    if(!usedWebGl){
+        ctx.save();
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const scale = 1 + fx.heat * 0.024 + fx.radial * 0.012;
+        ctx.translate(canvas.width * 0.5, canvas.height * 0.5);
+        ctx.rotate(Math.sin(t * 1.35) * fx.chrom * 0.018);
+        ctx.scale(scale, scale);
+        ctx.translate(-canvas.width * 0.5 + Math.sin(t * 1.7) * fx.heat * 8, -canvas.height * 0.5 + Math.cos(t * 1.25) * fx.heat * 6);
+        ctx.drawImage(perseveranceWarpCanvas, 0, 0, canvas.width, canvas.height);
+        ctx.restore();
+    }
+    if(fx.chrom > 0.006){
+        const shift = 1.2 + fx.chrom * 18;
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.globalAlpha = Math.min(0.22, fx.chrom * 0.68);
+        ctx.filter = "sepia(1) saturate(3.1) hue-rotate(-24deg)";
+        ctx.drawImage(perseveranceWarpCanvas, shift, 0, canvas.width, canvas.height);
+        ctx.filter = "sepia(1) saturate(3.1) hue-rotate(165deg)";
+        ctx.drawImage(perseveranceWarpCanvas, -shift, 0, canvas.width, canvas.height);
+        ctx.restore();
+    }
+}
+function drawPerseveranceReflections(t){
+    if(window.PERFORMANCE_MODE || perseveranceIsPixelPhase(t) || !perseveranceSpritesReady()) return;
+    ctx.save();
+    ctx.globalAlpha = 0.24 + perseveranceShaderState(t).light * 0.06;
+    ctx.globalCompositeOperation = "screen";
+    ctx.filter = "blur(2.4px) brightness(0.62) saturate(0.82)";
+    ctx.translate(0, 1232);
+    ctx.scale(1, -0.68);
+    drawPerseveranceCharacter("sans", 486, 630, 0.43, t);
+    drawPerseveranceCharacter("boyfriend", 854, 638, 0.47, t);
+    ctx.restore();
+    if(typeof setRenderQuality === "function") setRenderQuality(ctx);
 }
 function perseveranceScrollSpeed(t){
     let current = 2.0;
@@ -2915,6 +3108,7 @@ function stage(t){
             ctx.drawImage(perseveranceSpriteState.images.bgMid, bgX, bgY, bgW, bgH);
             if(fade < 1){
                 // transition: characters already visible under overlay
+                drawPerseveranceReflections(t);
                 drawPerseveranceCharacter("gf", 630, 604, 0.53, t);
                 drawPerseveranceCharacter("sans", 486, 630, 0.43, t);
                 drawPerseveranceCharacter("boyfriend", 854, 638, 0.47, t);
@@ -2985,6 +3179,7 @@ function stage(t){
         ctx.drawImage(perseveranceSpriteState.images.bgA, bgX - 22, bgY, bgW, bgH);
         ctx.drawImage(perseveranceSpriteState.images.bgB, bgX - 15, bgY, bgW, bgH);
         ctx.drawImage(perseveranceSpriteState.images.bgMid, bgX, bgY, bgW, bgH);
+        drawPerseveranceReflections(t);
         drawPerseveranceCharacter("gf", 630, 604, 0.53, t);
         drawPerseveranceCharacter("sans", 486, 630, 0.43, t);
         drawPerseveranceCharacter("boyfriend", 854, 638, 0.47, t);
@@ -3108,6 +3303,8 @@ function renderScene(songT, previewT){
     stage(t);
     ctx.restore();
     if(state.selectedSong === "perseverance"){
+        drawPerseveranceLightShader(t);
+        drawPerseveranceDustShader(t);
         const gray = perseveranceGrayness(t);
         const vignette = perseveranceSpriteState.images.vignette;
         if(vignette && vignette.complete && vignette.naturalWidth && gray > 0.001 && t >= 16){
@@ -3282,7 +3479,7 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 </script>
 <script src="online-mode.js?v=20260530e"></script>
 <script src="boxing-fight-mode.js?v=20260322-stage6"></script>
-<script src="combat-mode.js?v=20260602l"></script>
+<script src="combat-mode.js?v=20260608c"></script>
 <script src="ballistic-mode.js?v=20260601h"></script>
 <script src="boxing-match-wg-mode.js?v=20260608b"></script>
 <script src="broken-reality-mode.js"></script>

@@ -229,35 +229,42 @@
   }
 
   function combatDepth(t){
-    // No custom idle drift here. unknownBG is drawn at unknownnew.json's
-    // source defaultZoom so it does not ride the close-up gameplay camera.
-    const bgX = 0;
-    const bgY = 0;
+    const camZoom = Number(state?.camera?.zoom || 1);
+    const focusX = Number.isFinite(state?.camera?.focusX) ? state.camera.focusX : 640;
+    const focusY = Number.isFinite(state?.camera?.focusY) ? state.camera.focusY : 420;
+    const reduce = !!window.REDUCE_MOTION;
+    const pan = reduce ? 0 : clampValue((focusX - 640) / 520, -1.15, 1.15);
+    const lift = reduce ? 0 : clampValue((focusY - 430) / 430, -1, 1);
+    const zoomPush = reduce ? 0 : clampValue((camZoom - 1.05) / 0.75, 0, 1);
+    const sourceDrift = reduce ? 0 : Math.sin(t * 0.32 + 0.8) * 0.34 + Math.cos(t * 0.19 + 1.7) * 0.18;
+    const far = wiiLayerDepth("far", pan * 0.48, sourceDrift * 0.45, t);
+    const mid = wiiLayerDepth("mid", pan * 0.72, sourceDrift * 0.72, t);
+    const near = wiiLayerDepth("near", pan * 1.02, sourceDrift, t);
     return {
-      far: 0,
-      mid: 0,
-      near: 0,
-      farY: 0,
-      midY: 0,
-      nearY: 0,
-      lean: 0,
-      bgX,
-      bgY,
+      far: far.x * (0.45 + zoomPush * 0.45),
+      mid: mid.x * (0.65 + zoomPush * 0.55),
+      near: near.x * (0.85 + zoomPush * 0.75),
+      farY: far.y + lift * 3,
+      midY: mid.y + lift * 8,
+      nearY: near.y + lift * 15,
+      lean: pan * 0.018 * zoomPush,
+      bgX: 0,
+      bgY: 0,
       scale: {
-        far: 1,
-        mid: 1,
-        near: 1,
-        platform: 1
+        far: far.scale,
+        mid: mid.scale,
+        near: near.scale,
+        platform: 1 + zoomPush * 0.012
       },
       angle: {
-        far: 0,
-        mid: 0,
-        near: 0
+        far: far.angle,
+        mid: mid.angle,
+        near: near.angle
       },
       projection: {
-        far: 1,
-        mid: 1,
-        near: 1
+        far: far.projection,
+        mid: mid.projection,
+        near: near.projection
       }
     };
   }
@@ -320,8 +327,6 @@
   }
 
   function wiikZStageDepthStyle(layer, depth){
-    // No custom layer drift. The draw path below applies the source
-    // unknownnew.lua scroll factors for each Wiik Z sprite.
     if(layer === "bg"){
       return {
         x: Number(depth?.bgX || 0),
@@ -330,7 +335,34 @@
         angle: 0
       };
     }
-    return { x: 0, y: 0, scale: 1, angle: 0 };
+    if(layer === "far"){
+      return {
+        x: Number(depth?.far || 0) * 0.12,
+        y: Number(depth?.farY || 0) * 0.28,
+        scale: Number(depth?.scale?.far || 1),
+        angle: Number(depth?.angle?.far || 0) * 0.3
+      };
+    }
+    if(layer === "near"){
+      return {
+        x: Number(depth?.near || 0) * 0.24,
+        y: Number(depth?.nearY || 0) * 0.42,
+        scale: Number(depth?.scale?.near || 1),
+        angle: Number(depth?.angle?.near || 0) * 0.22
+      };
+    }
+    return {
+      x: Number(depth?.mid || 0) * 0.18,
+      y: Number(depth?.midY || 0) * 0.35,
+      scale: Number(depth?.scale?.mid || 1),
+      angle: Number(depth?.angle?.mid || 0) * 0.28
+    };
+  }
+
+  function wiikZDepthKey(layer){
+    if(layer === "near" || layer === "split") return "near";
+    if(layer === "far" || layer === "back4") return "far";
+    return "mid";
   }
 
   function wiikZMattBaseAnchor(){
@@ -753,13 +785,20 @@
       if(!imgReady(image)) continue;
       const fadeIn = Math.min(1, rawP / 0.14);
       const fadeOut = 1 - Math.max(0, (rawP - 0.82) / 0.18);
-      const centerX = canvas.width * (spec.sx + (spec.ex - spec.sx) * p) + depth.mid * 0.16 + Math.sin(t * 1.1 + spec.delay * 3) * spec.drift * (0.25 + p);
-      const centerY = canvas.height * (spec.sy + (spec.ey - spec.sy) * p) + depth.midY * 0.52 + Math.cos(t * 0.9 + spec.delay * 4) * spec.drift * 0.22;
-      const scale = spec.s0 + (spec.s1 - spec.s0) * p;
+      const depthKey = wiikZDepthKey(spec.layer);
+      const layerX = Number(depth?.[depthKey] || 0);
+      const layerY = Number(depth?.[depthKey + "Y"] || 0);
+      const layerScale = Number(depth?.scale?.[depthKey] || 1);
+      const layerXWeight = depthKey === "near" ? 0.52 : depthKey === "mid" ? 0.34 : 0.18;
+      const layerYWeight = depthKey === "near" ? 0.7 : depthKey === "mid" ? 0.52 : 0.34;
+      const centerX = canvas.width * (spec.sx + (spec.ex - spec.sx) * p) + layerX * layerXWeight + Math.sin(t * 1.1 + spec.delay * 3) * spec.drift * (0.25 + p);
+      const centerY = canvas.height * (spec.sy + (spec.ey - spec.sy) * p) + layerY * layerYWeight + Math.cos(t * 0.9 + spec.delay * 4) * spec.drift * 0.22;
+      const scale = (spec.s0 + (spec.s1 - spec.s0) * p) * (0.98 + (layerScale - 1) * 0.55);
       const scroll = WIIK_Z_LAYER_SCROLL[spec.layer] || WIIK_Z_LAYER_SCROLL.mid;
       const pos = combatCameraParallaxPoint(centerX - image.naturalWidth * scale * 0.5, centerY - image.naturalHeight * scale * 0.5, scroll, scroll);
       queue.push({
         p,
+        layer: depthKey,
         key: spec.key,
         x: pos.x,
         y: pos.y,
@@ -769,7 +808,8 @@
         flip: spec.flip
       });
     }
-    queue.sort((a, b) => a.p - b.p);
+    const layerOrder = { far: 0, mid: 1, near: 2 };
+    queue.sort((a, b) => (layerOrder[a.layer] - layerOrder[b.layer]) || a.p - b.p);
     for(const rock of queue){
       drawImageRotated(rock.key, rock.x, rock.y, rock.scale, rock.angle, rock.alpha, rock.flip);
     }
