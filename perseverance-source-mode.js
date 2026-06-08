@@ -109,48 +109,87 @@
       return current;
     }
 
-    function sourceStageZoom(time, side) {
-      const fallback = side === "player" ? STAGE.playerZoom : STAGE.zoom;
-      const appliesToSide = event => {
-        const p = event.params || [];
-        if (side === "player") return !!p[1];
-        if (side === "gf") return !!p[3];
-        return !!p[2] || !!p[0];
+    function sourceZoomValue(time, key) {
+      const base = key === "default" ? STAGE.zoom : key === "bf" ? STAGE.playerZoom : -1;
+      const flagIndex = key === "default" ? 0 : key === "bf" ? 1 : key === "dad" ? 2 : 3;
+      let current = base;
+      let active = null;
+      const advance = toTime => {
+        if (!active) return;
+        if (toTime < active.start + active.duration) {
+          const ease = sourceEase(active.ease, active.mode, (toTime - active.start) / Math.max(0.001, active.duration));
+          current = lerp(active.from, active.to, ease);
+        } else {
+          current = active.to;
+          active = null;
+        }
       };
-      return eventTween(
-        "Change Stage Zoom",
-        time,
-        fallback,
-        e => num(e.params?.[5], fallback),
-        6,
-        appliesToSide
-      );
+      for (const event of sourceEvents("Change Stage Zoom").sort((a, b) => a.time - b.time)) {
+        const p = event.params || [];
+        if (!p[flagIndex]) continue;
+        if (event.time > time) break;
+        advance(event.time);
+        const target = num(p[5], current);
+        const duration = secondsForSteps(event.time, p[6] || 0);
+        if (p[4] && duration > 0) {
+          active = { start: event.time, duration, from: current, to: target, ease: p[7], mode: p[8] };
+        } else {
+          current = target;
+          active = null;
+        }
+      }
+      advance(time);
+      return current;
+    }
+    function sourceStageZoom(time, side) {
+      const defaultZoom = sourceZoomValue(time, "default");
+      const sideZoom = side === "player"
+        ? sourceZoomValue(time, "bf")
+        : side === "gf"
+          ? sourceZoomValue(time, "gf")
+          : sourceZoomValue(time, "dad");
+      return sideZoom === -1 ? defaultZoom : sideZoom;
     }
     function sourceCameraSide(time) {
       let side = "opp";
       for (const event of sourceEvents("Camera Movement").sort((a, b) => a.time - b.time)) {
         if (event.time > time) break;
-        side = num(event.params?.[0]) === 1 ? "player" : "opp";
+        const target = num(event.params?.[0]);
+        side = target === 1 ? "player" : target === 2 ? "gf" : "opp";
       }
       return side;
     }
-    function sourceCharacterOffset(index, time) {
+    function sourceCharacterCameraOffset(index, time) {
       let current = { x: 0, y: 0 };
+      let active = null;
+      const advance = toTime => {
+        if (!active) return;
+        if (toTime < active.start + active.duration) {
+          const ease = sourceEase(active.ease, active.mode, (toTime - active.start) / Math.max(0.001, active.duration));
+          current = {
+            x: lerp(active.from.x, active.to.x, ease),
+            y: lerp(active.from.y, active.to.y, ease)
+          };
+        } else {
+          current = active.to;
+          active = null;
+        }
+      };
       for (const event of sourceEvents("Change Character Offset").sort((a, b) => a.time - b.time)) {
         const p = event.params || [];
         if (num(p[1], -1) !== index) continue;
         if (event.time > time) break;
-        const target = { x: num(p[2]), y: num(p[3]) };
+        advance(event.time);
+        const target = { x: current.x + num(p[2]), y: current.y + num(p[3]) };
         const duration = secondsForSteps(event.time, p[4] || 0);
-        if (duration > 0 && time < event.time + duration) {
-          const ease = sourceEase(p[5], p[6], (time - event.time) / duration);
-          return {
-            x: lerp(current.x, target.x, ease),
-            y: lerp(current.y, target.y, ease)
-          };
+        if (p[0] && duration > 0) {
+          active = { start: event.time, duration, from: { ...current }, to: target, ease: p[5], mode: p[6] };
+        } else {
+          current = target;
+          active = null;
         }
-        current = target;
       }
+      advance(time);
       return current;
     }
 
@@ -181,11 +220,81 @@
     perseverancePlayerDirAnim = function(dir) { return perseveranceDirAnim(dir); };
     perseverancePlayerMissAnim = function(dir) { return perseveranceMissAnim(dir); };
 
+    function sourceCharacterName(index, time) {
+      let name = index === 0 ? "sans_perseverance" : index === 1 ? "bf_frisk" : "gf";
+      for (const event of sourceEvents("Change Character").sort((a, b) => a.time - b.time)) {
+        if (event.time > time) break;
+        if (num(event.params?.[0], -1) === index) name = String(event.params?.[1] || name);
+      }
+      return name;
+    }
+    function sourceAnimSuffix(index, time) {
+      let suffix = "";
+      for (const event of sourceEvents("Change Char Anim Suffix").sort((a, b) => a.time - b.time)) {
+        if (event.time > time) break;
+        if (num(event.params?.[0], -1) === index) suffix = String(event.params?.[1] || "");
+      }
+      return suffix;
+    }
+    function sourceForcedAnimation(index, time) {
+      let current = null;
+      const phaseEvents = sourceEvents().filter(event =>
+        event.name === "Play Animation" ||
+        event.name === "Change Character" ||
+        event.name === "Change Char Anim Suffix"
+      ).sort((a, b) => a.time - b.time);
+      for (const event of phaseEvents) {
+        if (event.time > time) break;
+        if (num(event.params?.[0], -1) !== index) continue;
+        if (event.name === "Play Animation") current = { name: String(event.params?.[1] || ""), start: event.time, forced: !!event.params?.[2] };
+        else current = null;
+      }
+      return current;
+    }
+
     const originalPerseveranceCharacter = perseveranceCharacter;
     perseveranceCharacter = function(kind, time) {
-      const data = originalPerseveranceCharacter(kind, time);
-      if (kind === "boyfriend") data.flipX = false;
-      return data;
+      if (kind !== "sans") {
+        const data = originalPerseveranceCharacter(kind, time);
+        if (kind === "boyfriend" && data) data.flipX = false;
+        return data;
+      }
+      const characterName = sourceCharacterName(0, time);
+      if (characterName === "sans_pixel") {
+        const sprite = window.PERSEVERANCE_DATA.sprites.sansPixel;
+        const pose = state.poses.sans;
+        const held = perseveranceHeldNote("sans", perseveranceTime());
+        const dir = sportingLaneKey((held ? held.lane : pose.lane) || 0);
+        const age = performance.now() / 1000 - pose.time;
+        const active = perseveranceAnimation(sprite, perseveranceDirAnim(dir));
+        const idle = perseveranceAnimation(sprite, "idle");
+        if (held && active) return { sprite, image: perseveranceSpriteState.images.sansPixel, anim: active, elapsed: Math.max(0, perseveranceTime() - held.time), loop: false, flipX: false, alpha: 1 };
+        if (age >= 0 && active && age < sportingAnimDuration(active.frames, active.fps || 12, 0.18, 0.8)) return { sprite, image: perseveranceSpriteState.images.sansPixel, anim: active, elapsed: age, loop: false, flipX: false, alpha: 1 };
+        return { sprite, image: perseveranceSpriteState.images.sansPixel, anim: idle, elapsed: time * 0.5, loop: true, flipX: false, alpha: 1 };
+      }
+      const sprite = window.PERSEVERANCE_DATA.sprites.sans;
+      const pose = state.poses.sans;
+      const held = perseveranceHeldNote("sans", perseveranceTime());
+      const dir = sportingLaneKey((held ? held.lane : pose.lane) || 0);
+      const age = performance.now() / 1000 - pose.time;
+      const suffix = sourceAnimSuffix(0, time);
+      const forced = sourceForcedAnimation(0, time);
+      const activeName = perseveranceDirAnim(dir) + suffix;
+      const active = perseveranceAnimation(sprite, activeName) || perseveranceAnimation(sprite, perseveranceDirAnim(dir));
+      if (held && active) return { sprite, image: perseveranceSpriteState.images.sans, anim: active, elapsed: Math.max(0, perseveranceTime() - held.time), loop: false, flipX: false, alpha: 1 };
+      if (age >= 0 && active && age < sportingAnimDuration(active.frames, active.fps || 24, 0.16, 0.7)) return { sprite, image: perseveranceSpriteState.images.sans, anim: active, elapsed: age, loop: false, flipX: false, alpha: 1 };
+      if (forced?.name) {
+        const intro = perseveranceAnimation(sprite, forced.name);
+        const loop = perseveranceAnimation(sprite, forced.name + "-loop") || (forced.name === "eyedle" ? intro : null);
+        const elapsed = Math.max(0, time - forced.start);
+        const introLen = perseveranceExactAnimDuration(intro);
+        if (intro && (forced.name === "eyedle" || elapsed < introLen || !loop)) {
+          return { sprite, image: perseveranceSpriteState.images.sans, anim: intro, elapsed, loop: forced.name === "eyedle", flipX: false, alpha: 1 };
+        }
+        if (loop) return { sprite, image: perseveranceSpriteState.images.sans, anim: loop, elapsed: Math.max(0, elapsed - introLen), loop: true, flipX: false, alpha: 1 };
+      }
+      const idle = perseveranceAnimation(sprite, "idle" + suffix) || perseveranceAnimation(sprite, "idle");
+      return { sprite, image: perseveranceSpriteState.images.sans, anim: idle, elapsed: time * 0.5, loop: true, flipX: false, alpha: 1 };
     };
 
     function currentFrameData(kind, time) {
@@ -198,9 +307,8 @@
       const positions = window.PERSEVERANCE_DATA.stage.positions;
       if (kind === "boyfriend") {
         const p = positions.player;
-        const off = sourceCharacterOffset(1, time);
         const base = window.PERSEVERANCE_DATA.sprites.boyfriend.baseOffset || [0, 0];
-        return { x: num(p.x) + base[0] + off.x, y: num(p.y) + base[1] + off.y };
+        return { x: num(p.x) + base[0], y: num(p.y) + base[1] };
       }
       if (kind === "gf") {
         const p = positions.gf;
@@ -210,13 +318,20 @@
         };
       }
       const p = positions.opponent;
-      const off = sourceCharacterOffset(0, time);
-      const sprite = perseveranceIsPixelPhase(time) ? window.PERSEVERANCE_DATA.sprites.sansPixel : window.PERSEVERANCE_DATA.sprites.sans;
+      const sprite = sourceCharacterName(0, time) === "sans_pixel" ? window.PERSEVERANCE_DATA.sprites.sansPixel : window.PERSEVERANCE_DATA.sprites.sans;
       const base = sprite.baseOffset || [0, 0];
-      return { x: num(p.x) + base[0] + off.x, y: num(p.y) + base[1] + off.y };
+      return { x: num(p.x) + base[0], y: num(p.y) + base[1] };
+    }
+    function sourceCameraFrame(kind, time) {
+      const data = perseveranceCharacter(kind, time);
+      if (!data?.sprite) return null;
+      const idleName = kind === "gf" ? "danceLeft" : "idle";
+      const idle = perseveranceAnimation(data.sprite, idleName) || data.anim;
+      const frame = idle?.frames?.[0] || data.anim?.frames?.[0] || null;
+      return frame ? { data, frame } : null;
     }
     function characterBox(kind, time) {
-      const current = currentFrameData(kind, time);
+      const current = sourceCameraFrame(kind, time);
       const pos = stagePosition(kind, time);
       if (!current) return { x: pos.x, y: pos.y, w: 1, h: 1 };
       const scale = current.data.sprite.scale || 1;
@@ -244,30 +359,78 @@
       const frameLerp = follow >= 1 ? 0.035 : Math.min(0.25, follow);
       return clamp01(1 - Math.pow(1 - frameLerp, dt * 60));
     }
+    function sourceZoomBlend(dt) {
+      return clamp01(1 - Math.pow(1 - 0.05, dt * 60));
+    }
+    function sourceCharacterBaseCameraOffset(kind, time) {
+      if (kind === "sans") return sourceCharacterName(0, time) === "sans_pixel" ? { x: -310, y: 30 } : { x: 0, y: -50 };
+      return { x: 0, y: 0 };
+    }
+    function sourceCameraEventOffset(side, time) {
+      if (side === "player") return sourceCharacterCameraOffset(1, time);
+      if (side === "gf") return sourceCharacterCameraOffset(2, time);
+      return sourceCharacterCameraOffset(0, time);
+    }
     function sourceCameraOffset(side, time) {
       const positions = window.PERSEVERANCE_DATA.stage.positions;
-      if (perseveranceIsPixelPhase(time)) return { x: -310, y: 30 };
+      const kind = side === "player" ? "boyfriend" : side === "gf" ? "gf" : "sans";
+      const charBase = sourceCharacterBaseCameraOffset(kind, time);
+      const eventOffset = sourceCameraEventOffset(side, time);
       if (side === "player") {
         const p = positions.player;
-        return { x: num(p.camxoffset, -180), y: num(p.camyoffset, -40) };
+        return { x: num(p.camxoffset, -180) + charBase.x + eventOffset.x, y: num(p.camyoffset, -40) + charBase.y + eventOffset.y };
       }
       if (side === "gf") {
         const p = positions.gf;
-        return { x: num(p.camxoffset, 0), y: num(p.camyoffset, 0) };
+        return { x: num(p.camxoffset, 0) + charBase.x + eventOffset.x, y: num(p.camyoffset, 0) + charBase.y + eventOffset.y };
       }
       const p = positions.opponent;
-      return { x: num(p.camxoffset, 200), y: num(p.camyoffset, 40) };
+      return { x: num(p.camxoffset, 200) + charBase.x + eventOffset.x, y: num(p.camyoffset, 40) + charBase.y + eventOffset.y };
+    }
+    function sourceCamMoveOffset(time) {
+      const t = s => timeForStep(s);
+      if (time >= t(1000) && time < t(1040)) return 0;
+      if (time >= t(1136) && time < t(1167)) return 0;
+      return 15;
+    }
+    function sourceCurrentSingDir(side, time) {
+      if (side === "gf") return null;
+      const noteSide = side === "player" ? "player" : "opp";
+      let best = null;
+      const notes = state?.chart?.notes || window.PERSEVERANCE_DATA?.chart?.notes || [];
+      for (const note of notes) {
+        if (note.side !== noteSide) continue;
+        if (note.time > time + 0.04) break;
+        const end = note.time + Math.max(0.18, num(note.sLen, 0) + 0.14);
+        if (time >= note.time - 0.025 && time <= end) best = note;
+      }
+      if (best) return sportingLaneKey(best.lane);
+      const poseKey = side === "player" ? "player" : "sans";
+      const pose = state?.poses?.[poseKey];
+      const age = performance.now() / 1000 - (pose?.time || -99);
+      return age >= 0 && age < 0.18 ? sportingLaneKey(pose.lane || 0) : null;
+    }
+    function sourceSingCameraOffset(side, time) {
+      const dir = sourceCurrentSingDir(side, time);
+      const move = sourceCamMoveOffset(time);
+      if (!dir || move <= 0) return { x: 0, y: 0 };
+      if (dir === "left") return { x: -move, y: 0 };
+      if (dir === "right") return { x: move, y: 0 };
+      if (dir === "up") return { x: 0, y: -move };
+      return { x: 0, y: move };
     }
     function sourceCameraTarget(time) {
-      const side = perseveranceIsPixelPhase(time) ? "opp" : sourceCameraSide(time);
-      const box = characterBox(side === "player" ? "boyfriend" : "sans", time);
+      const side = sourceCharacterName(0, time) === "sans_pixel" ? "opp" : sourceCameraSide(time);
+      const kind = side === "player" ? "boyfriend" : side === "gf" ? "gf" : "sans";
+      const box = characterBox(kind, time);
       const offset = sourceCameraOffset(side, time);
-      const idle = sourceIdleCamera(time);
+      const sing = sourceSingCameraOffset(side, time);
+      const idle = sourceIdleCamera(time, side);
       const zoomBase = sourceStageZoom(time, side);
       const fit = Math.min(canvas.width / SOURCE_W, canvas.height / SOURCE_H) || 1;
       const zoom = Math.max(0.05, zoomBase * fit);
-      const focusX = box.x + box.w / 2 + offset.x + idle.x;
-      const focusY = box.y + box.h / 2 + offset.y + idle.y;
+      const focusX = box.x + box.w / 2 + offset.x + sing.x + idle.x;
+      const focusY = box.y + box.h / 2 + offset.y + sing.y + idle.y;
       return {
         side,
         zoom,
@@ -287,9 +450,10 @@
       } else if (Math.abs(time - last.time) > 0.00001) {
         const dt = Math.max(0, Math.min(0.25, time - last.time));
         const blend = sourceCameraBlend(follow, dt);
+        const zoomBlend = sourceZoomBlend(dt);
         const camera = {
           side: target.side,
-          zoom: lerp(last.camera.zoom, target.zoom, blend),
+          zoom: lerp(last.camera.zoom, target.zoom, zoomBlend),
           scrollX: lerp(last.camera.scrollX, target.scrollX, blend),
           scrollY: lerp(last.camera.scrollY, target.scrollY, blend)
         };
@@ -297,17 +461,18 @@
       }
       return sourceCameraState.camera;
     }
-    function sourceIdleCamera(time) {
+    function sourceIdleCamera(time, side) {
+      if (sourceCurrentSingDir(side, time)) return { x: 0, y: 0 };
       let amp = 0;
-      let speed = 0;
       for (const event of sourceEvents("Idle Cam Movement").sort((a, b) => a.time - b.time)) {
         if (event.time > time) break;
         amp = num(event.params?.[0]);
-        speed = num(event.params?.[1]);
       }
+      if (amp <= 0) return { x: 0, y: 0 };
+      const phase = time * (30 / amp);
       return {
-        x: Math.sin(time * (0.8 + speed)) * amp * 0.18,
-        y: Math.cos(time * (0.7 + speed)) * amp * 0.11
+        x: Math.sin(phase) * amp,
+        y: (Math.sin(phase * 2) / 2) * (amp * 0.6)
       };
     }
     function worldToScreen(camera, x, y, scrollX = 1, scrollY = 1) {
@@ -336,7 +501,8 @@
       const current = currentFrameData(kind, time);
       if (!current) return;
       const pos = stagePosition(kind, time);
-      const point = worldToScreen(camera, pos.x, pos.y);
+      const animOffset = current.data.anim?.offset || [0, 0];
+      const point = worldToScreen(camera, pos.x - num(animOffset[0]), pos.y - num(animOffset[1]));
       const sourceScale = current.data.sprite.scale || 1;
       const drawScale = sourceScale * camera.zoom;
       const anchorX = point.x + (((current.frame.fw || current.frame.w) / 2) + (current.frame.fx || 0)) * drawScale;
