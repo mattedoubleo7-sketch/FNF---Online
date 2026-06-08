@@ -388,9 +388,41 @@
     function sourceBloomRaw(time) {
       return eventTween("Bloom Effect", time, 1.4, e => num(e.params?.[1], 1.4), 2);
     }
+    function sourceBloomSize(time) {
+      const t = s => timeForStep(s);
+      let size = 10;
+      const pulses = [
+        [645, 10, 25, 8],
+        [752, 35, 10, 8],
+        [760, 35, 10, 8],
+        [768, 35, 10, 8],
+        [880, 35, 10, 8],
+        [888, 35, 10, 8],
+        [896, 35, 10, 8],
+        [1840, 15, 30, 12],
+        [1936, 32, 15, 8],
+        [1952, 32, 15, 8],
+        [1968, 32, 15, 8],
+        [2064, 32, 15, 8],
+        [2080, 32, 15, 8],
+        [2096, 32, 15, 8],
+        [2288, 10, 50, 4],
+        [2528, 10, 50, 6],
+        [2536, 10, 50, 26]
+      ];
+      if (time >= t(2128)) size = 10;
+      for (const [step, from, to, steps] of pulses) {
+        const start = t(step);
+        if (time < start) continue;
+        const duration = secondsForSteps(start, steps);
+        size = time < start + duration ? lerp(from, to, sourceEase("quad", "Out", (time - start) / duration)) : to;
+      }
+      return size;
+    }
     const originalBloomStrength = perseveranceBloomStrength;
     perseveranceBloomStrength = function(time) {
       if (state?.selectedSong !== "perseverance") return originalBloomStrength(time);
+      if (Math.abs((window.__perseveranceOfficialBloomTime || -999) - time) < 0.05) return 0;
       if (perseveranceIsPixelPhase(time)) return 0;
       return clamp01(sourceBloomRaw(time) / 3.2);
     };
@@ -462,6 +494,8 @@
       return {
         heat: Math.min(0.12, water * 0.12),
         chrom: Math.min(0.16, chrom * 0.18),
+        waterStrength: water,
+        chromDistortion: chrom,
         dust: snow.layers / 37,
         light: sourceFogIntensity(time) * 0.28,
         radial: eventTween("Screen Vignette", time, 1.4, e => num(e.params?.[1], 1), 3) * 0.08,
@@ -471,6 +505,23 @@
         staticStrength,
         glitch
       };
+    }
+    function sourcePixelBlockSize(time) {
+      const t = s => timeForStep(s);
+      const transitions = [
+        [1168, 1, 16, 8],
+        [1184, 32, 1, 24],
+        [1688, 1, 16, 7.7],
+        [1696, 16, 1, 8]
+      ];
+      let block = 1;
+      for (const [step, from, to, steps] of transitions) {
+        const start = t(step);
+        if (time < start) continue;
+        const duration = secondsForSteps(start, steps);
+        block = time < start + duration ? lerp(from, to, sourceEase("circ", "Out", (time - start) / duration)) : to;
+      }
+      return block;
     }
     function sourceFogIntensity(time) {
       const s1840 = timeForStep(1840);
@@ -547,9 +598,40 @@
 
     const originalApplyShaders = applyPerseveranceScreenShaders;
     applyPerseveranceScreenShaders = function(time) {
-      originalApplyShaders(time);
+      window.__perseveranceOfficialBloomTime = -999;
       if (state?.selectedSong !== "perseverance" || window.PERFORMANCE_MODE || state?.settings?.performance) return;
       const fx = perseveranceShaderState(time);
+      const camera = sourceCamera(time);
+      const warpCtx = typeof syncPerseveranceWarpCanvas === "function" ? syncPerseveranceWarpCanvas() : null;
+      if (warpCtx && window.FNF_WEBGL?.drawDustinPostStack) {
+        warpCtx.clearRect(0, 0, perseveranceWarpCanvas.width, perseveranceWarpCanvas.height);
+        warpCtx.drawImage(canvas, 0, 0, perseveranceWarpCanvas.width, perseveranceWarpCanvas.height);
+        const usedOfficial = window.FNF_WEBGL.drawDustinPostStack(perseveranceWarpCanvas, {
+          time,
+          resX: SOURCE_W,
+          resY: SOURCE_H,
+          grayness: perseveranceGrayness(time),
+          staticStrength: fx.staticStrength,
+          chromDistortion: fx.chromDistortion || 0,
+          waterStrength: fx.waterStrength || 0,
+          glitchAmount: fx.glitch || 0,
+          pixelBlockSize: sourcePixelBlockSize(time),
+          bloomBrightness: perseveranceIsPixelPhase(time) ? 0 : sourceBloomRaw(time),
+          bloomSize: sourceBloomSize(time),
+          bloomThreshold: 0.5,
+          fogIntensity: perseveranceIsPixelPhase(time) ? 0 : sourceFogIntensity(time),
+          fogApplyY: perseveranceIsPixelPhase(time) ? 9999999 : 1520,
+          fogApplyRange: perseveranceIsPixelPhase(time) ? 0 : 900,
+          cameraZoom: camera.zoom,
+          cameraX: camera.scrollX,
+          cameraY: camera.scrollY
+        });
+        if (usedOfficial) {
+          window.__perseveranceOfficialBloomTime = time;
+          return;
+        }
+      }
+      originalApplyShaders(time);
       if (fx.staticStrength > 0.01) {
         ctx.save();
         ctx.globalAlpha = Math.min(0.18, fx.staticStrength * 0.035);

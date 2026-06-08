@@ -1322,7 +1322,7 @@ body.gamepadOn.gameRunning #consoleHud { display: none; }
 <script src="genocide-data.js?v=genocide-v10"></script>
 <script src="genocide-commands.js?v=genocide-v10"></script>
 <script src="genocide-revival-data.js?v=genocide-revival-v8"></script>
-<script src="webgl-renderer.js?v=20260602b"></script>
+<script src="webgl-renderer.js?v=20260608c"></script>
 <script>
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
@@ -1334,6 +1334,12 @@ const DUSTIN_SHADER_SOURCES = Object.freeze({
     lightPreprocess: "shaders/dustin-light_preprocess.frag",
     chromaticWarp: "shaders/dustin-chromaticWarp.frag",
     waterDistortion: "shaders/dustin-waterDistortion.frag",
+    blackwhite: "shaders/dustin-blackwhite.frag",
+    static: "shaders/dustin-static.frag",
+    pixel: "shaders/dustin-pixel.frag",
+    fog: "shaders/dustin-fog.frag",
+    gradient: "shaders/dustin-gradient.frag",
+    glitching2: "shaders/dustin-glitching2.frag",
     cine: "shaders/dustin-br_cine.frag"
 });
 const postFxCanvas = document.createElement("canvas");

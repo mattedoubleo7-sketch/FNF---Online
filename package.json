@@ -58,6 +58,7 @@
       "perseverance-source-events.js",
       "perseverance-source-mode.js",
       "assets/**/*",
+      "shaders/**/*",
       "*.ogg",
       "package.json",
       "broken-reality-data.js",

@@ -45,7 +45,8 @@
       height: 0,
       camera: null,
       parallax: null,
-      speedLines: null
+      speedLines: null,
+      dustinPost: null
     };
 
     function markFailed(error){
@@ -336,6 +337,278 @@
       }
     }
 
+    function ensureDustinPostPass(){
+      const gl = ensureContext();
+      if(!gl) return null;
+      if(state.dustinPost) return state.dustinPost;
+      try {
+        const program = createProgram(gl, `
+          attribute vec2 aPosition;
+          attribute vec2 aTexCoord;
+          varying vec2 vUv;
+          void main(){
+            vUv = aTexCoord;
+            gl_Position = vec4(aPosition, 0.0, 1.0);
+          }
+        `, `
+          precision mediump float;
+          uniform sampler2D uTexture;
+          uniform vec2 uTextureSize;
+          uniform vec2 uRes;
+          uniform float uTime;
+          uniform float uGrayness;
+          uniform float uStaticStrength;
+          uniform float uChromDistortion;
+          uniform float uWaterStrength;
+          uniform float uGlitchAmount;
+          uniform float uPixelBlockSize;
+          uniform float uBloomBrightness;
+          uniform float uBloomSize;
+          uniform float uBloomThreshold;
+          uniform float uFogIntensity;
+          uniform float uFogApplyY;
+          uniform float uFogApplyRange;
+          uniform float uCameraZoom;
+          uniform vec2 uCameraPosition;
+          varying vec2 vUv;
+
+          #define PI 3.1415926535897932384626433832795
+          #define TWO_PI 6.283185307179586476925286766559
+
+          float rand2(vec2 co){
+            return fract(sin(dot(co.xy, vec2(12.9898, 78.233))) * 43758.5453);
+          }
+
+          float waterRand(vec2 n){
+            return fract(sin(dot(n, vec2(12.9898, 4.1414))) * 43758.5453);
+          }
+
+          float waterNoise(vec2 n){
+            const vec2 d = vec2(0.0, 1.0);
+            vec2 b = floor(n);
+            vec2 f = smoothstep(vec2(0.0), vec2(1.0), fract(n));
+            return mix(mix(waterRand(b), waterRand(b + d.yx), f.x), mix(waterRand(b + d.xy), waterRand(b + d.yy), f.x), f.y);
+          }
+
+          vec2 pincushionDistortion(vec2 uv, float strength){
+            vec2 st = uv - 0.5;
+            float uvA = atan(st.x, st.y);
+            float uvD = dot(st, st);
+            return 0.5 + vec2(sin(uvA), cos(uvA)) * sqrt(uvD) * (1.0 - strength * uvD);
+          }
+
+          float glitchHash(vec2 v){
+            return fract(sin(dot(v, vec2(89.44, 19.36))) * 22189.22);
+          }
+
+          float glitchIHash(vec2 v, vec2 r){
+            float h00 = glitchHash(vec2(floor(v * r + vec2(0.0, 0.0)) / r));
+            float h10 = glitchHash(vec2(floor(v * r + vec2(1.0, 0.0)) / r));
+            float h01 = glitchHash(vec2(floor(v * r + vec2(0.0, 1.0)) / r));
+            float h11 = glitchHash(vec2(floor(v * r + vec2(1.0, 1.0)) / r));
+            vec2 ip = smoothstep(vec2(0.0), vec2(1.0), mod(v * r, 1.0));
+            return (h00 * (1.0 - ip.x) + h10 * ip.x) * (1.0 - ip.y) + (h01 * (1.0 - ip.x) + h11 * ip.x) * ip.y;
+          }
+
+          float glitchNoise(vec2 v){
+            float sum = 0.0;
+            for(int i = 1; i < 9; i++){
+              float fi = float(i);
+              sum += glitchIHash(v + vec2(fi), vec2(2.0 * pow(2.0, fi))) / pow(2.0, fi);
+            }
+            return sum;
+          }
+
+          vec2 fogRandom2(vec2 st){
+            st = vec2(dot(st, vec2(127.1, 311.7)), dot(st, vec2(269.5, 183.3)));
+            return -1.0 + 2.0 * fract(sin(st) * 43759.34517123);
+          }
+
+          float fogNoise(vec2 st){
+            vec2 i = floor(st);
+            vec2 f = fract(st);
+            vec2 u = f * f * (3.0 - 2.0 * f);
+            return mix(
+              mix(dot(fogRandom2(i + vec2(0.0, 0.0)), f - vec2(0.0, 0.0)),
+                  dot(fogRandom2(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0)), u.x),
+              mix(dot(fogRandom2(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0)),
+                  dot(fogRandom2(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0)), u.x),
+              u.y
+            );
+          }
+
+          float fogFbm(vec2 coord){
+            float value = 0.0;
+            float scale = 0.5;
+            for(int i = 0; i < 4; i++){
+              value += fogNoise(coord) * scale;
+              coord *= 2.0;
+              scale *= 0.5;
+            }
+            return value + 0.2;
+          }
+
+          float brightness(vec3 color){
+            return (color.r + color.g + color.b) / 3.0;
+          }
+
+          vec4 sampleDustin(vec2 uv){
+            uv = clamp(uv, vec2(0.0), vec2(1.0));
+            if(uChromDistortion > 0.0001){
+              float r = texture2D(uTexture, pincushionDistortion(uv, ((0.3 * uChromDistortion) * 0.9) + (uChromDistortion * 0.1))).r;
+              float g = texture2D(uTexture, pincushionDistortion(uv, ((0.15 * uChromDistortion) * 0.9) + (uChromDistortion * 0.1))).g;
+              float b = texture2D(uTexture, pincushionDistortion(uv, ((0.075 * uChromDistortion) * 0.9) + (uChromDistortion * 0.1))).b;
+              return vec4(r, g, b, texture2D(uTexture, uv).a);
+            }
+            return texture2D(uTexture, uv);
+          }
+
+          vec2 worldCoordFor(vec2 uv){
+            vec2 normalizedCoord = gl_FragCoord.xy / uTextureSize.xy;
+            vec2 ndc = normalizedCoord * 2.0 - 1.0;
+            ndc /= max(0.001, uCameraZoom);
+            vec2 zoomedScreenCoord = (ndc + 1.0) * 0.5 * uRes;
+            return zoomedScreenCoord + uCameraPosition;
+          }
+
+          void main(){
+            vec2 uv = vUv;
+            float blockSize = max(1.0, uPixelBlockSize);
+            if(blockSize > 1.001){
+              vec2 blocks = ((uRes + vec2(0.5, 0.5)) / blockSize) - vec2(0.5, 0.5);
+              vec2 texCoords = (uv * blocks) + (0.5 / uRes);
+              uv = floor(texCoords) / blocks;
+            }
+
+            if(uGlitchAmount > 0.0001){
+              uv.x += (glitchNoise(vec2(uv.y, uTime)) - 0.5) * 0.002;
+              uv.x += (glitchNoise(vec2(uv.y * 100.0, uTime * 10.0)) - 0.5) * (0.01 * uGlitchAmount);
+            }
+
+            if(uWaterStrength > 0.0001){
+              vec2 p = uv;
+              p.y += uTime * 0.1;
+              vec2 dstOffset = (vec4(waterNoise(p * vec2(30.0))).xy - vec2(0.3, 0.3)) * uWaterStrength * 0.03;
+              uv += dstOffset;
+            }
+
+            vec4 color = sampleDustin(uv);
+
+            if(uGlitchAmount > 0.0001){
+              float ogAlpha = color.a;
+              color *= 1.0 + clamp(glitchNoise(vec2(0.0, uv.y + uTime * 0.2)) * 0.6 - 0.25, 0.0, 0.1);
+              color.a = ogAlpha;
+            }
+
+            if(uStaticStrength > 0.0001){
+              color.xyz *= (1.0 + (rand2(uv + uTime * 0.01) - 0.2) * (uStaticStrength * 0.15));
+            }
+
+            if(uGrayness > 0.0001){
+              vec3 greyScale = vec3(dot(color.rgb, vec3(0.25)));
+              color = vec4((color.rgb * abs(1.0 - uGrayness)) + (greyScale * uGrayness), color.a);
+            }
+
+            vec2 worldCoord = worldCoordFor(uv);
+            if(uFogIntensity > 0.0001 && uFogApplyRange > 0.0){
+              vec2 st = worldCoord.xy / uRes.xy;
+              st *= uRes.xy / uRes.y;
+              vec2 pos = vec2(st * 3.0);
+              vec2 motion = vec2(fogFbm(pos + vec2(uTime * -0.2, uTime * -0.2)));
+              float fogAmount = fogFbm(pos + motion) * uFogIntensity;
+              vec3 fogColor = vec3(166.0 / 255.0, 185.0 / 255.0, 189.0 / 255.0);
+              vec3 bg = vec3(0.0);
+              float gradient = 0.0;
+              if(worldCoord.y <= uFogApplyY && worldCoord.y >= uFogApplyY - uFogApplyRange){
+                float dist = uFogApplyY - worldCoord.y;
+                gradient = 1.0 - (dist / uFogApplyRange);
+              } else if(worldCoord.y <= uFogApplyY + 100.0 && worldCoord.y >= uFogApplyY){
+                float dist = (uFogApplyY + 100.0) - worldCoord.y;
+                gradient = dist / 100.0;
+              }
+              if(gradient > 0.0){
+                vec3 fogEffect = mix(bg, fogColor, fogAmount * gradient);
+                vec3 effect = fogEffect * vec3(gradient * fogAmount);
+                color.rgb += effect;
+                if(color.a == 0.0 && brightness(effect) > 0.0) color.a = brightness(effect);
+              }
+
+              if(worldCoord.y <= uFogApplyY && worldCoord.y >= uFogApplyY - 1000.0 && color.a > 0.5){
+                float dist = uFogApplyY - worldCoord.y;
+                float g = 1.0 - (dist / 1000.0);
+                vec3 gradientCol = mix(vec3(0.0), fogColor * 1.3, g);
+                color += vec4(gradientCol * 2.0, 1.0) * (g * 0.06) * color.a;
+              }
+            }
+
+            if(uBloomBrightness > 0.0001 && uBloomSize > 0.0001){
+              vec4 bloom = vec4(0.0);
+              float weightSum = 0.0;
+              for(float d = 0.0; d < TWO_PI; d += 0.39269908169){
+                for(float i = 1.0; i <= 3.0; i += 1.0){
+                  float offset = (i / 3.0) * uBloomSize;
+                  float xOffset = (sin(d) * offset) / uTextureSize.y;
+                  float yOffset = (cos(d) * offset) / uTextureSize.x;
+                  vec2 sampleUv = clamp(uv + vec2(xOffset, yOffset), vec2(0.0), vec2(1.0));
+                  vec4 sampleColor = max(texture2D(uTexture, sampleUv) - uBloomThreshold, 0.0);
+                  float weight = exp(-2.0 * (i / 3.0));
+                  bloom += sampleColor * weight;
+                  weightSum += weight;
+                }
+              }
+              if(weightSum > 0.0) bloom /= weightSum;
+              color += bloom * uBloomBrightness;
+            }
+
+            gl_FragColor = color;
+          }
+        `);
+        const buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+          -1, -1, 0, 0,
+           1, -1, 1, 0,
+          -1,  1, 0, 1,
+           1,  1, 1, 1
+        ]), gl.STATIC_DRAW);
+        const texture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        state.dustinPost = {
+          program,
+          buffer,
+          texture,
+          aPosition: gl.getAttribLocation(program, "aPosition"),
+          aTexCoord: gl.getAttribLocation(program, "aTexCoord"),
+          uTexture: gl.getUniformLocation(program, "uTexture"),
+          uTextureSize: gl.getUniformLocation(program, "uTextureSize"),
+          uRes: gl.getUniformLocation(program, "uRes"),
+          uTime: gl.getUniformLocation(program, "uTime"),
+          uGrayness: gl.getUniformLocation(program, "uGrayness"),
+          uStaticStrength: gl.getUniformLocation(program, "uStaticStrength"),
+          uChromDistortion: gl.getUniformLocation(program, "uChromDistortion"),
+          uWaterStrength: gl.getUniformLocation(program, "uWaterStrength"),
+          uGlitchAmount: gl.getUniformLocation(program, "uGlitchAmount"),
+          uPixelBlockSize: gl.getUniformLocation(program, "uPixelBlockSize"),
+          uBloomBrightness: gl.getUniformLocation(program, "uBloomBrightness"),
+          uBloomSize: gl.getUniformLocation(program, "uBloomSize"),
+          uBloomThreshold: gl.getUniformLocation(program, "uBloomThreshold"),
+          uFogIntensity: gl.getUniformLocation(program, "uFogIntensity"),
+          uFogApplyY: gl.getUniformLocation(program, "uFogApplyY"),
+          uFogApplyRange: gl.getUniformLocation(program, "uFogApplyRange"),
+          uCameraZoom: gl.getUniformLocation(program, "uCameraZoom"),
+          uCameraPosition: gl.getUniformLocation(program, "uCameraPosition")
+        };
+        return state.dustinPost;
+      } catch(error) {
+        markFailed(error);
+        return null;
+      }
+    }
+
     function drawCameraPass(source, params){
       if(window.PERFORMANCE_MODE || !source) return false;
       const gl = ensureContext();
@@ -448,10 +721,61 @@
       }
     }
 
+    function drawDustinPostStack(source, params){
+      if(window.PERFORMANCE_MODE || !source) return false;
+      const gl = ensureContext();
+      const pass = gl && ensureDustinPostPass();
+      if(!gl || !pass || !syncSize()) return false;
+      if(typeof gl.isContextLost === "function" && gl.isContextLost()) return markFailed("WebGL context lost");
+      try {
+        gl.viewport(0, 0, state.width, state.height);
+        gl.clearColor(0, 0, 0, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.useProgram(pass.program);
+        gl.bindBuffer(gl.ARRAY_BUFFER, pass.buffer);
+        gl.enableVertexAttribArray(pass.aPosition);
+        gl.vertexAttribPointer(pass.aPosition, 2, gl.FLOAT, false, 16, 0);
+        gl.enableVertexAttribArray(pass.aTexCoord);
+        gl.vertexAttribPointer(pass.aTexCoord, 2, gl.FLOAT, false, 16, 8);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, pass.texture);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+        gl.uniform1i(pass.uTexture, 0);
+        gl.uniform2f(pass.uTextureSize, state.width, state.height);
+        gl.uniform2f(pass.uRes, clamp(params?.resX ?? 1280, 1, 4096), clamp(params?.resY ?? 720, 1, 4096));
+        gl.uniform1f(pass.uTime, Number(params?.time || 0));
+        gl.uniform1f(pass.uGrayness, clamp(params?.grayness ?? 0, 0, 1));
+        gl.uniform1f(pass.uStaticStrength, clamp(params?.staticStrength ?? 0, 0, 8));
+        gl.uniform1f(pass.uChromDistortion, clamp(params?.chromDistortion ?? 0, 0, 2));
+        gl.uniform1f(pass.uWaterStrength, clamp(params?.waterStrength ?? 0, 0, 2));
+        gl.uniform1f(pass.uGlitchAmount, clamp(params?.glitchAmount ?? 0, 0, 4));
+        gl.uniform1f(pass.uPixelBlockSize, clamp(params?.pixelBlockSize ?? 1, 1, 64));
+        gl.uniform1f(pass.uBloomBrightness, clamp(params?.bloomBrightness ?? 0, 0, 4));
+        gl.uniform1f(pass.uBloomSize, clamp(params?.bloomSize ?? 0, 0, 64));
+        gl.uniform1f(pass.uBloomThreshold, clamp(params?.bloomThreshold ?? 0.5, 0, 2));
+        gl.uniform1f(pass.uFogIntensity, clamp(params?.fogIntensity ?? 0, 0, 3));
+        gl.uniform1f(pass.uFogApplyY, clamp(params?.fogApplyY ?? 999999, -999999, 999999));
+        gl.uniform1f(pass.uFogApplyRange, clamp(params?.fogApplyRange ?? 0, 0, 4096));
+        gl.uniform1f(pass.uCameraZoom, clamp(params?.cameraZoom ?? 1, 0.05, 4));
+        gl.uniform2f(pass.uCameraPosition, clamp(params?.cameraX ?? 0, -999999, 999999), clamp(params?.cameraY ?? 0, -999999, 999999));
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        const error = gl.getError();
+        if(error !== gl.NO_ERROR) throw new Error("WebGL error " + error);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(state.fxCanvas, 0, 0, canvas.width, canvas.height);
+        return true;
+      } catch(error) {
+        return markFailed(error);
+      }
+    }
+
     return {
       drawCameraPass,
       drawParallaxPass,
       drawSpeedLines,
+      drawDustinPostStack,
       status(){
         return {
           available: !!state.gl && !state.failed,
