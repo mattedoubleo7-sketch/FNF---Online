@@ -319,7 +319,7 @@
         };
       }
       const p = positions.opponent;
-      const sprite = sourceCharacterName(0, time) === "sans_pixel" ? window.PERSEVERANCE_DATA.sprites.sansPixel : window.PERSEVERANCE_DATA.sprites.sans;
+      const sprite = window.PERSEVERANCE_DATA.sprites.sans;
       const base = sprite.baseOffset || [0, 0];
       return { x: num(p.x) + base[0], y: num(p.y) + base[1] };
     }
