@@ -11,7 +11,7 @@
       back: { key: "bgA", x: -60, y: 0, scale: 1, scrollX: 0.7, scrollY: 1 },
       frontBack: { key: "bgB", x: -40, y: 0, scale: 1, scrollX: 0.9, scrollY: 1 },
       mid: { key: "bgMid", x: 0, y: 0, scale: 1, scrollX: 1, scrollY: 1 },
-      foreground: { key: "bgFore", x: 15, y: -104, scale: 0.82, scrollX: 0.8, scrollY: 0.8, flixelScaleOrigin: true },
+      foreground: { key: "bgFore", x: 15, y: 250, scale: 1.08, scrollX: 0.8, scrollY: 0.8, flixelScaleOrigin: true },
       pillars: { key: "pillars", x: 1950, y: 900, scale: 7, scrollX: 1, scrollY: 1 }
     };
 
@@ -319,7 +319,9 @@
         };
       }
       const p = positions.opponent;
-      const sprite = window.PERSEVERANCE_DATA.sprites.sans;
+      const sprite = sourceCharacterName(0, time) === "sans_pixel"
+        ? window.PERSEVERANCE_DATA.sprites.sansPixel
+        : window.PERSEVERANCE_DATA.sprites.sans;
       const base = sprite.baseOffset || [0, 0];
       return { x: num(p.x) + base[0], y: num(p.y) + base[1] };
     }

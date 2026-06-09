@@ -37,6 +37,10 @@
   const cineImages = {};
   const charImages = {};
   const noteImages = {};
+  let brokenRealityFxCanvas = null;
+  let brokenRealityFxCtx = null;
+  let brokenRealityPixelCanvas = null;
+  let brokenRealityPixelCtx = null;
   const cineFlashSurfaceCache = new Map();
   const endingVideoSources = {
     youAre: "you-are-cutscene.mp4",
@@ -406,6 +410,262 @@
   const oppOffsetTimeline = buildCharacterOffsetTimeline(0);
   const playerOffsetTimeline = buildCharacterOffsetTimeline(1);
   const sansPapyrusDuetWindows = buildOpponentDuetWindows("sans_br", "phantom_paps_br");
+  const beatTimePoints = ((BR.chart && BR.chart.notes) || [])
+    .map(note => ({ beat: Number(note.beat), time: Number(note.time) }))
+    .filter(point => Number.isFinite(point.beat) && Number.isFinite(point.time))
+    .sort((a, b) => a.beat - b.beat)
+    .filter((point, index, points) => index === 0 || Math.abs(point.beat - points[index - 1].beat) > 0.0001);
+  if (!beatTimePoints.length || beatTimePoints[0].beat > 0.001) {
+    beatTimePoints.unshift({ beat: 0, time: 0 });
+  }
+
+  function brokenRealityStepToTime(step) {
+    const beat = Number(step || 0) / 4;
+    if (!beatTimePoints.length) {
+      return beat * Number(BR.chart?.spb || 0.5);
+    }
+    let prev = beatTimePoints[0];
+    let next = beatTimePoints[beatTimePoints.length - 1];
+    for (const point of beatTimePoints) {
+      if (point.beat <= beat) {
+        prev = point;
+      }
+      if (point.beat >= beat) {
+        next = point;
+        break;
+      }
+    }
+    if (Math.abs(next.beat - prev.beat) < 0.0001) {
+      const index = Math.max(0, beatTimePoints.indexOf(prev));
+      const before = beatTimePoints[Math.max(0, index - 1)] || prev;
+      const after = beatTimePoints[Math.min(beatTimePoints.length - 1, index + 1)] || prev;
+      const slope = (after.time - before.time) / Math.max(0.0001, after.beat - before.beat);
+      return prev.time + (beat - prev.beat) * slope;
+    }
+    const ratio = (beat - prev.beat) / (next.beat - prev.beat);
+    return lerp01(prev.time, next.time, ratio);
+  }
+
+  function brokenRealityStepDuration(step, durationSteps) {
+    return Math.max(1 / 60, brokenRealityStepToTime(Number(step || 0) + Number(durationSteps || 0)) - brokenRealityStepToTime(step));
+  }
+
+  function easeOutQuad01(t) {
+    const p = clamp(t, 0, 1);
+    return 1 - (1 - p) * (1 - p);
+  }
+
+  function easeInOutCube01(t) {
+    const p = clamp(t, 0, 1);
+    return p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+  }
+
+  function shaderTweenValue(t, step, from, to, durationSteps, easeName = "cubeInOut") {
+    const start = brokenRealityStepToTime(step);
+    const duration = brokenRealityStepDuration(step, durationSteps);
+    if (t < start || t > start + duration) {
+      return null;
+    }
+    const raw = (t - start) / duration;
+    const eased = easeName === "quadOut" ? easeOutQuad01(raw) : easeInOutCube01(raw);
+    return lerp01(Number(from || 0), Number(to || 0), eased);
+  }
+
+  function maxShaderTween(t, steps, from, to, durationSteps, easeName) {
+    let value = 0;
+    for (const step of steps) {
+      const tween = shaderTweenValue(t, step, from, to, durationSteps, easeName);
+      if (tween != null) {
+        value = Math.max(value, tween);
+      }
+    }
+    return value;
+  }
+
+  const BR_RADIAL_STEPS = [850, 977, 3104, 4832, 5088];
+  const BR_PAPYRUS_CHROM_STEPS = [1984, 2224, 2300, 2512, 2592, 2656, 2720, 2784];
+  const BR_SANS_SHADER_STEPS = [688, 944, 1072, 1200, 1232, 1328, 3428, 3552, 3680, 4448, 4576, 4588, 4608, 4620, 4640, 4654, 4672, 4688, 4768, 4800, 4960];
+  const BR_PIXEL_WINDOWS = [
+    { start: 1624, remove: 1650, duration: 12, ease: "quadOut" },
+    { start: 3808, remove: 3827, duration: 16, ease: "quadOut" }
+  ];
+
+  function brokenRealityPixelBlockSizeAt(t) {
+    let block = 1;
+    for (const window of BR_PIXEL_WINDOWS) {
+      const start = brokenRealityStepToTime(window.start);
+      const remove = brokenRealityStepToTime(window.remove);
+      if (t < start || t >= remove) {
+        continue;
+      }
+      const tween = shaderTweenValue(t, window.start, 1, 8, window.duration, window.ease);
+      block = Math.max(block, tween == null ? 8 : tween);
+    }
+    return block;
+  }
+
+  function brokenRealityScriptShaderStateAt(t, attackFx) {
+    const radial = maxShaderTween(t, BR_RADIAL_STEPS, 0.03, 0, 8, "cubeInOut");
+    const radialHud = maxShaderTween(t, BR_RADIAL_STEPS, 0.006, 0, 8, "cubeInOut");
+    const radialHeat = maxShaderTween(t, BR_RADIAL_STEPS, 0.03, 0, 8, "cubeInOut");
+    const radialChrom = maxShaderTween(t, BR_RADIAL_STEPS, 0.35, 0, 8, "cubeInOut");
+    const radialHudChrom = maxShaderTween(t, BR_RADIAL_STEPS, 0.05, 0, 8, "cubeInOut");
+    const papyrusChrom = maxShaderTween(t, BR_PAPYRUS_CHROM_STEPS, 0.35, 0.1, 6, "cubeInOut");
+    const papyrusHudChrom = maxShaderTween(t, BR_PAPYRUS_CHROM_STEPS, 0.09, 0, 6, "cubeInOut");
+    const sansHeat = maxShaderTween(t, BR_SANS_SHADER_STEPS, 0.03, 0, 8, "cubeInOut");
+    const sansHeatGame = maxShaderTween(t, BR_SANS_SHADER_STEPS, 0.06, 0, 8, "cubeInOut");
+    const sansChrom = maxShaderTween(t, BR_SANS_SHADER_STEPS, 0.35, 0, 8, "cubeInOut");
+    const sansHudChrom = maxShaderTween(t, BR_SANS_SHADER_STEPS, 0.05, 0, 8, "cubeInOut");
+    const attackChroma = Number(attackFx?.chromaAlpha || 0);
+    return {
+      radial: radial + radialHud,
+      heat: Math.max(radialHeat, sansHeat, sansHeatGame * 0.72),
+      chrom: Math.max(radialChrom, radialHudChrom * 2.4, papyrusChrom, papyrusHudChrom * 2.2, sansChrom, sansHudChrom * 2.4, attackChroma * 0.42),
+      pixelBlockSize: brokenRealityPixelBlockSizeAt(t),
+      bloomKick: Math.max(radial * 13, attackChroma * 0.35),
+      glitch: Math.max(0, attackChroma * 0.28)
+    };
+  }
+
+  function syncBrokenRealityFxCanvas() {
+    if (!brokenRealityFxCanvas) {
+      brokenRealityFxCanvas = document.createElement("canvas");
+      brokenRealityFxCtx = brokenRealityFxCanvas.getContext("2d");
+    }
+    if (!brokenRealityFxCtx) {
+      return null;
+    }
+    if (brokenRealityFxCanvas.width !== canvas.width || brokenRealityFxCanvas.height !== canvas.height) {
+      brokenRealityFxCanvas.width = canvas.width;
+      brokenRealityFxCanvas.height = canvas.height;
+    }
+    return brokenRealityFxCtx;
+  }
+
+  function drawBrokenRealityShaderFallback(source, fx, t, bloomBrightness, bloomSize, grayness) {
+    if (!source) {
+      return;
+    }
+    if (fx.pixelBlockSize > 1.01) {
+      const divisor = Math.max(1, Math.round(fx.pixelBlockSize));
+      const w = Math.max(1, Math.round(canvas.width / divisor));
+      const h = Math.max(1, Math.round(canvas.height / divisor));
+      if (!brokenRealityPixelCanvas) {
+        brokenRealityPixelCanvas = document.createElement("canvas");
+        brokenRealityPixelCtx = brokenRealityPixelCanvas.getContext("2d");
+      }
+      if (brokenRealityPixelCtx) {
+        if (brokenRealityPixelCanvas.width !== w || brokenRealityPixelCanvas.height !== h) {
+          brokenRealityPixelCanvas.width = w;
+          brokenRealityPixelCanvas.height = h;
+        }
+        brokenRealityPixelCtx.imageSmoothingEnabled = false;
+        brokenRealityPixelCtx.clearRect(0, 0, w, h);
+        brokenRealityPixelCtx.drawImage(source, 0, 0, w, h);
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(brokenRealityPixelCanvas, 0, 0, canvas.width, canvas.height);
+        ctx.restore();
+      }
+    }
+    if (fx.chrom > 0.012 || fx.heat > 0.006 || grayness > 0.01) {
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      ctx.globalAlpha = Math.min(0.22, fx.chrom * 0.34 + fx.heat * 1.2);
+      ctx.filter = "sepia(1) saturate(4.2) hue-rotate(302deg)";
+      ctx.drawImage(source, -Math.min(18, fx.chrom * 38), Math.sin(t * 11) * fx.heat * 18);
+      ctx.filter = "sepia(1) saturate(4.2) hue-rotate(142deg)";
+      ctx.drawImage(source, Math.min(18, fx.chrom * 38), -Math.cos(t * 9) * fx.heat * 18);
+      ctx.filter = "none";
+      ctx.restore();
+      if (grayness > 0.01) {
+        ctx.save();
+        ctx.globalAlpha = Math.min(0.46, grayness);
+        ctx.filter = "grayscale(1) contrast(1.12)";
+        ctx.drawImage(source, 0, 0);
+        ctx.restore();
+      }
+    }
+    if (fx.radial > 0.001 || bloomBrightness > 0.03) {
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      const passes = fx.radial > 0.001 ? 5 : 2;
+      for (let i = 1; i <= passes; i++) {
+        const p = i / passes;
+        const scale = 1 + p * (fx.radial * 10 + bloomBrightness * 0.028);
+        ctx.globalAlpha = Math.min(0.22, (bloomBrightness * 0.035 + fx.radial * 1.2) * (1 - p * 0.45));
+        ctx.filter = "blur(" + Math.min(18, bloomSize * 0.1 + p * 6).toFixed(2) + "px)";
+        ctx.translate(cx, cy);
+        ctx.scale(scale, scale);
+        ctx.drawImage(source, -cx, -cy);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+      }
+      ctx.filter = "none";
+      ctx.restore();
+    }
+  }
+
+  function applyBrokenRealityDustinShaders(t, attackFx) {
+    if (window.PERFORMANCE_MODE || state?.settings?.performance) {
+      return;
+    }
+    const fx = brokenRealityScriptShaderStateAt(t, attackFx);
+    const bloom = Number(state.br?.bloom || 1);
+    const rawSaturation = clamp(Number(state.br?.saturation || 1), 0, 1);
+    const grayness = clamp((1 - rawSaturation) * 0.72 + brokenRealityBlackoutAlphaAt(t) * 0.1, 0, 1);
+    const bloomBrightness = clamp(Math.max(0, bloom - 1) * 1.45 + fx.bloomKick, 0, 3.2);
+    const bloomSize = clamp(12 + Math.max(0, bloom - 1) * 34 + fx.radial * 520, 0, 56);
+    const active =
+      fx.heat > 0.004 ||
+      fx.chrom > 0.01 ||
+      fx.radial > 0.001 ||
+      fx.pixelBlockSize > 1.01 ||
+      fx.glitch > 0.01 ||
+      bloomBrightness > 0.03 ||
+      grayness > 0.01;
+    if (!active) {
+      return;
+    }
+    const sourceCtx = syncBrokenRealityFxCanvas();
+    if (!sourceCtx) {
+      return;
+    }
+    sourceCtx.clearRect(0, 0, brokenRealityFxCanvas.width, brokenRealityFxCanvas.height);
+    sourceCtx.drawImage(canvas, 0, 0, brokenRealityFxCanvas.width, brokenRealityFxCanvas.height);
+    const usedWebgl = window.FNF_WEBGL?.drawDustinPostStack?.(brokenRealityFxCanvas, {
+      time: t,
+      resX: 1280,
+      resY: 720,
+      grayness,
+      staticStrength: 0,
+      chromDistortion: fx.chrom,
+      waterStrength: fx.heat * 4.2,
+      glitchAmount: fx.glitch,
+      pixelBlockSize: fx.pixelBlockSize,
+      bloomBrightness,
+      bloomSize,
+      bloomThreshold: 0.52,
+      fogIntensity: 0,
+      fogApplyY: 999999,
+      fogApplyRange: 0,
+      cameraZoom: Number(state.camera?.zoom || 1),
+      cameraX: Number(state.camera?.focusX || 0),
+      cameraY: Number(state.camera?.focusY || 0),
+      snowTime: 0,
+      snowLayersA: 0,
+      snowLayersB: 0,
+      snowBrightA: 0,
+      snowBrightB: 0,
+      snowPixely: false,
+      snowMeltsA: false,
+      snowMeltsB: false
+    });
+    if (!usedWebgl) {
+      drawBrokenRealityShaderFallback(brokenRealityFxCanvas, fx, t, bloomBrightness, bloomSize, grayness);
+    }
+  }
 
   const RED_PHASE_START = 144;
   const PAPYRUS_ORBIT_START = 227.75;
@@ -2161,6 +2421,7 @@
     const saturation = 0.72 + rawSaturation * 0.28;
     const bloom = Number(state.br?.bloom || 1);
 
+    applyBrokenRealityDustinShaders(t, attackFx);
     drawCineFlashOverlays(t);
 
     if (bars > 0.001) {
