@@ -181,7 +181,7 @@
         if (num(p[1], -1) !== index) continue;
         if (event.time > time) break;
         advance(event.time);
-        const target = { x: current.x + num(p[2]), y: current.y + num(p[3]) };
+        const target = { x: num(p[2]), y: num(p[3]) };
         const duration = secondsForSteps(event.time, p[4] || 0);
         if (p[0] && duration > 0) {
           active = { start: event.time, duration, from: { ...current }, to: target, ease: p[5], mode: p[6] };
@@ -319,9 +319,7 @@
         };
       }
       const p = positions.opponent;
-      const sprite = sourceCharacterName(0, time) === "sans_pixel"
-        ? window.PERSEVERANCE_DATA.sprites.sansPixel
-        : window.PERSEVERANCE_DATA.sprites.sans;
+      const sprite = window.PERSEVERANCE_DATA.sprites.sans;
       const base = sprite.baseOffset || [0, 0];
       return { x: num(p.x) + base[0], y: num(p.y) + base[1] };
     }
@@ -768,6 +766,22 @@
       const t = clamp01(p);
       return t * t - (t * t * t) / 3;
     }
+    function easeIntegral(name, mode, p) {
+      const end = clamp01(p);
+      if (end <= 0) return 0;
+      const samples = 12;
+      let area = 0;
+      let prevX = 0;
+      let prevY = sourceEase(name, mode, 0);
+      for (let i = 1; i <= samples; i++) {
+        const x = end * i / samples;
+        const y = sourceEase(name, mode, x);
+        area += (prevY + y) * (x - prevX) * 0.5;
+        prevX = x;
+        prevY = y;
+      }
+      return area;
+    }
     function integrateConstantSpeed(time, start, end, speed) {
       if (time <= start) return 0;
       return Math.max(0, Math.min(time, end) - start) * speed;
@@ -778,26 +792,46 @@
       const p = clamp01((Math.min(time, start + duration) - start) / duration);
       return duration * (from * p + (to - from) * quadOutIntegral(p));
     }
+    function integrateEasedSpeed(time, start, steps, from, to, ease = "sine", mode = "InOut") {
+      const duration = secondsForSteps(start, steps);
+      if (time <= start || duration <= 0) return 0;
+      const p = clamp01((Math.min(time, start + duration) - start) / duration);
+      return duration * (from * p + (to - from) * easeIntegral(ease, mode, p));
+    }
+    function smoothStepValue(time, start, steps, from, to, ease = "sine", mode = "InOut") {
+      const duration = secondsForSteps(start, steps);
+      if (time <= start) return from;
+      if (duration <= 0 || time >= start + duration) return to;
+      return lerp(from, to, sourceEase(ease, mode, (time - start) / duration));
+    }
     function sourceSnowClock(time) {
       const t = s => timeForStep(s);
       const s128 = t(128);
       const d128 = secondsForSteps(s128, 8);
       const s1696 = t(1696);
+      const d1696 = secondsForSteps(s1696, 8);
       const s1840 = t(1840);
       const d1840 = secondsForSteps(s1840, 32);
       const s2128 = t(2128);
+      const d2128 = secondsForSteps(s2128, 8);
       const s2288 = t(2288);
+      const d2288 = secondsForSteps(s2288, 8);
       const s2536 = t(2536);
+      const d2536 = secondsForSteps(s2536, 8);
       let clock = 0;
       clock += integrateConstantSpeed(time, 0, s128, 7);
       clock += integrateQuadOutSpeed(time, s128, 8, 7, 1.3);
       clock += integrateConstantSpeed(time, s128 + d128, s1696, 1.3);
-      clock += integrateConstantSpeed(time, s1696, s1840, 3);
+      clock += integrateEasedSpeed(time, s1696, 8, 1.3, 3);
+      clock += integrateConstantSpeed(time, s1696 + d1696, s1840, 3);
       clock += integrateQuadOutSpeed(time, s1840, 32, 3, 2.7);
       clock += integrateConstantSpeed(time, s1840 + d1840, s2128, 2.7);
-      clock += integrateConstantSpeed(time, s2128, s2288, 0.7);
-      clock += integrateConstantSpeed(time, s2288, s2536, 4);
-      if (time > s2536) clock += (time - s2536) * 7;
+      clock += integrateEasedSpeed(time, s2128, 8, 2.7, 0.7);
+      clock += integrateConstantSpeed(time, s2128 + d2128, s2288, 0.7);
+      clock += integrateEasedSpeed(time, s2288, 8, 0.7, 4);
+      clock += integrateConstantSpeed(time, s2288 + d2288, s2536, 4);
+      clock += integrateEasedSpeed(time, s2536, 8, 4, 7);
+      if (time > s2536 + d2536) clock += (time - s2536 - d2536) * 7;
       return clock;
     }
     function sourceSnowState(time) {
@@ -821,7 +855,7 @@
       let charMelts = true;
       let meltRect = pixely ? [1000, 1430, 1700, 70] : [1000, 1220, 1500, 100];
       if (time >= s1696) {
-        speed = 3;
+        speed = smoothStepValue(time, s1696, 8, 1.3, 3);
         gameLayers = 14;
         charLayers = 13;
         pixely = false;
@@ -838,9 +872,9 @@
         charMelts = false;
       }
       if (time >= s2128) {
-        speed = 0.7;
-        gameBright = 1;
-        charBright = 1;
+        speed = smoothStepValue(time, s2128, 8, 2.7, 0.7);
+        gameBright = smoothStepValue(time, s2128, 8, 2.4, 1);
+        charBright = smoothStepValue(time, s2128, 8, 2.8, 1);
         charMelts = true;
       }
       if (time >= s2280) {
@@ -849,14 +883,14 @@
         charMelts = false;
       }
       if (time >= s2288) {
-        speed = 4;
-        gameBright = 2.8;
-        charBright = 3.5;
+        speed = smoothStepValue(time, s2288, 8, 0.7, 4);
+        gameBright = smoothStepValue(time, s2288, 8, 1, 2.8);
+        charBright = smoothStepValue(time, s2288, 8, 1, 3.5);
       }
       if (time >= s2536) {
-        speed = 7;
-        gameBright = 2.9;
-        charBright = 4;
+        speed = smoothStepValue(time, s2536, 8, 4, 7);
+        gameBright = smoothStepValue(time, s2536, 8, 2.8, 2.9);
+        charBright = smoothStepValue(time, s2536, 8, 3.5, 4);
       }
       if ((time >= t(1432) && time < t(1440)) || (time >= t(1568) && time < t(1572))) charLayers = 0;
       return {

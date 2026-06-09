@@ -1322,7 +1322,7 @@ body.gamepadOn.gameRunning #consoleHud { display: none; }
 <script src="genocide-data.js?v=genocide-v10"></script>
 <script src="genocide-commands.js?v=genocide-v10"></script>
 <script src="genocide-revival-data.js?v=genocide-revival-v8"></script>
-<script src="webgl-renderer.js?v=20260608d"></script>
+<script src="webgl-renderer.js?v=20260609a"></script>
 <script>
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
@@ -1813,10 +1813,31 @@ const PERSEVERANCE_SCROLL_TWEENS = [
     { time: 222.395349, from: 1.6, to: 3.5, steps: 16, ease: "circOut" }
 ];
 const PERSEVERANCE_SCROLL_BASELINES = [
-    { time: 0, speed: 2.0 },
-    { time: 170.995349, speed: 1.7 },
-    { time: 184.645349, speed: 1.6 }
+    { time: 0, speed: 2.0, steps: 0, ease: "linear" },
+    { time: 82.195349, speed: 2.0, steps: 4, ease: "linear" },
+    { time: 82.795349, speed: 2.0, steps: 4, ease: "linear" },
+    { time: 91.795349, speed: 2.0, steps: 4, ease: "linear" },
+    { time: 92.395349, speed: 2.0, steps: 4, ease: "linear" },
+    { time: 92.995349, speed: 2.0, steps: 4, ease: "linear" },
+    { time: 152.995349, speed: 2.0, steps: 4, ease: "linear" },
+    { time: 155.395349, speed: 2.0, steps: 4, ease: "linear" },
+    { time: 157.795349, speed: 2.0, steps: 4, ease: "linear" },
+    { time: 170.995349, speed: 1.7, steps: 4, ease: "linear" },
+    { time: 172.195349, speed: 1.7, steps: 4, ease: "linear" },
+    { time: 180.595349, speed: 1.7, steps: 4, ease: "linear" },
+    { time: 181.795349, speed: 1.7, steps: 4, ease: "linear" },
+    { time: 184.645349, speed: 1.6, steps: 4, ease: "linear" },
+    { time: 210.395349, speed: 1.6, steps: 4, ease: "linear" },
+    { time: 210.995349, speed: 1.6, steps: 4, ease: "linear" },
+    { time: 211.595349, speed: 1.6, steps: 4, ease: "linear" },
+    { time: 219.995349, speed: 1.6, steps: 4, ease: "linear" },
+    { time: 220.595349, speed: 1.6, steps: 4, ease: "linear" },
+    { time: 221.195349, speed: 1.6, steps: 4, ease: "linear" }
 ];
+const PERSEVERANCE_SCROLL_EVENTS = [
+    ...PERSEVERANCE_SCROLL_BASELINES.map(event => ({ time: event.time, to: event.speed, steps: event.steps || 0, ease: event.ease || "linear", order: 0 })),
+    ...PERSEVERANCE_SCROLL_TWEENS.map(event => ({ time: event.time, to: event.to, steps: event.steps || 0, ease: event.ease || "linear", order: 1 }))
+].sort((a, b) => a.time - b.time || a.order - b.order);
 function easeCurve(name, p){
     const t = clamp(p, 0, 1);
     if(name === "cubeIn") return t * t * t;
@@ -1825,6 +1846,7 @@ function easeCurve(name, p){
     if(name === "circOut") return Math.sqrt(1 - Math.pow(t - 1, 2));
     return t;
 }
+function perseveranceScrollStepSeconds(time){ return time >= 201.395349 ? 0.075 : 0.125; }
 function perseveranceScrollBasePx(){ return 405; }
 function perseveranceBloomStrength(t){
     if(perseveranceIsPixelPhase(t)) return 0;
@@ -1990,19 +2012,29 @@ function drawPerseveranceReflections(t){
 }
 function perseveranceScrollSpeed(t){
     let current = 2.0;
-    for(const base of PERSEVERANCE_SCROLL_BASELINES){
-        if(t >= base.time) current = base.speed;
-        else break;
-    }
-    for(const tween of PERSEVERANCE_SCROLL_TWEENS){
-        if(t < tween.time) break;
-        const duration = tween.steps * 0.125;
-        if(duration > 0 && t < tween.time + duration){
-            const eased = easeCurve(tween.ease, (t - tween.time) / duration);
-            return tween.from + (tween.to - tween.from) * eased;
+    let active = null;
+    const advance = toTime => {
+        if(!active) return;
+        if(toTime < active.time + active.duration){
+            const eased = easeCurve(active.ease, (toTime - active.time) / active.duration);
+            current = active.from + (active.to - active.from) * eased;
+        } else {
+            current = active.to;
+            active = null;
         }
-        current = Math.max(current, tween.to);
+    };
+    for(const event of PERSEVERANCE_SCROLL_EVENTS){
+        if(t < event.time) break;
+        advance(event.time);
+        const duration = event.steps * perseveranceScrollStepSeconds(event.time);
+        if(duration > 0){
+            active = { time: event.time, duration, from: current, to: event.to, ease: event.ease };
+        } else {
+            current = event.to;
+            active = null;
+        }
     }
+    advance(t);
     return current;
 }
 function perseveranceScroll(){ return perseveranceScrollBasePx() * perseveranceScrollSpeed(perseveranceTime()); }
@@ -3367,13 +3399,13 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 })();
 </script>
 <script src="boxing-fight-mode.js?v=20260322-stage6"></script>
-<script src="combat-mode.js?v=20260608c"></script>
+<script src="combat-mode.js?v=20260609b"></script>
 <script src="ballistic-mode.js?v=20260601h"></script>
-<script src="boxing-match-wg-mode.js?v=20260608b"></script>
-<script src="perseverance-source-mode.js?v=20260608i"></script>
+<script src="boxing-match-wg-mode.js?v=20260609a"></script>
+<script src="perseverance-source-mode.js?v=20260609a"></script>
 <script src="broken-reality-mode.js"></script>
 <script src="broken-reality-soul-data.js"></script>
-<script src="broken-reality-fix.js?v=20260608a"></script>
+<script src="broken-reality-fix.js?v=20260609a"></script>
 <script src="challenge-edd-mode.js?v=20260601h"></script>
 <script src="fallen-stars-mode.js?v=20260601h"></script>
 <script src="genocide-mode.js?v=20260601h"></script>

@@ -70,6 +70,11 @@
   const WIIK_Z_BF_POSITION = { x: 0, y: 380 };
   const WIIK_Z_MATT_IDLE = { fw: 423, fh: 462, offsetX: 90, offsetY: -255 };
   const WIIK_Z_BF_IDLE = { offsetX: 301, offsetY: -203, bottom: 137.77951959762723 };
+  const WIIK_Z_PARTICLES = {
+    far: { count: 50, interval: 0.5, spawnY: 1000, velocityY: -50, accelX: 5, scale: 0.5, scroll: 0.2 },
+    mid: { count: 15, interval: 1, spawnY: 1000, velocityY: -100, accelX: 10, scale: 0.6, scroll: 0.6 },
+    near: { count: 10, interval: 0.9, spawnY: 1300, velocityY: -200, accelX: 20, scale: 1, scroll: 1.4 }
+  };
 
   function isCombat(){
     return typeof state !== "undefined" && (state.selectedSong === "combat" || state.selectedSong === "oneHit" || state.selectedSong === "shimmy");
@@ -97,22 +102,11 @@
     loadImage("matt", data.sprites.matt.image);
     if(data.sprites.bfSword) loadImage("bfSword", data.sprites.bfSword.image);
     if(window.SHIMMY_VISUAL_DATA?.shimmer) loadImage("shimmyShimmer", window.SHIMMY_VISUAL_DATA.shimmer.image);
-    const dustSpecs = {
-      far: { count: 51, speed: 50, scale: 0.48, alpha: 0.13, sway: 5, startBelow: 160 },
-      mid: { count: 16, speed: 100, scale: 0.72, alpha: 0.22, sway: 10, startBelow: 170 },
-      near: { count: 11, speed: 200, scale: 1.18, alpha: 0.34, sway: 18, startBelow: 260 }
-    };
-    Object.entries(dustSpecs).forEach(([layer, spec]) => {
+    Object.entries(WIIK_Z_PARTICLES).forEach(([layer, spec]) => {
       for(let i = 0; i < spec.count; i++){
         combatState.dust.push({
           layer,
-          x: (i * 233 + (layer === "near" ? 97 : layer === "mid" ? 41 : 0)) % 1760 - 240,
-          phase: (i * 137) % 980,
-          speed: spec.speed,
-          scale: spec.scale * (0.86 + (i % 5) * 0.07),
-          alpha: spec.alpha,
-          sway: spec.sway,
-          startBelow: spec.startBelow
+          index: i
         });
       }
     });
@@ -738,27 +732,37 @@
     };
   }
 
+  function wiikZParticleUnit(layer, index, cycle, salt){
+    const layerSeed = layer === "near" ? 11.73 : layer === "mid" ? 7.31 : 3.19;
+    const value = Math.sin((index + 1) * 91.17 + (cycle + 1) * 37.43 + salt * 17.11 + layerSeed) * 43758.5453;
+    return value - Math.floor(value);
+  }
+
   function drawCombatDust(layer, t, depth){
-    const depthStyle = combatDustDepthStyle(layer, depth || combatDepth(t));
-    const scroll = WIIK_Z_LAYER_SCROLL[layer] || 1;
+    const spec = WIIK_Z_PARTICLES[layer];
+    if(!spec) return;
+    const image = combatState.images[layer];
+    if(!imgReady(image)) return;
     combatState.dust.forEach(p => {
       if(p.layer !== layer) return;
-      const image = combatState.images[p.layer];
-      if(!imgReady(image)) return;
-      const spanX = canvas.width + 420;
-      const spanY = canvas.height + p.startBelow + 220;
-      const x = ((p.x + Math.sin(t * 0.2 + p.phase) * p.sway + spanX * 3) % spanX) - 210;
-      const y = canvas.height + p.startBelow - ((t * p.speed + p.phase) % spanY);
-      if(y < -180) return;
+      const firstSpawn = spec.interval * (p.index + 1);
+      const elapsed = t - firstSpawn;
+      if(elapsed < 0) return;
+      const cycleLength = spec.interval * spec.count;
+      const cycle = Math.floor(elapsed / cycleLength);
+      const age = elapsed - cycle * cycleLength;
+      const spawnX = -200 + wiikZParticleUnit(layer, p.index, cycle, 1) * 2200;
+      const accelX = (wiikZParticleUnit(layer, p.index, cycle, 2) * 2 - 1) * spec.accelX;
+      const sourceX = spawnX + accelX * age * age * 0.5;
+      const sourceY = spec.spawnY + spec.velocityY * age;
+      if(sourceY < -220 || sourceY > spec.spawnY + 60) return;
+      const parallax = combatCameraParallaxPoint(worldX(sourceX), worldY(sourceY), spec.scroll, spec.scroll);
+      const width = image.naturalWidth * spec.scale;
+      const height = image.naturalHeight * spec.scale;
       ctx.save();
-      ctx.globalAlpha = p.alpha * depthStyle.alpha;
-      ctx.globalCompositeOperation = "screen";
-      const origin = combatCameraParallaxPoint(canvas.width * 0.5 + depthStyle.x, canvas.height * 0.58 + depthStyle.y, scroll, scroll);
-      ctx.translate(origin.x, origin.y);
-      ctx.rotate(depthStyle.angle);
-      ctx.scale(depthStyle.scale, depthStyle.scale);
-      ctx.translate(-canvas.width * 0.5, -canvas.height * 0.58);
-      ctx.drawImage(image, x, y, image.naturalWidth * p.scale, image.naturalHeight * p.scale);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(image, parallax.x, parallax.y, width, height);
       ctx.restore();
     });
   }
