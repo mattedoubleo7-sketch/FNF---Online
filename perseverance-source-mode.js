@@ -11,7 +11,7 @@
       back: { key: "bgA", x: -60, y: 0, scale: 1, scrollX: 0.7, scrollY: 1 },
       frontBack: { key: "bgB", x: -40, y: 0, scale: 1, scrollX: 0.9, scrollY: 1 },
       mid: { key: "bgMid", x: 0, y: 0, scale: 1, scrollX: 1, scrollY: 1 },
-      foreground: { key: "bgFore", x: 15, y: -104, scale: 0.82, scrollX: 0.8, scrollY: 0.8 },
+      foreground: { key: "bgFore", x: 15, y: -104, scale: 0.82, scrollX: 0.8, scrollY: 0.8, flixelScaleOrigin: true },
       pillars: { key: "pillars", x: 1950, y: 900, scale: 7, scrollX: 1, scrollY: 1 }
     };
 
@@ -495,7 +495,13 @@
         const brightness = (window.__perseveranceLastDrawTime || 0) < timeForStep(128) ? 0.105 : 1 - fade * 0.895;
         ctx.filter = "brightness(" + Math.max(0.105, brightness).toFixed(3) + ")";
       }
-      ctx.drawImage(img, point.x, point.y, img.naturalWidth * layer.scale * camera.zoom, img.naturalHeight * layer.scale * camera.zoom);
+      let drawX = point.x;
+      let drawY = point.y;
+      if (layer.flixelScaleOrigin) {
+        drawX += ((img.naturalWidth - img.naturalWidth * layer.scale) / 2) * camera.zoom;
+        drawY += ((img.naturalHeight - img.naturalHeight * layer.scale) / 2) * camera.zoom;
+      }
+      ctx.drawImage(img, drawX, drawY, img.naturalWidth * layer.scale * camera.zoom, img.naturalHeight * layer.scale * camera.zoom);
       ctx.restore();
     }
     function drawSourceCharacter(kind, camera, time, alphaOverride) {
