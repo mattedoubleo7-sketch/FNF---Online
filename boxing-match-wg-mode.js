@@ -60,12 +60,12 @@
     const WG_SOURCE_STAGE = {
       defaultZoom: 0.6,
       browserZoom: 1,
-      focusedZoom: 1.035,
-      finalZoom: 1.02,
-      landingZoom: 1.006,
-      finalLandingZoom: 1.012,
+      focusedZoom: 0.6,
+      finalZoom: 0.6,
+      landingZoom: 0.4,
+      finalLandingZoom: 0.6,
       landingFocus: { x: 640, y: 498 },
-      finalLandingFocus: { x: 640, y: 438 }
+      finalLandingFocus: { x: 640, y: 500 }
     };
 
     function isWg(){
@@ -900,10 +900,11 @@
       const phase = phaseForStep(step);
       const landingEnd = DATA.meta.phaseSteps.splash + 48;
       if(step >= DATA.meta.phaseSteps.endFly && step < landingEnd){
+        const afterSplash = step >= DATA.meta.phaseSteps.splash;
         return {
           x: WG_SOURCE_STAGE.landingFocus.x,
           y: WG_SOURCE_STAGE.landingFocus.y,
-          zoom: WG_SOURCE_STAGE.landingZoom,
+          zoom: afterSplash ? WG_SOURCE_STAGE.focusedZoom : WG_SOURCE_STAGE.landingZoom,
           lock: "arenaLanding"
         };
       }
@@ -937,12 +938,11 @@
       const shader = shaderSnapshot(step);
       const mirrorPush = Math.max(
         Math.abs(1 - shader.mirrorZoom) * 1.6,
-        Math.abs(1 - shader.mirrorHudZoom) * 1.2,
         Math.max(0, shader.mirrorOtherZoom - 1) * 0.25,
         Math.abs(shader.mirrorOtherAngle) / 120
       );
       const pulseZoom = 1 + Math.min(0.08, mirrorPush * 0.02);
-      const sideZoom = side === "both" ? Math.max(WG_SOURCE_STAGE.browserZoom, zoom * 0.96) : zoom;
+      const sideZoom = side === "both" ? (phase === "fly" ? Math.max(WG_SOURCE_STAGE.browserZoom, zoom * 0.96) : zoom * 0.96) : zoom;
       return { x: target.x + dirBump.x, y: target.y + dirBump.y, zoom: sideZoom * pulseZoom };
     }
 
@@ -982,13 +982,10 @@
       const flyWhiteOut = 1 - clamp01((step - 528) / 16);
       const whiteBg = step < 512 ? 0 : step < 528 ? Math.pow(flyWhiteIn, 2.4) : step < 544 ? flyWhiteOut : 0;
       const mirrorWarp = Math.abs(shader.mirrorWarp)
-        + Math.abs(shader.mirrorHudWarp) * 0.35
         + Math.abs(shader.mirrorOtherWarp) * 1.6;
       const mirrorAngle = Math.abs(shader.mirrorAngle) / 180
-        + Math.abs(shader.mirrorHudAngle) / 260
         + Math.abs(shader.mirrorOtherAngle) / 180;
       const mirrorZoom = Math.abs(1 - shader.mirrorZoom)
-        + Math.abs(1 - shader.mirrorHudZoom) * 0.55
         + Math.max(0, shader.mirrorOtherZoom - 1) * 0.12;
       const warp = mirrorWarp + mirrorAngle * 0.45 + mirrorZoom * 0.7 + shader.speed * 0.25;
       const cameraPulse = mirrorZoom + mirrorAngle * 0.25 + mirrorWarp * 0.2;
@@ -1008,15 +1005,22 @@
     function drawWgFx(t){
       const fx = fxValues(t);
       if(window.PERFORMANCE_MODE) return;
-      const mirrorAmount = Math.max(
+      const gameMirrorAmount = Math.max(
         Math.abs(1 - fx.mirrorZoom),
-        Math.abs(1 - fx.mirrorHudZoom) * 0.7,
         Math.max(0, fx.mirrorOtherZoom - 1) * 0.16,
-        Math.abs(fx.mirrorAngle + fx.mirrorHudAngle + fx.mirrorOtherAngle) / 180,
+        Math.abs(fx.mirrorAngle + fx.mirrorOtherAngle) / 180,
         Math.abs(fx.mirrorWarp + fx.mirrorOtherWarp) * 2,
         Math.abs(fx.mirrorX + fx.mirrorOtherX) * 0.04,
         Math.abs(fx.mirrorY + fx.mirrorOtherY) * 0.04
       );
+      const hudMirrorAmount = Math.max(
+        Math.abs(1 - fx.mirrorHudZoom) * 0.7,
+        Math.abs(fx.mirrorHudAngle) / 180,
+        Math.abs(fx.mirrorHudWarp) * 1.4,
+        Math.abs(fx.mirrorHudX) * 0.03,
+        Math.abs(fx.mirrorHudY) * 0.03
+      );
+      const mirrorAmount = Math.max(gameMirrorAmount, hudMirrorAmount * 0.28);
       const chroma = Math.max(fx.ca, fx.vhs > 0.01 ? Math.abs(fx.vhsChroma) * 18 : 0, fx.vhs * 0.018, fx.warp * 0.012);
       const needsCanvasFx = mirrorAmount > 0.01
         || fx.greyscale > 0.01
@@ -1031,13 +1035,13 @@
       let src = needsCanvasFx ? ensureFxCanvas() : null;
       const mirrorWaveX = Math.sin(t * Math.max(0.1, fx.mirrorSpeed) * 2.4) * (fx.mirrorXRange || 0) * 0.12;
       const mirrorWaveY = Math.cos(t * Math.max(0.1, fx.mirrorSpeed) * 2.1) * (fx.mirrorYRange || 0) * 0.1;
-      const cameraPassDone = !!src && mirrorAmount > 0.01 && window.FNF_WEBGL?.drawCameraPass(src, {
+      const cameraPassDone = !!src && gameMirrorAmount > 0.01 && window.FNF_WEBGL?.drawCameraPass(src, {
         zoom: Math.max(0.35, Math.min(2.4, (fx.mirrorZoom || 1) * (fx.mirrorOtherZoom || 1))),
-        angle: -(fx.mirrorAngle + fx.mirrorHudAngle * 0.28 + fx.mirrorOtherAngle),
+        angle: -(fx.mirrorAngle + fx.mirrorOtherAngle),
         offsetX: Math.max(-1.5, Math.min(1.5, -((fx.mirrorX + fx.mirrorOtherX) * 0.03 + mirrorWaveX))),
         offsetY: Math.max(-1.5, Math.min(1.5, -((fx.mirrorY + fx.mirrorOtherY) * 0.03 + mirrorWaveY))),
-        warp: Math.max(-1.2, Math.min(1.2, fx.mirrorWarp + fx.mirrorHudWarp * 0.25 + fx.mirrorOtherWarp)),
-        mirror: Math.min(1.4, mirrorAmount + fx.cameraPulse * 0.2)
+        warp: Math.max(-1.2, Math.min(1.2, fx.mirrorWarp + fx.mirrorOtherWarp)),
+        mirror: Math.min(1.4, gameMirrorAmount + fx.cameraPulse * 0.2)
       });
       if(cameraPassDone) src = ensureFxCanvas();
       if(fx.greyscale > 0.01 || fx.invert > 0.01 || fx.bloom > 0.01 || fx.warp > 0.01 || fx.blur > 0.01 || fx.vhs > 0.01){
@@ -1047,13 +1051,13 @@
         ctx.drawImage(src, 0, 0);
         ctx.restore();
       }
-      if(!cameraPassDone && mirrorAmount > 0.01){
+      if(!cameraPassDone && gameMirrorAmount > 0.01){
         ctx.save();
         ctx.globalCompositeOperation = "screen";
-        ctx.globalAlpha = Math.min(0.5, 0.12 + mirrorAmount * 0.34);
+        ctx.globalAlpha = Math.min(0.5, 0.12 + gameMirrorAmount * 0.34);
         ctx.translate(canvas.width / 2, canvas.height / 2);
-        ctx.rotate((fx.mirrorOtherAngle + fx.mirrorHudAngle * 0.45 + fx.mirrorAngle * 0.3) * Math.PI / 180 * 0.08);
-        ctx.scale(1 + Math.min(0.3, mirrorAmount * 0.09), 1 + Math.min(0.3, mirrorAmount * 0.09));
+        ctx.rotate((fx.mirrorOtherAngle + fx.mirrorAngle * 0.3) * Math.PI / 180 * 0.08);
+        ctx.scale(1 + Math.min(0.3, gameMirrorAmount * 0.09), 1 + Math.min(0.3, gameMirrorAmount * 0.09));
         ctx.drawImage(src, -canvas.width / 2 - fx.mirrorOtherWarp * 32 - fx.mirrorOtherX * 2, -canvas.height / 2 - fx.mirrorOtherY * 2);
         ctx.restore();
       }

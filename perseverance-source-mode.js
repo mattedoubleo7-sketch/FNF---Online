@@ -26,6 +26,13 @@
       const events = Array.isArray(source) ? source : (Array.isArray(window.PERSEVERANCE_SOURCE_EVENTS) ? window.PERSEVERANCE_SOURCE_EVENTS : []);
       return name ? events.filter(e => e.name === name) : events;
     }
+    function sourceTimeline(names) {
+      const wanted = Array.isArray(names) ? new Set(names) : new Set([names]);
+      return sourceEvents()
+        .map((event, order) => ({ event, order }))
+        .filter(entry => wanted.has(entry.event?.name))
+        .sort((a, b) => num(a.event.time) - num(b.event.time) || a.order - b.order);
+    }
     function baseEase(name, p) {
       const t = clamp01(p);
       const key = String(name || "linear").toLowerCase();
@@ -176,12 +183,20 @@
           active = null;
         }
       };
-      for (const event of sourceEvents("Change Character Offset").sort((a, b) => a.time - b.time)) {
+      for (const { event } of sourceTimeline(["Change Character", "Change Character Offset"])) {
         const p = event.params || [];
-        if (num(p[1], -1) !== index) continue;
         if (event.time > time) break;
         advance(event.time);
-        const target = { x: num(p[2]), y: num(p[3]) };
+        if (event.name === "Change Character") {
+          if (num(p[0], -1) === index) {
+            current = { x: 0, y: 0 };
+            active = null;
+          }
+          continue;
+        }
+        if (num(p[1], -1) !== index) continue;
+        const delta = { x: num(p[2]), y: num(p[3]) };
+        const target = { x: current.x + delta.x, y: current.y + delta.y };
         const duration = secondsForSteps(event.time, p[4] || 0);
         if (p[0] && duration > 0) {
           active = { start: event.time, duration, from: { ...current }, to: target, ease: p[5], mode: p[6] };
@@ -319,7 +334,9 @@
         };
       }
       const p = positions.opponent;
-      const sprite = window.PERSEVERANCE_DATA.sprites.sans;
+      const sprite = sourceCharacterName(0, time) === "sans_pixel"
+        ? window.PERSEVERANCE_DATA.sprites.sansPixel
+        : window.PERSEVERANCE_DATA.sprites.sans;
       const base = sprite.baseOffset || [0, 0];
       return { x: num(p.x) + base[0], y: num(p.y) + base[1] };
     }
@@ -651,7 +668,6 @@
     perseveranceBloomStrength = function(time) {
       if (state?.selectedSong !== "perseverance") return originalBloomStrength(time);
       if (Math.abs((window.__perseveranceOfficialBloomTime || -999) - time) < 0.05) return 0;
-      if (perseveranceIsPixelPhase(time)) return 0;
       return clamp01(sourceBloomRaw(time) / 3.2);
     };
     perseveranceGrayness = function(time) {
@@ -978,8 +994,9 @@
           chromDistortion: fx.chromDistortion || 0,
           waterStrength: fx.waterStrength || 0,
           glitchAmount: fx.glitch || 0,
-          pixelBlockSize: sourcePixelBlockSize(time),
-          bloomBrightness: perseveranceIsPixelPhase(time) ? 0 : sourceBloomRaw(time),
+          pixelZoom: sourcePixelBlockSize(time),
+          pixelBlockSize: 1,
+          bloomBrightness: sourceBloomRaw(time),
           bloomSize: sourceBloomSize(time),
           bloomThreshold: 0.5,
           fogIntensity: perseveranceIsPixelPhase(time) ? 0 : sourceFogIntensity(time),

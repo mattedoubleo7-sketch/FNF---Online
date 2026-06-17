@@ -1551,7 +1551,7 @@ body.mobile .chatLog { max-height: 130px !important; font-size: 12px !important;
 <script src="genocide-data.js?v=genocide-v10"></script>
 <script src="genocide-commands.js?v=genocide-v10"></script>
 <script src="genocide-revival-data.js?v=genocide-revival-v8"></script>
-<script src="webgl-renderer.js?v=20260609a"></script>
+<script src="webgl-renderer.js?v=20260616b"></script>
 <script>
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
@@ -3335,7 +3335,7 @@ function renderScene(songT, previewT){
     }
     bg(state.currentSong, t);
     const camZ = state.camera.zoom;
-    if(camZ > 1.001){
+    if(Math.abs(camZ - 1) > 0.001){
         const fx = state.camera.focusX, fy = state.camera.focusY;
         ctx.translate(fx * (1 - camZ), fy * (1 - camZ));
         ctx.scale(camZ, camZ);
@@ -3524,8 +3524,8 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 <script src="boxing-fight-mode.js?v=20260322-stage6"></script>
 <script src="combat-mode.js?v=20260609b"></script>
 <script src="ballistic-mode.js?v=20260601h"></script>
-<script src="boxing-match-wg-mode.js?v=20260609a"></script>
-<script src="perseverance-source-mode.js?v=20260609a"></script>
+<script src="boxing-match-wg-mode.js?v=20260616b"></script>
+<script src="perseverance-source-mode.js?v=20260616b"></script>
 <script src="broken-reality-mode.js"></script>
 <script src="broken-reality-soul-data.js"></script>
 <script src="broken-reality-fix.js?v=20260609a"></script>

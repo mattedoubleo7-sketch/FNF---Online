@@ -363,6 +363,7 @@
           uniform float uChromDistortion;
           uniform float uWaterStrength;
           uniform float uGlitchAmount;
+          uniform float uPixelZoom;
           uniform float uPixelBlockSize;
           uniform float uBloomBrightness;
           uniform float uBloomSize;
@@ -584,6 +585,10 @@
 
           void main(){
             vec2 uv = vUv;
+            float pixelZoom = max(0.001, uPixelZoom);
+            if(abs(pixelZoom - 1.0) > 0.001){
+              uv = vec2(0.5, 0.5) + ((uv - vec2(0.5, 0.5)) * pixelZoom);
+            }
             float blockSize = max(1.0, uPixelBlockSize);
             if(blockSize > 1.001){
               vec2 blocks = ((uRes + vec2(0.5, 0.5)) / blockSize) - vec2(0.5, 0.5);
@@ -651,12 +656,6 @@
                 if(color.a == 0.0 && brightness(effect) > 0.0) color.a = brightness(effect);
               }
 
-              if(worldCoord.y <= uFogApplyY && worldCoord.y >= uFogApplyY - 1000.0 && color.a > 0.5){
-                float dist = uFogApplyY - worldCoord.y;
-                float g = 1.0 - (dist / 1000.0);
-                vec3 gradientCol = mix(vec3(0.0), fogColor * 1.3, g);
-                color += vec4(gradientCol * 2.0, 1.0) * (g * 0.06) * color.a;
-              }
             }
 
             if(uBloomBrightness > 0.0001 && uBloomSize > 0.0001){
@@ -710,6 +709,7 @@
           uChromDistortion: gl.getUniformLocation(program, "uChromDistortion"),
           uWaterStrength: gl.getUniformLocation(program, "uWaterStrength"),
           uGlitchAmount: gl.getUniformLocation(program, "uGlitchAmount"),
+          uPixelZoom: gl.getUniformLocation(program, "uPixelZoom"),
           uPixelBlockSize: gl.getUniformLocation(program, "uPixelBlockSize"),
           uBloomBrightness: gl.getUniformLocation(program, "uBloomBrightness"),
           uBloomSize: gl.getUniformLocation(program, "uBloomSize"),
@@ -878,6 +878,7 @@
         gl.uniform1f(pass.uChromDistortion, clamp(params?.chromDistortion ?? 0, 0, 2));
         gl.uniform1f(pass.uWaterStrength, clamp(params?.waterStrength ?? 0, 0, 2));
         gl.uniform1f(pass.uGlitchAmount, clamp(params?.glitchAmount ?? 0, 0, 4));
+        gl.uniform1f(pass.uPixelZoom, clamp(params?.pixelZoom ?? 1, 0.001, 64));
         gl.uniform1f(pass.uPixelBlockSize, clamp(params?.pixelBlockSize ?? 1, 1, 64));
         gl.uniform1f(pass.uBloomBrightness, clamp(params?.bloomBrightness ?? 0, 0, 4));
         gl.uniform1f(pass.uBloomSize, clamp(params?.bloomSize ?? 0, 0, 64));
