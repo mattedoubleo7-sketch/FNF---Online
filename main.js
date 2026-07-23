@@ -50,9 +50,11 @@ async function stopEmbeddedServer() {
   embeddedServer = null;
 }
 
-async function ensureEmbeddedServer() {
+async function ensureEmbeddedServer(clientConfig = {}) {
   if (!embeddedServer) {
-    embeddedServer = await createGameServer({ port: 0, host: "127.0.0.1" });
+    embeddedServer = await createGameServer({ port: 0, host: "127.0.0.1", clientConfig });
+  } else if (embeddedServer.clientConfig && Object.prototype.hasOwnProperty.call(clientConfig, "onlineServerUrl")) {
+    embeddedServer.clientConfig.onlineServerUrl = String(clientConfig.onlineServerUrl || "").trim().replace(/\/$/, "");
   }
   return embeddedServer;
 }
@@ -62,19 +64,13 @@ async function loadDesktopMode(win, mode) {
   currentDesktopMode = normalized;
 
   if (normalized === "offline") {
-    const localServer = await ensureEmbeddedServer();
+    const localServer = await ensureEmbeddedServer({ onlineServerUrl: "" });
     await win.loadURL(`http://127.0.0.1:${localServer.port}/offline`);
     return;
   }
 
   const targetUrl = readRemoteServerUrl();
-  if (targetUrl) {
-    await stopEmbeddedServer();
-    await win.loadURL(targetUrl.replace(/\/$/, "") + "/play");
-    return;
-  }
-
-  const localServer = await ensureEmbeddedServer();
+  const localServer = await ensureEmbeddedServer({ onlineServerUrl: targetUrl });
   await win.loadURL(`http://127.0.0.1:${localServer.port}/play`);
 }
 

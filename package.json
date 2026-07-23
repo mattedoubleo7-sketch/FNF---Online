@@ -25,6 +25,7 @@
       "main.js",
       "preload.js",
       "desktop-mode.js",
+      "client-config.js",
       "remote-server-url.txt",
       "server.js",
       "downloads.html",

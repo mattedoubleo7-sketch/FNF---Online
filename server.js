@@ -227,15 +227,26 @@ function leaveRoom(io, socket) {
   broadcastRoom(io, room);
 }
 
-function createGameServer({ port = Number(process.env.PORT) || 3000, host = process.env.HOST || "0.0.0.0" } = {}) {
+function createGameServer({ port = Number(process.env.PORT) || 3000, host = process.env.HOST || "0.0.0.0", clientConfig = {} } = {}) {
   const app = express();
   const server = http.createServer(app);
   const io = new Server(server, { cors: { origin: true, credentials: true } });
+  const resolvedClientConfig = {
+    onlineServerUrl: String(clientConfig.onlineServerUrl || process.env.FNF_ONLINE_SERVER_URL || "").trim().replace(/\/$/, "")
+  };
 
   app.use(express.json({ limit: "256kb" }));
 
   app.get("/health", (_req, res) => {
     res.json({ ok: true, rooms: rooms.size, queue: matchmakingQueue.length });
+  });
+
+  app.get("/client-config.js", (_req, res) => {
+    res.type("application/javascript");
+    res.send([
+      "window.FNF_ONLINE_SERVER_URL = " + JSON.stringify(resolvedClientConfig.onlineServerUrl) + ";",
+      "window.FNF_CLIENT_CONFIG = Object.assign({}, window.FNF_CLIENT_CONFIG || {}, { onlineServerUrl: window.FNF_ONLINE_SERVER_URL });"
+    ].join("\n"));
   });
 
   app.use("/assets", express.static(path.join(ROOT, "assets")));
@@ -494,7 +505,7 @@ function createGameServer({ port = Number(process.env.PORT) || 3000, host = proc
 
   return new Promise(resolve => {
     server.listen(port, host, () => {
-      resolve({ app, server, io, port: server.address().port, host });
+      resolve({ app, server, io, port: server.address().port, host, clientConfig: resolvedClientConfig });
     });
   });
 }

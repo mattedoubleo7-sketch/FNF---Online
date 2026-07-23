@@ -491,13 +491,19 @@ function onlineSupported() {
   return location.protocol === "http:" || location.protocol === "https:";
 }
 
+function configuredOnlineServerUrl() {
+  const value = window.FNF_ONLINE_SERVER_URL || window.FNF_CLIENT_CONFIG?.onlineServerUrl || "";
+  return String(value || "").trim().replace(/\/$/, "");
+}
+
 function loadSocketClient() {
   if (window.io) return Promise.resolve(true);
   if (socketClientPromise) return socketClientPromise;
   if (!onlineSupported()) return Promise.resolve(false);
   socketClientPromise = new Promise(resolve => {
     const script = document.createElement("script");
-    script.src = "/socket.io/socket.io.js";
+    const serverUrl = configuredOnlineServerUrl();
+    script.src = (serverUrl ? serverUrl : "") + "/socket.io/socket.io.js";
     script.onload = () => resolve(true);
     script.onerror = () => resolve(false);
     document.head.appendChild(script);
@@ -693,7 +699,10 @@ async function ensureOnlineSocket() {
   state.network.matchStartAt = 0;
   state.network.lastTrackSync = 0;
   clearPreparedMatch();
-  const socket = window.io({ transports: ["websocket", "polling"] });
+  const serverUrl = configuredOnlineServerUrl();
+  const socket = serverUrl
+    ? window.io(serverUrl, { transports: ["websocket", "polling"] })
+    : window.io({ transports: ["websocket", "polling"] });
   state.network.socket = socket;
   socket.on("connect", () => {
     state.network.connected = true;
@@ -1316,5 +1325,4 @@ setInterval(() => {
   if (state.network.preparing || (state.network.pendingStartAt && state.network.pendingStartAt > serverClockNow())) updateOnlinePanel();
 }, 250);
 ensureOnlineSocket();
-
 

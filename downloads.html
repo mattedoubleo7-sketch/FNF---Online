@@ -566,8 +566,8 @@ p, li {
   <img src="assets/icon.ico" alt="Silly Billy app icon">
   <div>
     <span>New update</span>
-    <strong>Outskirtz Import</strong>
-    <small>Outskirtz now loads the source hard chart, arena stage, Alex/BF Wii atlases, custom note skin, health drain, and official shader fragments from the Outskritz build.</small>
+    <strong>Desktop WebGL Fix</strong>
+    <small>The online app now renders the bundled WebGL build locally, while Outskirtz swaps up/down lanes for the full source flip windows.</small>
   </div>
 </aside>
 <div class="page">
@@ -576,7 +576,7 @@ p, li {
     <div>
       <div class="kicker"><span class="liveDot"></span> Live build updated</div>
       <div class="titleWrap"><h1 data-text="FNF Onliine">FNF Onliine</h1></div>
-      <p>This is the download portal for the browser and app builds. Browser play is the easiest route for friends because it avoids Windows SmartScreen warnings on the unsigned `.exe`. The newest browser build adds <strong>Outskirtz</strong> from the Outskritz Psych Engine build with the source chart, arena coordinates, Alex/BF Wii sprites, custom notes, health drain, and official shader fragments.</p>
+      <p>This is the download portal for the browser and app builds. Browser play is the easiest route for friends because it avoids Windows SmartScreen warnings on the unsigned `.exe`. The newest build fixes desktop WebGL loading so the online app uses bundled visuals, and Outskirtz now swaps the up/down lanes through the full source upside-down flip windows.</p>
       <div class="actions">
         <a class="btn primary" href="/play">Play Online In Browser</a>
         <a class="btn ghost" href="/offline">Play Offline In Browser</a>
@@ -587,15 +587,15 @@ p, li {
   <section class="statsRow">
     <div class="statChip"><span>Newest song</span><strong>Outskirtz</strong></div>
     <div class="statChip"><span>Now supports</span><strong>Mobile + Gamepad</strong></div>
-    <div class="statChip"><span>Latest polish</span><strong>Source Events</strong></div>
+    <div class="statChip"><span>Latest polish</span><strong>Desktop WebGL</strong></div>
     <div class="statChip"><span>Best route</span><strong>Browser</strong></div>
   </section>
 
   <section class="panel updatePanel">
     <div class="latestBox">
       <div class="version">Update log - 2026.07.23</div>
-      <h2>Outskirtz Import</h2>
-      <p>Outskirtz has been added from the Outskritz Psych Engine build. The browser version now ships the source hard chart, arena stage positions, Alex and BF Wii character atlases, the custom A-D note/hold skin, source MoveArrowsToMiddle layout, Alex health drain, and the official Outskritz shader fragment files with a browser-safe camera/post-FX pass.</p>
+      <h2>Desktop WebGL + Outskirtz Flip Fix</h2>
+      <p>The online desktop app now serves the bundled HTML/WebGL build locally and only uses the hosted server for rooms, so the EXE gets the same shader code as the browser build. Direct HTML no longer self-disables the Outskirtz WebGL pass, and Outskirtz up/down lanes now swap for both full source mirror flip windows.</p>
       <div class="actions">
         <a class="btn primary" href="/play">Jump Into Online</a>
         <a class="btn secondary" href="/offline">Try Offline</a>
@@ -604,6 +604,10 @@ p, li {
     <div class="logList">
       <div class="logItem">
         <div class="logDate">Latest</div>
+        <div><div class="logTitle">Desktop WebGL + Outskirtz lane swap</div><p>Online EXE rendering now comes from the bundled local HTML/WebGL files while sockets connect to the hosted room server. Outskirtz direct HTML can warm the WebGL post stack, and up/down lanes swap during both source -360 mirror flip windows.</p></div>
+      </div>
+      <div class="logItem">
+        <div class="logDate">Previous</div>
         <div><div class="logTitle">Outskirtz imported</div><p>Added the source hard chart, arena stage, Alex/BF Wii sprites, custom note skin, health drain, shader event playback, and official Outskritz shader files.</p></div>
       </div>
       <div class="logItem">
@@ -690,9 +694,9 @@ p, li {
         </div>
         <div class="dlBlock">
           <h3>Online App</h3>
-          <p>Packaged desktop app for online play. It has the current release files and connects to the hosted online game.</p>
+          <p>Packaged desktop app for online play. It renders the bundled local WebGL files and connects rooms to the hosted online server.</p>
           <div class="actions">
-            <a class="btn primary" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/ONLINE/FNF-Browser-Jam-1.0.0-portable.exe?cache=20260723h">Download Online App</a>
+            <a class="btn primary" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/ONLINE/FNF-Browser-Jam-1.0.0-portable.exe?cache=20260723i">Download Online App</a>
           </div>
         </div>
         <div class="dlBlock">
@@ -731,7 +735,7 @@ p, li {
           <h3>Offline App</h3>
           <p>Packaged offline download with the current local-play build and bundled assets.</p>
           <div class="actions">
-            <a class="btn primary" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/fnf/FNF-Browser-Jam-offline-1.0.0-portable.exe?cache=20260723h">Download Offline App</a>
+            <a class="btn primary" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/fnf/FNF-Browser-Jam-offline-1.0.0-portable.exe?cache=20260723i">Download Offline App</a>
           </div>
         </div>
         <div class="dlBlock">
@@ -779,7 +783,7 @@ p, li {
     </div>
   </section>
 
-  <div class="footer">FNF Onliine download portal - Outskirtz import and shader polish - browser recommended, app builds refreshed</div>
+  <div class="footer">FNF Onliine download portal - desktop WebGL and Outskirtz flip fix - browser recommended, app builds refreshed</div>
 </div>
 </body>
 </html>
