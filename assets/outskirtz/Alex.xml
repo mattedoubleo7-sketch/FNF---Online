@@ -1,0 +1,123 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TextureAtlas imagePath="Alex.png">
+	<!-- Created with Adobe Animate version 24.0.0.305 -->
+	<!-- http://www.adobe.com/products/animate.html -->
+	<SubTexture name="alex down note0000" x="0" y="0" width="361" height="427"/>
+	<SubTexture name="alex down note0001" x="0" y="0" width="361" height="427"/>
+	<SubTexture name="alex down note0002" x="366" y="0" width="361" height="427"/>
+	<SubTexture name="alex down note0003" x="366" y="0" width="361" height="427"/>
+	<SubTexture name="alex down note0004" x="732" y="0" width="361" height="427"/>
+	<SubTexture name="alex down note0005" x="732" y="0" width="361" height="427"/>
+	<SubTexture name="alex down note0006" x="1098" y="0" width="361" height="427"/>
+	<SubTexture name="alex down note0007" x="1098" y="0" width="361" height="427"/>
+	<SubTexture name="alex down note0008" x="1464" y="0" width="361" height="427"/>
+	<SubTexture name="alex down note0009" x="1830" y="0" width="361" height="427"/>
+	<SubTexture name="alex down note0010" x="1830" y="0" width="361" height="427"/>
+	<SubTexture name="alex down note0011" x="1830" y="0" width="361" height="427"/>
+	<SubTexture name="alex down note0012" x="1830" y="0" width="361" height="427"/>
+	<SubTexture name="alex down note0013" x="1830" y="0" width="361" height="427"/>
+	<SubTexture name="alex down note alt0000" x="2196" y="0" width="361" height="427"/>
+	<SubTexture name="alex down note alt0001" x="2196" y="0" width="361" height="427"/>
+	<SubTexture name="alex down note alt0002" x="2562" y="0" width="361" height="427"/>
+	<SubTexture name="alex down note alt0003" x="2562" y="0" width="361" height="427"/>
+	<SubTexture name="alex down note alt0004" x="2928" y="0" width="361" height="427"/>
+	<SubTexture name="alex down note alt0005" x="2928" y="0" width="361" height="427"/>
+	<SubTexture name="alex down note alt0006" x="3294" y="0" width="361" height="427"/>
+	<SubTexture name="alex down note alt0007" x="3294" y="0" width="361" height="427"/>
+	<SubTexture name="alex down note alt0008" x="3660" y="0" width="361" height="427"/>
+	<SubTexture name="alex down note alt0009" x="0" y="432" width="361" height="427"/>
+	<SubTexture name="alex down note alt0010" x="0" y="432" width="361" height="427"/>
+	<SubTexture name="alex down note alt0011" x="0" y="432" width="361" height="427"/>
+	<SubTexture name="alex down note alt0012" x="0" y="432" width="361" height="427"/>
+	<SubTexture name="alex down note alt0013" x="0" y="432" width="361" height="427"/>
+	<SubTexture name="alex idle0000" x="366" y="432" width="291" height="501"/>
+	<SubTexture name="alex idle0001" x="366" y="432" width="291" height="501"/>
+	<SubTexture name="alex idle0002" x="662" y="432" width="291" height="501"/>
+	<SubTexture name="alex idle0003" x="662" y="432" width="291" height="501"/>
+	<SubTexture name="alex idle0004" x="958" y="432" width="291" height="501"/>
+	<SubTexture name="alex idle0005" x="958" y="432" width="291" height="501"/>
+	<SubTexture name="alex idle0006" x="1254" y="432" width="291" height="501"/>
+	<SubTexture name="alex idle0007" x="1254" y="432" width="291" height="501"/>
+	<SubTexture name="alex idle0008" x="1550" y="432" width="291" height="501"/>
+	<SubTexture name="alex idle0009" x="1550" y="432" width="291" height="501"/>
+	<SubTexture name="alex idle0010" x="1846" y="432" width="291" height="501"/>
+	<SubTexture name="alex idle0011" x="1846" y="432" width="291" height="501"/>
+	<SubTexture name="alex idle0012" x="1846" y="432" width="291" height="501"/>
+	<SubTexture name="alex idle0013" x="1846" y="432" width="291" height="501"/>
+	<SubTexture name="alex idle0014" x="1846" y="432" width="291" height="501"/>
+	<SubTexture name="alex idle0015" x="1846" y="432" width="291" height="501"/>
+	<SubTexture name="alex idle0016" x="1846" y="432" width="291" height="501"/>
+	<SubTexture name="alex idle0017" x="1846" y="432" width="291" height="501"/>
+	<SubTexture name="alex left note0000" x="2142" y="432" width="404" height="450"/>
+	<SubTexture name="alex left note0001" x="2142" y="432" width="404" height="450"/>
+	<SubTexture name="alex left note0002" x="2551" y="432" width="404" height="450"/>
+	<SubTexture name="alex left note0003" x="2551" y="432" width="404" height="450"/>
+	<SubTexture name="alex left note0004" x="2960" y="432" width="404" height="450"/>
+	<SubTexture name="alex left note0005" x="2960" y="432" width="404" height="450"/>
+	<SubTexture name="alex left note0006" x="3369" y="432" width="404" height="450"/>
+	<SubTexture name="alex left note0007" x="3369" y="432" width="404" height="450"/>
+	<SubTexture name="alex left note0008" x="0" y="938" width="404" height="450"/>
+	<SubTexture name="alex left note0009" x="0" y="938" width="404" height="450"/>
+	<SubTexture name="alex left note0010" x="0" y="938" width="404" height="450"/>
+	<SubTexture name="alex left note0011" x="0" y="938" width="404" height="450"/>
+	<SubTexture name="alex left note alt0000" x="409" y="938" width="389" height="450"/>
+	<SubTexture name="alex left note alt0001" x="409" y="938" width="389" height="450"/>
+	<SubTexture name="alex left note alt0002" x="803" y="938" width="389" height="450"/>
+	<SubTexture name="alex left note alt0003" x="803" y="938" width="389" height="450"/>
+	<SubTexture name="alex left note alt0004" x="1197" y="938" width="389" height="450"/>
+	<SubTexture name="alex left note alt0005" x="1197" y="938" width="389" height="450"/>
+	<SubTexture name="alex left note alt0006" x="1591" y="938" width="389" height="450"/>
+	<SubTexture name="alex left note alt0007" x="1591" y="938" width="389" height="450"/>
+	<SubTexture name="alex left note alt0008" x="1985" y="938" width="389" height="450"/>
+	<SubTexture name="alex left note alt0009" x="1985" y="938" width="389" height="450"/>
+	<SubTexture name="alex left note alt0010" x="1985" y="938" width="389" height="450"/>
+	<SubTexture name="alex left note alt0011" x="1985" y="938" width="389" height="450"/>
+	<SubTexture name="alex right note0000" x="2379" y="938" width="545" height="417"/>
+	<SubTexture name="alex right note0001" x="2379" y="938" width="545" height="417"/>
+	<SubTexture name="alex right note0002" x="2929" y="938" width="545" height="417"/>
+	<SubTexture name="alex right note0003" x="2929" y="938" width="545" height="417"/>
+	<SubTexture name="alex right note0004" x="3479" y="938" width="545" height="417"/>
+	<SubTexture name="alex right note0005" x="3479" y="938" width="545" height="417"/>
+	<SubTexture name="alex right note0006" x="0" y="1393" width="545" height="417"/>
+	<SubTexture name="alex right note0007" x="0" y="1393" width="545" height="417"/>
+	<SubTexture name="alex right note0008" x="550" y="1393" width="545" height="417"/>
+	<SubTexture name="alex right note0009" x="550" y="1393" width="545" height="417"/>
+	<SubTexture name="alex right note0010" x="550" y="1393" width="545" height="417"/>
+	<SubTexture name="alex right note0011" x="550" y="1393" width="545" height="417"/>
+	<SubTexture name="alex right note alt0000" x="1100" y="1393" width="521" height="417"/>
+	<SubTexture name="alex right note alt0001" x="1100" y="1393" width="521" height="417"/>
+	<SubTexture name="alex right note alt0002" x="1626" y="1393" width="521" height="417"/>
+	<SubTexture name="alex right note alt0003" x="2152" y="1393" width="521" height="417"/>
+	<SubTexture name="alex right note alt0004" x="2678" y="1393" width="521" height="417"/>
+	<SubTexture name="alex right note alt0005" x="2678" y="1393" width="521" height="417"/>
+	<SubTexture name="alex right note alt0006" x="3204" y="1393" width="521" height="417"/>
+	<SubTexture name="alex right note alt0007" x="0" y="1815" width="521" height="417"/>
+	<SubTexture name="alex right note alt0008" x="526" y="1815" width="521" height="417"/>
+	<SubTexture name="alex right note alt0009" x="526" y="1815" width="521" height="417"/>
+	<SubTexture name="alex right note alt0010" x="526" y="1815" width="521" height="417"/>
+	<SubTexture name="alex right note alt0011" x="526" y="1815" width="521" height="417"/>
+	<SubTexture name="alex up note0000" x="1052" y="1815" width="359" height="523"/>
+	<SubTexture name="alex up note0001" x="1052" y="1815" width="359" height="523"/>
+	<SubTexture name="alex up note0002" x="1416" y="1815" width="359" height="523"/>
+	<SubTexture name="alex up note0003" x="1416" y="1815" width="359" height="523"/>
+	<SubTexture name="alex up note0004" x="1780" y="1815" width="359" height="523"/>
+	<SubTexture name="alex up note0005" x="1780" y="1815" width="359" height="523"/>
+	<SubTexture name="alex up note0006" x="2144" y="1815" width="359" height="523"/>
+	<SubTexture name="alex up note0007" x="2144" y="1815" width="359" height="523"/>
+	<SubTexture name="alex up note0008" x="2508" y="1815" width="359" height="523"/>
+	<SubTexture name="alex up note0009" x="2508" y="1815" width="359" height="523"/>
+	<SubTexture name="alex up note0010" x="2508" y="1815" width="359" height="523"/>
+	<SubTexture name="alex up note0011" x="2508" y="1815" width="359" height="523"/>
+	<SubTexture name="alex up note alt0000" x="2872" y="1815" width="394" height="523"/>
+	<SubTexture name="alex up note alt0001" x="2872" y="1815" width="394" height="523"/>
+	<SubTexture name="alex up note alt0002" x="3271" y="1815" width="394" height="523"/>
+	<SubTexture name="alex up note alt0003" x="3271" y="1815" width="394" height="523"/>
+	<SubTexture name="alex up note alt0004" x="3670" y="1815" width="394" height="523"/>
+	<SubTexture name="alex up note alt0005" x="3670" y="1815" width="394" height="523"/>
+	<SubTexture name="alex up note alt0006" x="0" y="2343" width="394" height="523"/>
+	<SubTexture name="alex up note alt0007" x="0" y="2343" width="394" height="523"/>
+	<SubTexture name="alex up note alt0008" x="399" y="2343" width="394" height="523"/>
+	<SubTexture name="alex up note alt0009" x="399" y="2343" width="394" height="523"/>
+	<SubTexture name="alex up note alt0010" x="399" y="2343" width="394" height="523"/>
+	<SubTexture name="alex up note alt0011" x="399" y="2343" width="394" height="523"/>
+</TextureAtlas>
