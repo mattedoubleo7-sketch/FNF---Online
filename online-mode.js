@@ -998,6 +998,9 @@ handlePress = function(lane){
   if (!localControlsSide(side)) return;
   let best = null;
   let bestDiff = Infinity;
+  const perfectWin = typeof hitWinPerfect === "function" ? hitWinPerfect() : 0.045;
+  const goodWin = typeof hitWinGood === "function" ? hitWinGood() : 0.09;
+  const badWin = typeof hitWinBad === "function" ? hitWinBad() : 0.155;
   for (const n of state.chart.notes) {
     if (n.judged || n.side !== side || n.lane !== lane) continue;
     const d = Math.abs(n.time - t);
@@ -1007,7 +1010,7 @@ handlePress = function(lane){
     }
     if (n.time - t > 0.2) break;
   }
-  if (!best || bestDiff > 0.155) return;
+  if (!best || bestDiff > badWin) return;
   best.judged = true;
   best.played = true;
   best.hit = true;
@@ -1016,16 +1019,17 @@ handlePress = function(lane){
     best.holdDone = false;
     best.played = false;
   }
-  const kind = bestDiff <= 0.045 ? "perfect" : bestDiff <= 0.09 ? "good" : "bad";
+  const kind = bestDiff <= perfectWin ? "perfect" : bestDiff <= goodWin ? "good" : "bad";
   judge(side, kind, lane, best.character, bestDiff);
   emitOnlineJudgment(best, kind, bestDiff);
 };
 
 handleMisses = function(t){
+  const missCutoff = typeof missWin === "function" ? missWin() : 0.16;
   for (const n of state.chart.notes) {
     if (n.judged) continue;
     if (!localControlsSide(n.side)) continue;
-    if (t > n.time + 0.16) {
+    if (t > n.time + missCutoff) {
       n.judged = true;
       n.played = true;
       judge(n.side, "miss", n.lane, n.character, 0.155);
@@ -1036,6 +1040,7 @@ handleMisses = function(t){
 
 updateHoldNotes = function(t){
   if (!state.chart) return;
+  const holdGrace = typeof hitWinGood === "function" ? hitWinGood() : 0.09;
   for (const n of state.chart.notes) {
     if (!n.holdActive || n.holdDone || !isHoldNote(n)) continue;
     const end = holdEndTime(n);
@@ -1045,7 +1050,7 @@ updateHoldNotes = function(t){
       continue;
     }
     if (!localControlsSide(n.side)) continue;
-    if (t > n.time + 0.09 && !state.keysDown[n.lane]) {
+    if (t > n.time + holdGrace && !state.keysDown[n.lane]) {
       n.holdDone = true;
       n.played = true;
       judge(n.side, "miss", n.lane, n.character, 0.155);
@@ -1311,6 +1316,5 @@ setInterval(() => {
   if (state.network.preparing || (state.network.pendingStartAt && state.network.pendingStartAt > serverClockNow())) updateOnlinePanel();
 }, 250);
 ensureOnlineSocket();
-
 
 

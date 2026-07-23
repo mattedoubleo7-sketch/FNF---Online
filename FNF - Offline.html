@@ -2677,10 +2677,20 @@ function judge(side, kind, lane, char){
     feed(side, label, color); pose(char, lane % 4, kind === "miss" ? "miss" : "hit");
 }
 function inputLatencyComp() { return (state.settings && state.settings.mobile) ? 0.085 : 0; }
-function hitWinPerfect() { return 0.045 + inputLatencyComp(); }
-function hitWinGood()    { return 0.09  + inputLatencyComp(); }
-function hitWinBad()     { return 0.155 + inputLatencyComp(); }
-function missWin()       { return 0.16  + inputLatencyComp(); }
+function songTimingGrace(){
+    const song = state.currentSong || SONGS[state.selectedSong];
+    const source = song && song.chartSource;
+    if(source === "outskirtz") return { perfect:.012, good:.024, bad:.035, miss:.04 };
+    const fast = Number(song && song.scroll || 0) >= 1100;
+    const imported = typeof isImportedSong === "function" && isImportedSong(song);
+    if(fast) return { perfect:.006, good:.014, bad:.022, miss:.026 };
+    if(imported) return { perfect:.004, good:.01, bad:.016, miss:.02 };
+    return { perfect:0, good:0, bad:0, miss:0 };
+}
+function hitWinPerfect() { const g = songTimingGrace(); return 0.045 + inputLatencyComp() + g.perfect; }
+function hitWinGood()    { const g = songTimingGrace(); return 0.09  + inputLatencyComp() + g.good; }
+function hitWinBad()     { const g = songTimingGrace(); return 0.155 + inputLatencyComp() + g.bad; }
+function missWin()       { const g = songTimingGrace(); return 0.16  + inputLatencyComp() + g.miss; }
 function handlePress(lane){
     if(!state.playing || !state.chart) return;
     const t = songTime(); const side = lane < 4 ? "opp" : "player";
