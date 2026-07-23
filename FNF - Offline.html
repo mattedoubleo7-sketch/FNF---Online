@@ -3294,14 +3294,43 @@ function startSong(id=state.selectedSong){
     }
     state.feeds.player.time = -10; state.feeds.opp.time = -10; Object.values(state.poses).forEach(p => { p.time = -10; p.kind = "hit"; }); state.receptorFx.forEach(fx => fx.time = -10); state.perseverance = { canDodge:false, prompt:false, dodging:false, dodged:false, resolved:false, dodgeStart:-10, flashTime:-10, gfAlpha:0 }; state.camera = { zoom: 1, focusX: canvas.width / 2, focusY: canvas.height * 0.45, sideTime: 0, lastSide: "both", highwayX: 0, highwayY: 0 }; ui.p1Box.style.display = state.mode === "versus" ? "block" : "none"; ui.songTitle.textContent = state.currentSong.title; ui.songSub.textContent = state.currentSong.subtitle; ui.statusText.textContent = "Get ready"; ui.statusSub.textContent = state.currentSong.chartSource === "sporting" ? "Sporting is using the original hard chart, real vocals, and 1.5x scroll on the boxing ring." : state.currentSong.chartSource === "boxingMatch" ? "Boxing Match is using the imported VS Matt chart with the real instrumental and vocals on the boxing ring." : state.currentSong.chartSource === "combat" ? "Combat is using the original Wii Funkin hard chart with the real instrumental and vocals." : state.currentSong.chartSource === "oneHit" ? "One Hit is using the original Wii Funkin hard chart with Combat's stage, the extra shader bursts from the modchart, and Challenge Edd hold-note skin." : state.currentSong.chartSource === "shimmy" ? "Shimmy is using the original Wii Funkin hard chart with Combat's 3D stage, shader pulses, Challenge Edd hold-note skin, and Matt's Not bad, kid line." : state.currentSong.chartSource === "perseverance" ? "Perseverance is using the original hard chart, split vocals, pixel section, and dodge mechanic." : "Song starts on the next phrase. Hit right-side notes in solo, or both lanes in versus."; ui.timer.textContent = `0:00 / ${formatTime(state.chart.totalTime)}`; ui.menu.classList.remove("show"); ui.settings.classList.remove("show"); ui.resultsWrap.classList.remove("show");
 }
+function gameplayLaneForInput(lane){
+    const raw = Number(lane);
+    if(!Number.isFinite(raw)) return lane;
+    if(typeof window.mapGameplayLaneForCurrentView === "function"){
+        const t = state.playing ? songTime() : 0;
+        const mapped = Number(window.mapGameplayLaneForCurrentView(raw, t));
+        if(Number.isFinite(mapped)) return mapped;
+    }
+    return raw;
+}
+function pressGameplayLane(rawLane){
+    const lane = gameplayLaneForInput(rawLane);
+    if(!state.keysDown[lane]){
+        state.keysDown[lane] = true;
+        if(lane !== rawLane) state.keysDown[rawLane] = false;
+        handlePress(lane);
+    }
+    return lane;
+}
+function releaseGameplayLane(rawLane, heldLane){
+    const raw = Number(rawLane);
+    const lane = heldLane == null ? NaN : Number(heldLane);
+    if(Number.isFinite(raw)) state.keysDown[raw] = false;
+    if(Number.isFinite(lane)) state.keysDown[lane] = false;
+    else {
+        const current = gameplayLaneForInput(raw);
+        if(Number.isFinite(current)) state.keysDown[current] = false;
+    }
+}
 function keydown(e){
     const key = e.key.toLowerCase();
     if(state.binding){ e.preventDefault(); if(key === "escape"){ clearBinding(); return; } state.settings[state.binding.group][state.binding.dir] = key; saveSettings(); renderBinds(); clearBinding(); rebuildKeyMap(); return; }
     if(key === "escape" && ui.settings.classList.contains("show")){ ui.settings.classList.remove("show"); clearBinding(); return; }
     if(state.selectedSong === "perseverance" && state.playing && key === " " && state.perseverance.canDodge && !state.perseverance.dodging && !state.perseverance.resolved){ e.preventDefault(); state.perseverance.dodging = true; state.perseverance.dodged = true; state.perseverance.dodgeStart = songTime(); return; }
-    const lane = state.keyMap[key]; if(lane !== undefined){ e.preventDefault(); if(!state.keysDown[lane]){ state.keysDown[lane] = true; handlePress(lane); } }
+    const lane = state.keyMap[key]; if(lane !== undefined){ e.preventDefault(); const playLane = pressGameplayLane(lane); state.inputHeldLanes = state.inputHeldLanes || {}; state.inputHeldLanes["key:" + key] = playLane; }
 }
-function keyup(e){ const key = e.key.toLowerCase(), lane = state.keyMap[key]; if(lane !== undefined) state.keysDown[lane] = false; }
+function keyup(e){ const key = e.key.toLowerCase(), lane = state.keyMap[key]; if(lane !== undefined){ const token = "key:" + key; const heldLane = state.inputHeldLanes && state.inputHeldLanes[token]; releaseGameplayLane(lane, heldLane); if(state.inputHeldLanes) delete state.inputHeldLanes[token]; } }
 ui.playBtn.onclick = () => startSong();
 ui.settingsBtn.onclick = () => ui.settings.classList.add("show");
 ui.closeSettings.onclick = () => { clearBinding(); ui.settings.classList.remove("show"); };
@@ -3416,7 +3445,7 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 <script src="perseverance-source-mode.js?v=20260616b"></script>
 <script src="broken-reality-mode.js"></script>
 <script src="broken-reality-soul-data.js"></script>
-<script src="broken-reality-fix.js?v=20260609a"></script>
+<script src="broken-reality-fix.js?v=20260723a"></script>
 <script src="challenge-edd-mode.js?v=20260601h"></script>
 <script src="fallen-stars-mode.js?v=20260601h"></script>
 <script src="genocide-mode.js?v=20260601h"></script>
@@ -3519,16 +3548,17 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
     // Touch buttons: pointer events cover both touch and mouse.
     for (const btn of tc.querySelectorAll(".touchBtn")) {
         const lane = Number(btn.dataset.lane);
+        let activeLane = null;
         const press = e => {
             e.preventDefault();
-            if (state.keysDown[lane]) return;
-            state.keysDown[lane] = true;
+            if (activeLane != null && state.keysDown[activeLane]) return;
+            activeLane = pressGameplayLane(lane);
             btn.classList.add("pressed");
-            try { handlePress(lane); } catch (err) { console.error(err); }
         };
         const release = e => {
             e.preventDefault();
-            state.keysDown[lane] = false;
+            releaseGameplayLane(lane, activeLane);
+            activeLane = null;
             btn.classList.remove("pressed");
         };
         btn.addEventListener("pointerdown", press);
@@ -3792,12 +3822,12 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
     // D-pad (12/13/14/15) + face buttons (square/cross/triangle/circle = 2/0/3/1)
     // both fire the same lanes; either layout works for any player.
     const BUTTON_TO_LANE = { 14:4, 13:5, 12:6, 15:7, 2:4, 0:5, 3:6, 1:7 };
-    const held = new Set();
+    const held = new Map();
     function poll() {
         requestAnimationFrame(poll);
         const pads = navigator.getGamepads ? navigator.getGamepads() : [];
         if (!state.settings.console) {
-            if (held.size) { for (const l of held) state.keysDown[l] = false; held.clear(); }
+            if (held.size) { for (const [rawLane, activeLane] of held) releaseGameplayLane(rawLane, activeLane); held.clear(); }
             return;
         }
         const now = new Set();
@@ -3809,11 +3839,14 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
             }
         }
         for (const lane of now) if (!held.has(lane)) {
-            state.keysDown[lane] = true;
-            try { handlePress(lane); } catch (e) { console.error(e); }
+            try { held.set(lane, pressGameplayLane(lane)); } catch (e) { console.error(e); }
         }
-        for (const lane of held) if (!now.has(lane)) state.keysDown[lane] = false;
-        held.clear(); for (const l of now) held.add(l);
+        for (const [lane, activeLane] of Array.from(held)) {
+            if (!now.has(lane)) {
+                releaseGameplayLane(lane, activeLane);
+                held.delete(lane);
+            }
+        }
     }
     requestAnimationFrame(poll);
 })();

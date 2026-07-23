@@ -790,6 +790,32 @@
     return mode;
   }
 
+  const previousGameplayLaneMapper = window.mapGameplayLaneForCurrentView;
+  function brokenRealityInputLane(lane, t) {
+    const raw = Number(lane);
+    if (!Number.isFinite(raw)) {
+      return lane;
+    }
+    const dir = ((raw % 4) + 4) % 4;
+    if (dir !== 1 && dir !== 2) {
+      return raw;
+    }
+    const time = Number.isFinite(Number(t)) ? Number(t) : brokenRealityLiveTime();
+    const fix = getFixState();
+    const upsideDown = currentModeAt(time) === "down" || Number(fix.currentYMult || 0) < -0.35;
+    if (!upsideDown) {
+      return raw;
+    }
+    return raw + (dir === 1 ? 1 : -1);
+  }
+
+  window.mapGameplayLaneForCurrentView = function(lane, t) {
+    if (state.selectedSong === "brokenReality" || state.currentSong?.chartSource === "brokenReality") {
+      return brokenRealityInputLane(lane, t);
+    }
+    return typeof previousGameplayLaneMapper === "function" ? previousGameplayLaneMapper(lane, t) : lane;
+  };
+
   function brokenRealityLiveTime() {
     const audioTime = Math.max(
       Number(state.audio?.inst3?.currentTime || 0),
