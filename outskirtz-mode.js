@@ -142,10 +142,23 @@
     return canvas.width / SOURCE_W;
   }
 
-  function outskirtzLaneX(lane) {
+  function outskirtzDisplayLane(lane, t) {
+    const raw = Number(lane);
+    if (!Number.isFinite(raw)) {
+      return lane;
+    }
+    const dir = ((raw % 4) + 4) % 4;
+    if ((dir === 1 || dir === 2) && outskirtzCameraUpsideDown(t)) {
+      return raw + (dir === 1 ? 1 : -1);
+    }
+    return raw;
+  }
+
+  function outskirtzLaneX(lane, t) {
+    const visualLane = outskirtzDisplayLane(lane, t);
     const scale = sourceScale();
-    const side = lane < 4 ? "opp" : "player";
-    return clampValue(NOTE_X[side][lane % 4] * scale, 72, canvas.width - 72);
+    const side = visualLane < 4 ? "opp" : "player";
+    return clampValue(NOTE_X[side][visualLane % 4] * scale, 72, canvas.width - 72);
   }
 
   function outskirtzReceptorY() {
@@ -709,6 +722,39 @@
     return values;
   }
 
+  const previousGameplayLaneMapper = window.mapGameplayLaneForCurrentView;
+
+  function normalizeOutskirtzAngle(angle) {
+    return ((Number(angle) % 360) + 360) % 360;
+  }
+
+  function isOutskirtzCurrentSong() {
+    return state.selectedSong === "outskirtz" || state.currentSong?.chartSource === "outskirtz";
+  }
+
+  function outskirtzCameraUpsideDown(t) {
+    const time = Number.isFinite(Number(t)) ? Number(t) : (state.playing ? songTime() : 0);
+    const fx = fxAt(time);
+    const gameAngle = normalizeOutskirtzAngle((Number(fx.mirrorAngle) || 0) + (Number(fx.barrelAngle) || 0));
+    return gameAngle > 95 && gameAngle < 265;
+  }
+
+  function outskirtzInputLane(lane, t) {
+    const raw = Number(lane);
+    if (!Number.isFinite(raw)) {
+      return lane;
+    }
+    return outskirtzDisplayLane(raw, t);
+  }
+
+  window.outskirtzCameraUpsideDown = outskirtzCameraUpsideDown;
+  window.mapGameplayLaneForCurrentView = function(lane, t) {
+    if (isOutskirtzCurrentSong()) {
+      return outskirtzInputLane(lane, t);
+    }
+    return typeof previousGameplayLaneMapper === "function" ? previousGameplayLaneMapper(lane, t) : lane;
+  };
+
   function ensureFxCanvas() {
     if (!out.fxCanvas) {
       out.fxCanvas = document.createElement("canvas");
@@ -1069,7 +1115,7 @@
     withHudTransform(t, fx => {
       const y = outskirtzReceptorY();
       for (let lane = 0; lane < 8; lane++) {
-        const x = outskirtzLaneX(lane);
+        const x = outskirtzLaneX(lane, t);
         drawOutskirtzReceptor(lane, x, y, t, (lane < 4 ? 0.92 : 1) * fx.hudAlpha);
         ctx.strokeStyle = "rgba(255,255,255,0.04)";
         ctx.lineWidth = 1.5;
@@ -1088,7 +1134,7 @@
       for (const note of state.chart.notes) {
         if (note.played && note.hit && (!isHoldNote(note) || note.holdDone)) continue;
         if (note.judged && note.side !== "opp" && (!isHoldNote(note) || note.holdDone || !note.hit)) continue;
-        const x = outskirtzLaneX(note.lane);
+        const x = outskirtzLaneX(note.lane, t);
         const y = outskirtzNoteY(note.time, t);
         const tailY = outskirtzNoteY(holdEndTime(note), t);
         if ((y < -140 && tailY < -140) || (y > canvas.height + 140 && tailY > canvas.height + 140)) continue;
