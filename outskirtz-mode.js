@@ -471,24 +471,38 @@
       mirrorX: 0,
       mirrorY: 0,
       mirrorAngle: 0,
-      hudZoom: 1,
-      hudX: 0,
-      hudY: 0,
-      hudAngle: 0,
+      mirrorHudZoom: 1,
+      mirrorHudX: 0,
+      mirrorHudY: 0,
+      mirrorHudAngle: 0,
       barrelZoom: 1,
       barrel: 0,
+      barrelX: 0,
+      barrelY: 0,
+      barrelAngle: 0,
+      barrelHudZoom: 1,
+      barrelHud: 0,
+      barrelHudX: 0,
+      barrelHudY: 0,
+      barrelHudAngle: 0,
       chrom: 0,
-      bloom: 1,
+      goodChrom: 0,
+      blur: 0,
+      blur2: 0.3,
+      bloomContrast: 1,
       grey: 0,
       fish: 0,
       hue: 0,
-      vigAlpha: 0.35,
-      vigSize: 1,
-      fishbarsA: 0,
-      fishbarsB: 0,
-      fishbarsY: 0,
-      fishbarsAngle: 0,
-      fishbarsMix: 0,
+      vigStrength: 3,
+      vigSize: 50,
+      vigR: 1,
+      vigG: 1,
+      vigB: 1,
+      fishbarsEffect: 0,
+      fishbarsEffect2: 0,
+      fishbarsAngle1: 0,
+      fishbarsAngle2: 0,
+      fishbarsPower: 0,
       diAngle: 0,
       diStrength: 0,
       flash: 0,
@@ -558,7 +572,35 @@
   }
 
   function propDefault(name) {
-    return name === "mirrorZoom" || name === "hudZoom" || name === "barrelZoom" || name === "bloom" ? 1 : 0;
+    if (name.endsWith("Zoom") || name === "bloomContrast") return 1;
+    if (name === "blur2") return 0.3;
+    if (name === "vigStrength") return 3;
+    if (name === "vigSize") return 50;
+    if (name === "vigR" || name === "vigG" || name === "vigB") return 1;
+    return 0;
+  }
+
+  function cancelPropTweens(active, prop) {
+    for (let i = active.length - 1; i >= 0; i--) {
+      if (active[i].prop === prop) active.splice(i, 1);
+    }
+  }
+
+  function queueTween(active, values, prop, to, duration, ease) {
+    cancelPropTweens(active, prop);
+    const from = Number(values[prop] ?? propDefault(prop));
+    const seconds = Math.max(0, Number(duration || 0));
+    if (seconds <= 0.0001) {
+      values[prop] = Number(to) || 0;
+      return;
+    }
+    active.push({ prop, from, to: Number(to) || 0, startTime: active.time || 0, endTime: (active.time || 0) + seconds, ease });
+  }
+
+  function bumpTween(active, values, prop, amount, duration, ease) {
+    cancelPropTweens(active, prop);
+    values[prop] = Number(amount) || 0;
+    queueTween(active, values, prop, propDefault(prop), duration, ease);
   }
 
   function applyMirrorLike(event, values, active, prefix, bump) {
@@ -568,20 +610,23 @@
       const target = Number(args[index * 3] || 0);
       const duration = Number(args[index * 3 + 1] || 0) * STEP_SEC;
       const ease = args[index * 3 + 2] || "linear";
-      const hud = index > 0 && props[index - 1] === prop;
+      const hud = index === 1;
       let key = "";
-      if (prop === "zoom") key = hud ? "hudZoom" : `${prefix}Zoom`;
-      else if (prop === "x") key = hud ? "hudX" : `${prefix}X`;
-      else if (prop === "y") key = hud ? "hudY" : `${prefix}Y`;
-      else if (prop === "angle") key = hud ? "hudAngle" : `${prefix}Angle`;
-      else if (prop === "barrel") key = "barrel";
-      if (!key) return;
-      if (bump) {
-        values[key] = target;
-        active.push({ prop: key, from: target, to: propDefault(key), startTime: active.time || 0, endTime: (active.time || 0) + Math.max(0, duration), ease });
+      if (prefix === "barrel") {
+        if (prop === "zoom") key = hud ? "barrelHudZoom" : "barrelZoom";
+        else if (prop === "barrel") key = hud ? "barrelHud" : "barrel";
+        else if (prop === "x") key = hud ? "barrelHudX" : "barrelX";
+        else if (prop === "y") key = hud ? "barrelHudY" : "barrelY";
+        else if (prop === "angle") key = hud ? "barrelHudAngle" : "barrelAngle";
       } else {
-        active.push({ prop: key, from: Number(values[key] || 0), to: target, startTime: active.time || 0, endTime: (active.time || 0) + Math.max(0, duration), ease });
+        if (prop === "zoom") key = hud ? "mirrorHudZoom" : "mirrorZoom";
+        else if (prop === "x") key = hud ? "mirrorHudX" : "mirrorX";
+        else if (prop === "y") key = hud ? "mirrorHudY" : "mirrorY";
+        else if (prop === "angle") key = hud ? "mirrorHudAngle" : "mirrorAngle";
       }
+      if (!key) return;
+      if (bump) bumpTween(active, values, key, target, duration, ease);
+      else queueTween(active, values, key, target, duration, ease);
     });
   }
 
@@ -600,54 +645,55 @@
       else if (name === "barrelbump") applyMirrorLike(event, values, active, "barrel", true);
       else if (name === "bloom") {
         const args = parseList(event.value2);
-        active.push({ prop: "bloom", from: values.bloom, to: Number(event.value1 || 1), startTime: event.time, endTime: event.time + Number(args[0] || 0) * STEP_SEC, ease: args[1] || "linear" });
+        queueTween(active, values, "bloomContrast", Number(event.value1 || 1), Number(args[0] || 0) * STEP_SEC, args[1] || "linear");
       } else if (name === "bloombump") {
         const args = parseList(event.value2);
-        values.bloom = Number(event.value1 || 1);
-        active.push({ prop: "bloom", from: values.bloom, to: 1, startTime: event.time, endTime: event.time + Number(args[0] || 0) * STEP_SEC, ease: args[1] || "linear" });
+        bumpTween(active, values, "bloomContrast", Number(event.value1 || 1), Number(args[0] || 0) * STEP_SEC, args[1] || "linear");
       } else if (name === "chrombump") {
         const args = parseList(event.value2);
-        values.chrom = Number(event.value1 || 0);
-        active.push({ prop: "chrom", from: values.chrom, to: 0, startTime: event.time, endTime: event.time + Number(args[0] || 0) * STEP_SEC, ease: args[1] || "linear" });
+        bumpTween(active, values, "chrom", Number(event.value1 || 0), Number(args[0] || 0) * STEP_SEC, args[1] || "linear");
       } else if (name === "fish") {
         const args = parseList(event.value2);
-        active.push({ prop: "fish", from: values.fish, to: Number(event.value1 || 0), startTime: event.time, endTime: event.time + Number(args[0] || 0) * STEP_SEC, ease: args[1] || "linear" });
+        queueTween(active, values, "fish", Number(event.value1 || 0), Number(args[0] || 0) * STEP_SEC, args[1] || "linear");
       } else if (name === "fishbars") {
         const nums = numericList(event.value1);
         const args = parseList(event.value2);
-        ["fishbarsA", "fishbarsB", "fishbarsY", "fishbarsAngle", "fishbarsMix"].forEach((prop, i) => {
-          active.push({ prop, from: values[prop], to: nums[i] || 0, startTime: event.time, endTime: event.time + Number(args[0] || 0) * STEP_SEC, ease: args[1] || "linear" });
+        ["fishbarsEffect", "fishbarsEffect2", "fishbarsAngle1", "fishbarsAngle2", "fishbarsPower"].forEach((prop, i) => {
+          queueTween(active, values, prop, nums[i] || 0, Number(args[0] || 0) * STEP_SEC, args[1] || "linear");
         });
       } else if (name === "DIblur") {
         const nums = numericList(event.value1);
         const args = parseList(event.value2);
-        active.push({ prop: "diAngle", from: values.diAngle, to: nums[0] || 0, startTime: event.time, endTime: event.time + Number(args[0] || 0) * STEP_SEC, ease: args[1] || "linear" });
-        active.push({ prop: "diStrength", from: values.diStrength, to: nums[1] || 0, startTime: event.time, endTime: event.time + Number(args[0] || 0) * STEP_SEC, ease: args[1] || "linear" });
+        queueTween(active, values, "diAngle", nums[0] || 0, Number(args[0] || 0) * STEP_SEC, args[1] || "linear");
+        queueTween(active, values, "diStrength", nums[1] || 0, Number(args[0] || 0) * STEP_SEC, args[1] || "linear");
       } else if (name === "greyscale") {
         const args = parseList(event.value2);
-        active.push({ prop: "grey", from: values.grey, to: Number(event.value1 || 0), startTime: event.time, endTime: event.time + Number(args[0] || 0) * STEP_SEC, ease: args[1] || "linear" });
+        queueTween(active, values, "grey", Number(event.value1 || 0), Number(args[0] || 0) * STEP_SEC, args[1] || "linear");
       } else if (name === "hue") {
         const args = parseList(event.value2);
-        active.push({ prop: "hue", from: values.hue, to: Number(event.value1 || 0), startTime: event.time, endTime: event.time + Number(args[0] || 0) * STEP_SEC, ease: args[1] || "linear" });
+        queueTween(active, values, "hue", Number(event.value1 || 0), Number(args[0] || 0) * STEP_SEC, args[1] || "linear");
       } else if (name === "vignette") {
         const nums = numericList(event.value1);
         const args = parseList(event.value2);
-        active.push({ prop: "vigAlpha", from: values.vigAlpha, to: nums[0] || values.vigAlpha, startTime: event.time, endTime: event.time + Number(args[0] || 0) * STEP_SEC, ease: args[1] || "linear" });
-        active.push({ prop: "vigSize", from: values.vigSize, to: nums[1] || values.vigSize, startTime: event.time, endTime: event.time + Number(args[0] || 0) * STEP_SEC, ease: args[1] || "linear" });
+        const duration = Number(args[0] || 0) * STEP_SEC;
+        const ease = args[1] || "linear";
+        queueTween(active, values, "vigStrength", nums[0] ?? values.vigStrength, duration, ease);
+        queueTween(active, values, "vigSize", nums[1] ?? values.vigSize, duration, ease);
+        queueTween(active, values, "vigR", nums[2] ?? values.vigR, duration, ease);
+        queueTween(active, values, "vigG", nums[3] ?? values.vigG, duration, ease);
+        queueTween(active, values, "vigB", nums[4] ?? values.vigB, duration, ease);
       } else if (name === "Goodbye Hud") {
-        active.push({ prop: "hudAlpha", from: values.hudAlpha, to: Number(event.value1 || 1), startTime: event.time, endTime: event.time + Number(event.value2 || 0), ease: "linear" });
+        queueTween(active, values, "hudAlpha", Number(event.value1 || 1), Number(event.value2 || 0), "linear");
       } else if (name === "Camera Flash2" || name === "camShalf") {
         const duration = name === "camShalf" ? Number(event.value1 || 0.2) : Number(event.value1 || 0.4);
         const to = name === "camShalf" ? Number(event.value2 || 1) : 1;
-        values.flash = Math.max(values.flash, to);
-        active.push({ prop: "flash", from: to, to: 0, startTime: event.time, endTime: event.time + duration, ease: "linear" });
+        bumpTween(active, values, "flash", Math.max(values.flash, to), duration, "linear");
       } else if (name === "FadeScreenOut") {
         const duration = Number(event.value1 || 0.3);
-        values.fadeWhite = Math.max(values.fadeWhite, 1);
-        active.push({ prop: "fadeWhite", from: 1, to: 0, startTime: event.time, endTime: event.time + duration, ease: "cubeOut" });
+        bumpTween(active, values, "fadeWhite", Math.max(values.fadeWhite, 1), duration, "cubeOut");
       } else if (name === "FadeScreenIn") {
         const duration = Number(event.value1 || 0.3);
-        active.push({ prop: "fadeWhite", from: values.fadeWhite, to: 1, startTime: event.time, endTime: event.time + duration, ease: "cubeIn" });
+        queueTween(active, values, "fadeWhite", 1, duration, "cubeIn");
       } else if (name === "badappleSprite") {
         values.badApple = 1;
       } else if (name === "MirrorSwing") {
@@ -659,7 +705,7 @@
     active.time = time;
     advanceTweens(active, values, time);
     if (values.swingGame) values.mirrorAngle += Math.sin(time * 4.2) * values.swingGame * 5;
-    if (values.swingHud) values.hudAngle += Math.sin(time * 5.1) * values.swingHud * 5;
+    if (values.swingHud) values.mirrorHudAngle += Math.sin(time * 5.1) * values.swingHud * 5;
     return values;
   }
 
@@ -729,37 +775,43 @@
       ctx.drawImage(out.workingCanvas, 0, 0, canvas.width, canvas.height);
       ctx.restore();
     }
-    const bloom = Math.max(0, Number(fx.bloom || 1) - 1);
+    const bloom = Math.max(0, Number(fx.bloomContrast || 1) - 1);
     if (bloom > 0.02 && !window.PERFORMANCE_MODE) {
       copyCanvasTo(out.workingCtx);
       ctx.save();
       ctx.globalCompositeOperation = "screen";
-      ctx.globalAlpha = Math.min(0.65, bloom * 0.16);
-      ctx.filter = `blur(${Math.min(28, 6 + bloom * 4).toFixed(1)}px) brightness(${(1 + bloom * 0.08).toFixed(2)})`;
+      ctx.globalAlpha = Math.min(0.75, bloom * 0.22);
+      ctx.filter = `blur(${Math.min(30, 5 + bloom * 5).toFixed(1)}px) brightness(${(1 + bloom * 0.16).toFixed(2)})`;
       ctx.drawImage(out.workingCanvas, -10, -10, canvas.width + 20, canvas.height + 20);
       ctx.restore();
     }
   }
 
   function applyBarsAndVignette(fx, t) {
-    const bars = Math.max(Math.abs(fx.fishbarsA), Math.abs(fx.fishbarsMix));
+    const bars = Math.max(Math.abs(fx.fishbarsEffect), Math.abs(fx.fishbarsEffect2));
     if (bars > 0.01) {
       ctx.save();
-      ctx.globalAlpha = Math.min(0.5, bars * 0.9);
+      ctx.globalAlpha = Math.min(0.95, bars * 2.6);
       ctx.fillStyle = "#05020a";
-      const h = 22 + bars * 70;
-      const yShift = Math.sin(t * 5 + fx.fishbarsAngle) * 9 * bars + fx.fishbarsY * 80;
-      ctx.translate(0, yShift);
+      const h = Math.min(canvas.height * 0.48, bars * canvas.height);
+      const xW = Math.min(canvas.width * 0.5, Math.abs(fx.fishbarsEffect2) * canvas.width);
+      ctx.translate(0, Math.sin(t * 5 + fx.fishbarsAngle1) * 4 * Math.abs(fx.fishbarsPower));
       ctx.fillRect(0, 0, canvas.width, h);
       ctx.fillRect(0, canvas.height - h, canvas.width, h);
+      if (xW > 1) {
+        ctx.fillRect(0, 0, xW, canvas.height);
+        ctx.fillRect(canvas.width - xW, 0, xW, canvas.height);
+      }
       ctx.restore();
     }
     ctx.save();
-    const cx = canvas.width * 0.5, cy = canvas.height * 0.5;
-    const radius = canvas.width * (0.42 + clamp01(fx.vigSize) * 0.24);
-    const grad = ctx.createRadialGradient(cx, cy, radius * 0.18, cx, cy, radius);
+    const cx = canvas.width * 0.5;
+    const cy = canvas.height * 0.5;
+    const strength = Math.max(0, Number(fx.vigStrength || 0));
+    const radius = canvas.width * clampValue(Number(fx.vigSize || 0) / 5, 0.15, 12);
+    const grad = ctx.createRadialGradient(cx, cy, radius * 0.05, cx, cy, radius);
     grad.addColorStop(0, "rgba(0,0,0,0)");
-    grad.addColorStop(1, `rgba(0,0,0,${Math.min(0.72, fx.vigAlpha * 0.5).toFixed(3)})`);
+    grad.addColorStop(1, `rgba(0,0,0,${Math.min(0.82, strength * 0.22).toFixed(3)})`);
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
@@ -781,16 +833,53 @@
     const fx = fxAt(t);
     const useCameraFx = !window.PERFORMANCE_MODE && !window.REDUCE_MOTION;
     if (useCameraFx) {
+      const usedWebGl = window.FNF_WEBGL?.drawOutskirtzPostStack?.(canvas, {
+        time: t,
+        mirrorZoom: fx.mirrorZoom,
+        mirrorAngle: fx.mirrorAngle,
+        mirrorX: fx.mirrorX,
+        mirrorY: fx.mirrorY,
+        barrelZoom: fx.barrelZoom,
+        barrel: fx.barrel,
+        barrelAngle: fx.barrelAngle,
+        barrelX: fx.barrelX,
+        barrelY: fx.barrelY,
+        fish: fx.fish,
+        fishbarsEffect: fx.fishbarsEffect,
+        fishbarsEffect2: fx.fishbarsEffect2,
+        fishbarsAngle1: fx.fishbarsAngle1,
+        fishbarsAngle2: fx.fishbarsAngle2,
+        fishbarsPower: fx.fishbarsPower,
+        chrom: fx.chrom,
+        goodChrom: fx.goodChrom,
+        grey: fx.grey,
+        hue: fx.hue,
+        blur: fx.blur,
+        blur2: fx.blur2,
+        bloomContrast: fx.bloomContrast,
+        vigStrength: fx.vigStrength,
+        vigSize: fx.vigSize,
+        vigR: fx.vigR,
+        vigG: fx.vigG,
+        vigB: fx.vigB,
+        diAngle: fx.diAngle,
+        diStrength: fx.diStrength,
+        badApple: fx.badApple
+      });
+      if (usedWebGl) {
+        applyFlash(fx);
+        return;
+      }
       const cameraWarp = (fx.barrel || 0) * 0.012 + (fx.fish || 0) * 0.12 + (fx.barrelZoom - 1) * 0.04;
-      const usedWebGl = window.FNF_WEBGL?.drawCameraPass(canvas, {
-        zoom: clampValue(1 / Math.max(0.08, fx.mirrorZoom), 0.35, 2.4),
-        angle: fx.mirrorAngle,
-        offsetX: clampValue(fx.mirrorX * 0.035, -0.5, 0.5),
-        offsetY: clampValue(fx.mirrorY * 0.035, -0.5, 0.5),
+      const usedGenericWebGl = window.FNF_WEBGL?.drawCameraPass(canvas, {
+        zoom: clampValue(fx.mirrorZoom * fx.barrelZoom, 0.35, 2.4),
+        angle: fx.mirrorAngle + fx.barrelAngle,
+        offsetX: clampValue((fx.mirrorX + fx.barrelX) * 0.035, -0.5, 0.5),
+        offsetY: clampValue((fx.mirrorY + fx.barrelY) * 0.035, -0.5, 0.5),
         warp: clampValue(cameraWarp, -1.1, 1.1),
         mirror: clampValue(Math.abs(fx.mirrorZoom - 1) + Math.abs(fx.fish) + Math.abs(fx.barrel) * 0.02, 0, 1.4)
       });
-      if (!usedWebGl && Math.abs(fx.mirrorAngle) > 0.02) {
+      if (!usedGenericWebGl && Math.abs(fx.mirrorAngle) > 0.02) {
         ensureFxCanvas();
         copyCanvasTo(out.workingCtx);
         ctx.save();

@@ -46,7 +46,8 @@
       camera: null,
       parallax: null,
       speedLines: null,
-      dustinPost: null
+      dustinPost: null,
+      outskirtzPost: null
     };
 
     function markFailed(error){
@@ -736,6 +737,258 @@
       }
     }
 
+    function ensureOutskirtzPostPass(){
+      const gl = ensureContext();
+      if(!gl) return null;
+      if(state.outskirtzPost) return state.outskirtzPost;
+      try {
+        const program = createProgram(gl, `
+          attribute vec2 aPosition;
+          attribute vec2 aTexCoord;
+          varying vec2 vUv;
+          void main(){
+            vUv = aTexCoord;
+            gl_Position = vec4(aPosition, 0.0, 1.0);
+          }
+        `, `
+          precision mediump float;
+          uniform sampler2D uTexture;
+          uniform vec2 uTextureSize;
+          uniform float uTime;
+          uniform float uMirrorZoom;
+          uniform float uMirrorAngle;
+          uniform vec2 uMirrorOffset;
+          uniform float uBarrelZoom;
+          uniform float uBarrel;
+          uniform float uBarrelAngle;
+          uniform vec2 uBarrelOffset;
+          uniform float uFishPower;
+          uniform float uFishbarsEffect;
+          uniform float uFishbarsEffect2;
+          uniform float uFishbarsPower;
+          uniform float uFishbarsAngle1;
+          uniform float uFishbarsAngle2;
+          uniform float uChrom;
+          uniform float uGoodChrom;
+          uniform float uGray;
+          uniform float uHue;
+          uniform float uBlur;
+          uniform float uBlur2;
+          uniform float uBloomContrast;
+          uniform float uVigStrength;
+          uniform float uVigSize;
+          uniform vec3 uVigColor;
+          uniform float uDiAngle;
+          uniform float uDiStrength;
+          uniform float uBadApple;
+          varying vec2 vUv;
+
+          vec2 mirrorRepeat(vec2 uv){
+            if((uv.x > 1.0 || uv.x < 0.0) && abs(mod(uv.x, 2.0)) > 1.0) uv.x = (0.0 - uv.x) + 1.0;
+            if((uv.y > 1.0 || uv.y < 0.0) && abs(mod(uv.y, 2.0)) > 1.0) uv.y = (0.0 - uv.y) + 1.0;
+            return vec2(abs(mod(uv.x, 1.0)), abs(mod(uv.y, 1.0)));
+          }
+
+          vec2 sourceTransform(vec2 uv, float zoom, float angle, vec2 offset){
+            vec2 iResolution = vec2(1280.0, 720.0);
+            vec2 p = ((iResolution * uv) - (0.5 * iResolution)) / iResolution.y;
+            p *= max(0.001, zoom);
+            float a = radians(angle);
+            float s = sin(a);
+            float c = cos(a);
+            p = mat2(c, -s, s, c) * p;
+            p = mat2(0.5625, 0.0, 0.0, 1.0) * p;
+            return p + vec2(0.5) + offset;
+          }
+
+          vec2 brownConradyDistortion(vec2 uv, float dist){
+            uv = uv * 2.0 - 1.0;
+            float r2 = dot(uv, uv);
+            uv *= 1.0 + (0.1 * dist) * r2 + (-0.025 * dist) * r2 * r2;
+            return uv * 0.5 + 0.5;
+          }
+
+          vec2 barrelDistort(vec2 uv, float t, vec2 minDistort, vec2 maxDistort){
+            vec2 dist = mix(minDistort, maxDistort, t);
+            return brownConradyDistortion(uv, 75.0 * dist.x);
+          }
+
+          vec2 barrelCoord(vec2 uv){
+            vec2 transformed = sourceTransform(uv, uBarrelZoom, uBarrelAngle, uBarrelOffset);
+            float maxDistortPx = 50.0 * uBarrel;
+            vec2 maxDistort = vec2(maxDistortPx) / vec2(1280.0, 720.0);
+            vec2 minDistort = 0.5 * maxDistort;
+            return barrelDistort(transformed, 0.5, minDistort, maxDistort);
+          }
+
+          vec2 fishCoord(vec2 uv, float power){
+            float prop = 1280.0 / 720.0;
+            vec2 p = (uv * vec2(1280.0, 720.0)) / 1280.0;
+            vec2 m = vec2(0.5, 0.5 / prop);
+            vec2 d = p - m;
+            float r = sqrt(dot(d, d));
+            float adjustedPower = power * -1.3;
+            if(abs(adjustedPower) < 0.0001) return uv;
+            float bind = adjustedPower > 0.0 ? sqrt(dot(m, m)) : ((prop < 1.0) ? m.x : m.y);
+            vec2 dir = r > 0.0001 ? normalize(d) : vec2(0.0);
+            vec2 outUv = adjustedPower > 0.0
+              ? m + dir * tan(r * adjustedPower) * bind / tan(bind * adjustedPower)
+              : m + dir * atan(r * -adjustedPower * 10.0) * bind / atan(-adjustedPower * bind * 10.0);
+            outUv.y *= prop;
+            return outUv;
+          }
+
+          vec2 rotateAround(vec2 p, float a, vec2 center){
+            p -= center;
+            float c = cos(a);
+            float s = sin(a);
+            p = vec2(c * p.x - s * p.y, s * p.x + c * p.y);
+            return p + center;
+          }
+
+          vec2 pincushionDistortion(vec2 uv, float strength){
+            vec2 st = uv - 0.5;
+            float uvA = atan(st.x, st.y);
+            float uvD = dot(st, st);
+            return 0.5 + vec2(sin(uvA), cos(uvA)) * sqrt(uvD) * (1.0 - strength * uvD);
+          }
+
+          vec3 applyHue(vec3 color, float hue){
+            float angle = radians(hue);
+            vec3 k = vec3(0.57735);
+            float c = cos(angle);
+            return color * c + cross(k, color) * sin(angle) + k * dot(k, color) * (1.0 - c);
+          }
+
+          vec4 sampleSource(vec2 uv){
+            vec2 current = barrelCoord(uv);
+            current = fishCoord(current, uFishbarsPower);
+            current = fishCoord(current, uFishPower);
+            current = sourceTransform(current, uMirrorZoom, uMirrorAngle, uMirrorOffset);
+            return texture2D(uTexture, mirrorRepeat(current));
+          }
+
+          vec4 chromSample(vec2 uv){
+            float chrom = abs(uChrom) + abs(uGoodChrom) * 0.012;
+            vec4 color = sampleSource(uv);
+            if(chrom > 0.00001){
+              color.r = sampleSource(uv + vec2(chrom, 0.0)).r;
+              color.b = sampleSource(uv - vec2(chrom, 0.0)).b;
+            }
+            if(abs(uGoodChrom) > 0.00001){
+              vec2 baseUv = clamp(uv, vec2(0.0), vec2(1.0));
+              color.r = sampleSource(pincushionDistortion(baseUv, 0.3 * uGoodChrom)).r;
+              color.g = sampleSource(pincushionDistortion(baseUv, 0.15 * uGoodChrom)).g;
+              color.b = sampleSource(pincushionDistortion(baseUv, 0.075 * uGoodChrom)).b;
+            }
+            return color;
+          }
+
+          void main(){
+            vec2 uv = vUv;
+            vec2 diDir = vec2(cos(radians(uDiAngle)), sin(radians(uDiAngle))) * uDiStrength;
+            vec4 color = chromSample(uv);
+            if(uDiStrength > 0.0001){
+              color += chromSample(uv + diDir * 0.35) * 0.35;
+              color += chromSample(uv - diDir * 0.24) * 0.25;
+              color /= 1.6;
+            }
+            float blur = max(uBlur * 0.0015, max(0.0, uBlur2 - 0.3) * 0.001);
+            if(blur > 0.00001){
+              color += chromSample(uv + vec2(blur, 0.0));
+              color += chromSample(uv - vec2(blur, 0.0));
+              color += chromSample(uv + vec2(0.0, blur));
+              color += chromSample(uv - vec2(0.0, blur));
+              color /= 5.0;
+            }
+
+            vec2 barUv = fishCoord(barrelCoord(vUv), uFishbarsPower);
+            vec2 rotated1 = rotateAround(barUv, uFishbarsAngle1, vec2(0.5));
+            vec2 rotated2 = rotateAround(barUv, uFishbarsAngle2, vec2(0.5));
+            if(rotated1.y < uFishbarsEffect || rotated1.y > 1.0 - uFishbarsEffect ||
+               rotated2.x < uFishbarsEffect2 || rotated2.x > 1.0 - uFishbarsEffect2){
+              color = vec4(0.0, 0.0, 0.0, 1.0);
+            }
+
+            if(uGray > 0.0001){
+              vec3 grey = vec3(dot(color.rgb, vec3(0.25)));
+              color.rgb = mix(color.rgb, grey, clamp(uGray, 0.0, 1.0));
+            }
+            if(abs(uHue) > 0.00001) color.rgb = applyHue(color.rgb, uHue * 255.0);
+            if(uBadApple > 0.5){
+              float g = dot(color.rgb, vec3(0.299, 0.587, 0.114));
+              color.rgb = vec3(smoothstep(0.36, 0.62, g));
+            }
+
+            color.rgb *= max(0.0, uBloomContrast);
+
+            if(uVigStrength != 0.0 && uVigSize != 0.0){
+              float sizeVig = (uVigSize * uVigStrength) / 12.0;
+              vec2 vigUv = pow(max(vec2(0.0), sin(vUv * 3.0)), vec2(sizeVig));
+              float vig = clamp(vigUv.x * vigUv.y, 0.0, 1.0);
+              color.rgb = color.rgb * vig + (uVigColor / 255.0) * (1.0 - vig);
+            }
+
+            gl_FragColor = color;
+          }
+        `);
+        const buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+          -1, -1, 0, 0,
+           1, -1, 1, 0,
+          -1,  1, 0, 1,
+           1,  1, 1, 1
+        ]), gl.STATIC_DRAW);
+        const texture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        state.outskirtzPost = {
+          program,
+          buffer,
+          texture,
+          aPosition: gl.getAttribLocation(program, "aPosition"),
+          aTexCoord: gl.getAttribLocation(program, "aTexCoord"),
+          uTexture: gl.getUniformLocation(program, "uTexture"),
+          uTextureSize: gl.getUniformLocation(program, "uTextureSize"),
+          uTime: gl.getUniformLocation(program, "uTime"),
+          uMirrorZoom: gl.getUniformLocation(program, "uMirrorZoom"),
+          uMirrorAngle: gl.getUniformLocation(program, "uMirrorAngle"),
+          uMirrorOffset: gl.getUniformLocation(program, "uMirrorOffset"),
+          uBarrelZoom: gl.getUniformLocation(program, "uBarrelZoom"),
+          uBarrel: gl.getUniformLocation(program, "uBarrel"),
+          uBarrelAngle: gl.getUniformLocation(program, "uBarrelAngle"),
+          uBarrelOffset: gl.getUniformLocation(program, "uBarrelOffset"),
+          uFishPower: gl.getUniformLocation(program, "uFishPower"),
+          uFishbarsEffect: gl.getUniformLocation(program, "uFishbarsEffect"),
+          uFishbarsEffect2: gl.getUniformLocation(program, "uFishbarsEffect2"),
+          uFishbarsPower: gl.getUniformLocation(program, "uFishbarsPower"),
+          uFishbarsAngle1: gl.getUniformLocation(program, "uFishbarsAngle1"),
+          uFishbarsAngle2: gl.getUniformLocation(program, "uFishbarsAngle2"),
+          uChrom: gl.getUniformLocation(program, "uChrom"),
+          uGoodChrom: gl.getUniformLocation(program, "uGoodChrom"),
+          uGray: gl.getUniformLocation(program, "uGray"),
+          uHue: gl.getUniformLocation(program, "uHue"),
+          uBlur: gl.getUniformLocation(program, "uBlur"),
+          uBlur2: gl.getUniformLocation(program, "uBlur2"),
+          uBloomContrast: gl.getUniformLocation(program, "uBloomContrast"),
+          uVigStrength: gl.getUniformLocation(program, "uVigStrength"),
+          uVigSize: gl.getUniformLocation(program, "uVigSize"),
+          uVigColor: gl.getUniformLocation(program, "uVigColor"),
+          uDiAngle: gl.getUniformLocation(program, "uDiAngle"),
+          uDiStrength: gl.getUniformLocation(program, "uDiStrength"),
+          uBadApple: gl.getUniformLocation(program, "uBadApple")
+        };
+        return state.outskirtzPost;
+      } catch(error) {
+        markFailed(error);
+        return null;
+      }
+    }
+
     function drawCameraPass(source, params){
       if(window.PERFORMANCE_MODE || !source) return false;
       const gl = ensureContext();
@@ -915,11 +1168,73 @@
       }
     }
 
+    function drawOutskirtzPostStack(source, params){
+      if(window.PERFORMANCE_MODE || window.REDUCE_MOTION || !source) return false;
+      const gl = ensureContext();
+      const pass = gl && ensureOutskirtzPostPass();
+      if(!gl || !pass || !syncSize()) return false;
+      if(typeof gl.isContextLost === "function" && gl.isContextLost()) return markFailed("WebGL context lost");
+      try {
+        gl.viewport(0, 0, state.width, state.height);
+        gl.clearColor(0, 0, 0, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.useProgram(pass.program);
+        gl.bindBuffer(gl.ARRAY_BUFFER, pass.buffer);
+        gl.enableVertexAttribArray(pass.aPosition);
+        gl.vertexAttribPointer(pass.aPosition, 2, gl.FLOAT, false, 16, 0);
+        gl.enableVertexAttribArray(pass.aTexCoord);
+        gl.vertexAttribPointer(pass.aTexCoord, 2, gl.FLOAT, false, 16, 8);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, pass.texture);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+        gl.uniform1i(pass.uTexture, 0);
+        gl.uniform2f(pass.uTextureSize, state.width, state.height);
+        gl.uniform1f(pass.uTime, Number(params?.time || 0));
+        gl.uniform1f(pass.uMirrorZoom, clamp(params?.mirrorZoom ?? 1, 0.05, 6));
+        gl.uniform1f(pass.uMirrorAngle, clamp(params?.mirrorAngle ?? 0, -180, 180));
+        gl.uniform2f(pass.uMirrorOffset, clamp((params?.mirrorX ?? 0) * 0.035, -1.5, 1.5), clamp((params?.mirrorY ?? 0) * 0.035, -1.5, 1.5));
+        gl.uniform1f(pass.uBarrelZoom, clamp(params?.barrelZoom ?? 1, 0.05, 6));
+        gl.uniform1f(pass.uBarrel, clamp(params?.barrel ?? 0, -20, 20));
+        gl.uniform1f(pass.uBarrelAngle, clamp(params?.barrelAngle ?? 0, -180, 180));
+        gl.uniform2f(pass.uBarrelOffset, clamp((params?.barrelX ?? 0) * 0.035, -1.5, 1.5), clamp((params?.barrelY ?? 0) * 0.035, -1.5, 1.5));
+        gl.uniform1f(pass.uFishPower, clamp(params?.fish ?? 0, -2, 2));
+        gl.uniform1f(pass.uFishbarsEffect, clamp(params?.fishbarsEffect ?? 0, 0, 0.49));
+        gl.uniform1f(pass.uFishbarsEffect2, clamp(params?.fishbarsEffect2 ?? 0, 0, 0.49));
+        gl.uniform1f(pass.uFishbarsPower, clamp(params?.fishbarsPower ?? 0, -2, 2));
+        gl.uniform1f(pass.uFishbarsAngle1, Number(params?.fishbarsAngle1 || 0));
+        gl.uniform1f(pass.uFishbarsAngle2, Number(params?.fishbarsAngle2 || 0));
+        gl.uniform1f(pass.uChrom, clamp(params?.chrom ?? 0, -0.1, 0.1));
+        gl.uniform1f(pass.uGoodChrom, clamp(params?.goodChrom ?? 0, -8, 8));
+        gl.uniform1f(pass.uGray, clamp(params?.grey ?? 0, 0, 1));
+        gl.uniform1f(pass.uHue, clamp(params?.hue ?? 0, -1, 1));
+        gl.uniform1f(pass.uBlur, clamp(params?.blur ?? 0, 0, 32));
+        gl.uniform1f(pass.uBlur2, clamp(params?.blur2 ?? 0.3, 0, 32));
+        gl.uniform1f(pass.uBloomContrast, clamp(params?.bloomContrast ?? 1, 0, 8));
+        gl.uniform1f(pass.uVigStrength, clamp(params?.vigStrength ?? 0, 0, 12));
+        gl.uniform1f(pass.uVigSize, clamp(params?.vigSize ?? 0, 0, 80));
+        gl.uniform3f(pass.uVigColor, clamp(params?.vigR ?? 1, 0, 255), clamp(params?.vigG ?? 1, 0, 255), clamp(params?.vigB ?? 1, 0, 255));
+        gl.uniform1f(pass.uDiAngle, clamp(params?.diAngle ?? 0, -360, 360));
+        gl.uniform1f(pass.uDiStrength, clamp(params?.diStrength ?? 0, 0, 0.2));
+        gl.uniform1f(pass.uBadApple, params?.badApple ? 1 : 0);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        const error = gl.getError();
+        if(error !== gl.NO_ERROR) throw new Error("WebGL error " + error);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(state.fxCanvas, 0, 0, canvas.width, canvas.height);
+        return true;
+      } catch(error) {
+        return markFailed(error);
+      }
+    }
+
     return {
       drawCameraPass,
       drawParallaxPass,
       drawSpeedLines,
       drawDustinPostStack,
+      drawOutskirtzPostStack,
       status(){
         return {
           available: !!state.gl && !state.failed,
