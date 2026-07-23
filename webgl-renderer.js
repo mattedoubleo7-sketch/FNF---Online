@@ -47,13 +47,25 @@
       parallax: null,
       speedLines: null,
       dustinPost: null,
-      outskirtzPost: null
+      outskirtzPost: null,
+      warmCanvas: null,
+      sourceUploadBlocked: false
     };
 
     function markFailed(error){
       state.failed = true;
       state.failReason = error && error.message ? error.message : String(error || "WebGL unavailable");
       return false;
+    }
+
+    function handleSourcePassError(error){
+      const message = error && error.message ? error.message : String(error || "WebGL source upload failed");
+      if(/tainted|cross-origin|may not be loaded/i.test(message)){
+        state.sourceUploadBlocked = true;
+        state.failReason = message;
+        return false;
+      }
+      return markFailed(error);
     }
 
     function ensureContext(){
@@ -98,6 +110,30 @@
       state.fxCanvas.width = canvas.width;
       state.fxCanvas.height = canvas.height;
       return state.width > 0 && state.height > 0;
+    }
+
+    function warmSourceCanvas(){
+      if(!state.warmCanvas) state.warmCanvas = document.createElement("canvas");
+      if(state.warmCanvas.width !== state.width || state.warmCanvas.height !== state.height){
+        state.warmCanvas.width = Math.max(1, state.width || canvas.width || 1);
+        state.warmCanvas.height = Math.max(1, state.height || canvas.height || 1);
+      }
+      const warmCtx = state.warmCanvas.getContext("2d");
+      if(warmCtx){
+        const w = state.warmCanvas.width;
+        const h = state.warmCanvas.height;
+        warmCtx.setTransform(1, 0, 0, 1, 0, 0);
+        warmCtx.globalCompositeOperation = "source-over";
+        warmCtx.globalAlpha = 1;
+        warmCtx.filter = "none";
+        warmCtx.fillStyle = "#050206";
+        warmCtx.fillRect(0, 0, w, h);
+        warmCtx.fillStyle = "#241018";
+        warmCtx.fillRect(w * 0.08, h * 0.12, w * 0.84, h * 0.76);
+        warmCtx.fillStyle = "#e9def7";
+        warmCtx.fillRect(w * 0.4, h * 0.36, w * 0.2, h * 0.24);
+      }
+      return state.warmCanvas;
     }
 
     function ensureCameraPass(){
@@ -991,6 +1027,7 @@
 
     function drawCameraPass(source, params){
       if(window.PERFORMANCE_MODE || !source) return false;
+      if(state.sourceUploadBlocked) return false;
       const gl = ensureContext();
       const pass = gl && ensureCameraPass();
       if(!gl || !pass || !syncSize()) return false;
@@ -1023,12 +1060,13 @@
         ctx.drawImage(state.fxCanvas, 0, 0, canvas.width, canvas.height);
         return true;
       } catch(error) {
-        return markFailed(error);
+        return handleSourcePassError(error);
       }
     }
 
     function drawParallaxPass(source, params){
       if(window.PERFORMANCE_MODE || window.REDUCE_MOTION || !source) return false;
+      if(state.sourceUploadBlocked) return false;
       const amount = clamp(params?.amount ?? 0, 0, 1);
       if(amount <= 0.003) return false;
       const gl = ensureContext();
@@ -1062,7 +1100,7 @@
         ctx.drawImage(state.fxCanvas, 0, 0, canvas.width, canvas.height);
         return true;
       } catch(error) {
-        return markFailed(error);
+        return handleSourcePassError(error);
       }
     }
 
@@ -1103,6 +1141,7 @@
 
     function drawDustinPostStack(source, params){
       if(window.PERFORMANCE_MODE || !source) return false;
+      if(state.sourceUploadBlocked) return false;
       const gl = ensureContext();
       const pass = gl && ensureDustinPostPass();
       if(!gl || !pass || !syncSize()) return false;
@@ -1164,12 +1203,13 @@
         ctx.drawImage(state.fxCanvas, 0, 0, canvas.width, canvas.height);
         return true;
       } catch(error) {
-        return markFailed(error);
+        return handleSourcePassError(error);
       }
     }
 
-    function drawOutskirtzPostStack(source, params){
+    function runOutskirtzPostStack(source, params, commit){
       if(window.PERFORMANCE_MODE || window.REDUCE_MOTION || !source) return false;
+      if(commit && state.sourceUploadBlocked) return false;
       const gl = ensureContext();
       const pass = gl && ensureOutskirtzPostPass();
       if(!gl || !pass || !syncSize()) return false;
@@ -1221,12 +1261,57 @@
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         const error = gl.getError();
         if(error !== gl.NO_ERROR) throw new Error("WebGL error " + error);
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(state.fxCanvas, 0, 0, canvas.width, canvas.height);
+        if(commit){
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(state.fxCanvas, 0, 0, canvas.width, canvas.height);
+        }
         return true;
       } catch(error) {
-        return markFailed(error);
+        return handleSourcePassError(error);
       }
+    }
+
+    function drawOutskirtzPostStack(source, params){
+      return runOutskirtzPostStack(source, params, true);
+    }
+
+    function warmOutskirtzPostStack(source, params){
+      if(window.PERFORMANCE_MODE || window.REDUCE_MOTION) return false;
+      const gl = ensureContext();
+      if(!gl || !syncSize()) return false;
+      return runOutskirtzPostStack(source || warmSourceCanvas(), params || {
+        time: 9.15,
+        mirrorZoom: 3,
+        mirrorAngle: -10,
+        mirrorX: -1,
+        mirrorY: 0,
+        barrelZoom: 1.6,
+        barrel: -10,
+        barrelAngle: 0,
+        barrelX: 0,
+        barrelY: 0,
+        fish: 0.3,
+        fishbarsEffect: 0.31,
+        fishbarsEffect2: 0,
+        fishbarsAngle1: 0.3,
+        fishbarsAngle2: 0,
+        fishbarsPower: 0.3,
+        chrom: 0.01,
+        goodChrom: 0,
+        grey: 0,
+        hue: 0,
+        blur: 0,
+        blur2: 0.3,
+        bloomContrast: 4,
+        vigStrength: 0,
+        vigSize: 0,
+        vigR: 1,
+        vigG: 1,
+        vigB: 1,
+        diAngle: 160,
+        diStrength: 0.02,
+        badApple: 0
+      }, false);
     }
 
     return {
@@ -1235,11 +1320,18 @@
       drawSpeedLines,
       drawDustinPostStack,
       drawOutskirtzPostStack,
+      warmOutskirtzPostStack,
+      blockSourceUploads(reason){
+        state.sourceUploadBlocked = true;
+        if(reason) state.failReason = String(reason);
+        return false;
+      },
       status(){
         return {
           available: !!state.gl && !state.failed,
           failed: state.failed,
           reason: state.failReason,
+          sourceUploadBlocked: state.sourceUploadBlocked,
           width: state.width,
           height: state.height
         };
