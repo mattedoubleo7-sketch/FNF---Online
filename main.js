@@ -50,13 +50,20 @@ async function stopEmbeddedServer() {
   embeddedServer = null;
 }
 
+async function ensureEmbeddedServer() {
+  if (!embeddedServer) {
+    embeddedServer = await createGameServer({ port: 0, host: "127.0.0.1" });
+  }
+  return embeddedServer;
+}
+
 async function loadDesktopMode(win, mode) {
   const normalized = mode === "offline" ? "offline" : "online";
   currentDesktopMode = normalized;
 
   if (normalized === "offline") {
-    await stopEmbeddedServer();
-    await win.loadFile(path.join(__dirname, "FNF - Offline.html"));
+    const localServer = await ensureEmbeddedServer();
+    await win.loadURL(`http://127.0.0.1:${localServer.port}/offline`);
     return;
   }
 
@@ -67,10 +74,8 @@ async function loadDesktopMode(win, mode) {
     return;
   }
 
-  if (!embeddedServer) {
-    embeddedServer = await createGameServer({ port: 0, host: "127.0.0.1" });
-  }
-  await win.loadURL(`http://127.0.0.1:${embeddedServer.port}/play`);
+  const localServer = await ensureEmbeddedServer();
+  await win.loadURL(`http://127.0.0.1:${localServer.port}/play`);
 }
 
 async function createWindow() {

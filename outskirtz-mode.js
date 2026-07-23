@@ -38,8 +38,6 @@
     fxCtx: null,
     workingCanvas: null,
     workingCtx: null,
-    bloomCanvas: null,
-    bloomCtx: null,
     lastSong: "",
     lastSide: "opp",
     lastSideTime: -99,
@@ -48,7 +46,9 @@
     warmHeight: 0,
     rasterWarmed: false,
     liveWarmWidth: 0,
-    liveWarmHeight: 0
+    liveWarmHeight: 0,
+    fxCacheTime: NaN,
+    fxCache: null
   };
 
   const baseIsImportedSong = isImportedSong;
@@ -158,20 +158,20 @@
     return canvas.width / SOURCE_W;
   }
 
-  function outskirtzDisplayLane(lane, t) {
+  function outskirtzDisplayLane(lane, t, fx) {
     const raw = Number(lane);
     if (!Number.isFinite(raw)) {
       return lane;
     }
     const dir = ((raw % 4) + 4) % 4;
-    if ((dir === 1 || dir === 2) && outskirtzCameraUpsideDown(t)) {
+    if ((dir === 1 || dir === 2) && outskirtzCameraUpsideDown(t, fx)) {
       return raw + (dir === 1 ? 1 : -1);
     }
     return raw;
   }
 
-  function outskirtzLaneX(lane, t) {
-    const visualLane = outskirtzDisplayLane(lane, t);
+  function outskirtzLaneX(lane, t, fx) {
+    const visualLane = outskirtzDisplayLane(lane, t, fx);
     const scale = sourceScale();
     const side = visualLane < 4 ? "opp" : "player";
     return clampValue(NOTE_X[side][visualLane % 4] * scale, 72, canvas.width - 72);
@@ -445,14 +445,14 @@
     drawStageImage("overlay", OUT.stage.sprites.overlay, t, 0.96);
   }
 
-  function drawOutskirtzReceptor(lane, x, y, t, alpha = 1, leanFallback = false) {
+  function drawOutskirtzReceptor(lane, x, y, t, alpha = 1) {
     const skin = noteFrames(lane);
     const age = performance.now() / 1000 - Number(state.receptorFx[lane]?.time || -10);
     if (age >= 0 && age < 0.16 && skin.confirm?.length) {
       const frame = frameFromList(skin.confirm, age, 24, false);
       if (frame) {
         ctx.save();
-        ctx.shadowBlur = leanFallback ? 9 : 22;
+        ctx.shadowBlur = 22;
         ctx.shadowColor = COLORS[lane];
         drawAtlasCentered(out.images.notes, frame, x, y, 0.72 + (0.16 - age) * 0.52, alpha * (1 - age / 0.18));
         ctx.restore();
@@ -463,17 +463,17 @@
     const frame = pressed ? frameFromList(skin.press, performance.now() / 1000, 24, true) : skin.static;
     if (!frame) return;
     ctx.save();
-    ctx.shadowBlur = leanFallback ? (pressed ? 8 : 3) : (pressed ? 18 : 8);
+    ctx.shadowBlur = pressed ? 18 : 8;
     ctx.shadowColor = COLORS[lane];
     drawAtlasCentered(out.images.notes, frame, x, y, pressed ? 0.7 : 0.68, alpha);
     ctx.restore();
   }
 
-  function drawOutskirtzNote(lane, x, y, scale, alpha = 1, leanFallback = false) {
+  function drawOutskirtzNote(lane, x, y, scale, alpha = 1) {
     const skin = noteFrames(lane);
     if (!skin?.gem) return;
     ctx.save();
-    ctx.shadowBlur = leanFallback ? 7 : 20;
+    ctx.shadowBlur = 20;
     ctx.shadowColor = COLORS[lane];
     drawAtlasCentered(out.images.notes, skin.gem, x, y, 0.7 * scale, alpha);
     ctx.restore();
@@ -659,7 +659,7 @@
     });
   }
 
-  function fxAt(time) {
+  function computeFxAt(time) {
     const values = defaultFx();
     const active = [];
     active.time = 0;
@@ -738,6 +738,15 @@
     return values;
   }
 
+  function fxAt(time) {
+    const numberTime = Number(time) || 0;
+    if (out.fxCache && out.fxCacheTime === numberTime) return out.fxCache;
+    const values = computeFxAt(numberTime);
+    out.fxCacheTime = numberTime;
+    out.fxCache = values;
+    return values;
+  }
+
   const previousGameplayLaneMapper = window.mapGameplayLaneForCurrentView;
 
   function normalizeOutskirtzAngle(angle) {
@@ -748,19 +757,19 @@
     return state.selectedSong === "outskirtz" || state.currentSong?.chartSource === "outskirtz";
   }
 
-  function outskirtzCameraUpsideDown(t) {
+  function outskirtzCameraUpsideDown(t, fxOverride) {
     const time = Number.isFinite(Number(t)) ? Number(t) : (state.playing ? songTime() : 0);
-    const fx = fxAt(time);
+    const fx = fxOverride || fxAt(time);
     const gameAngle = normalizeOutskirtzAngle((Number(fx.mirrorAngle) || 0) + (Number(fx.barrelAngle) || 0));
     return gameAngle > 95 && gameAngle < 265;
   }
 
-  function outskirtzInputLane(lane, t) {
+  function outskirtzInputLane(lane, t, fx) {
     const raw = Number(lane);
     if (!Number.isFinite(raw)) {
       return lane;
     }
-    return outskirtzDisplayLane(raw, t);
+    return outskirtzDisplayLane(raw, t, fx);
   }
 
   window.outskirtzCameraUpsideDown = outskirtzCameraUpsideDown;
@@ -777,8 +786,6 @@
       out.fxCtx = out.fxCanvas.getContext("2d");
       out.workingCanvas = document.createElement("canvas");
       out.workingCtx = out.workingCanvas.getContext("2d");
-      out.bloomCanvas = document.createElement("canvas");
-      out.bloomCtx = out.bloomCanvas.getContext("2d");
     }
     if (out.fxCanvas.width !== canvas.width || out.fxCanvas.height !== canvas.height) {
       out.fxCanvas.width = canvas.width;
@@ -786,16 +793,6 @@
       out.workingCanvas.width = canvas.width;
       out.workingCanvas.height = canvas.height;
     }
-    const bloomW = Math.max(1, Math.round(canvas.width * 0.34));
-    const bloomH = Math.max(1, Math.round(canvas.height * 0.34));
-    if (out.bloomCanvas.width !== bloomW || out.bloomCanvas.height !== bloomH) {
-      out.bloomCanvas.width = bloomW;
-      out.bloomCanvas.height = bloomH;
-    }
-  }
-
-  function outskirtzSourceUploadBlocked() {
-    return !!window.FNF_WEBGL?.status?.().sourceUploadBlocked;
   }
 
   function copyCanvasTo(workCtx = out.workingCtx) {
@@ -833,19 +830,24 @@
     fxCtx.clearRect(0, 0, w, h);
     fxCtx.restore();
 
-    const bloomCtx = out.bloomCtx;
-    const bw = out.bloomCanvas.width;
-    const bh = out.bloomCanvas.height;
-    bloomCtx.save();
-    bloomCtx.setTransform(1, 0, 0, 1, 0, 0);
-    bloomCtx.globalCompositeOperation = "source-over";
-    bloomCtx.globalAlpha = 1;
-    bloomCtx.clearRect(0, 0, bw, bh);
-    bloomCtx.filter = "blur(7px) brightness(1.48)";
-    bloomCtx.drawImage(out.workingCanvas, -3, -3, bw + 6, bh + 6);
-    bloomCtx.filter = "none";
-    bloomCtx.clearRect(0, 0, bw, bh);
-    bloomCtx.restore();
+    fxCtx.save();
+    fxCtx.setTransform(1, 0, 0, 1, 0, 0);
+    fxCtx.globalCompositeOperation = "screen";
+    fxCtx.globalAlpha = 0.75;
+    fxCtx.filter = "blur(25px) brightness(1.48)";
+    fxCtx.drawImage(out.workingCanvas, -10, -10, w + 20, h + 20);
+    fxCtx.filter = "none";
+    fxCtx.clearRect(0, 0, w, h);
+    fxCtx.restore();
+  }
+
+  function warmOutskirtzShaderSamples(source) {
+    const webgl = window.FNF_WEBGL;
+    if (!webgl?.warmOutskirtzPostStack || window.PERFORMANCE_MODE || window.REDUCE_MOTION) return;
+    const samples = [0, 7.2, 8.7, 9.15, 9.6, 10.95, 30, 60].map(time => ({ time, ...fxAt(time) }));
+    for (const sample of samples) {
+      webgl.warmOutskirtzPostStack(source || null, sample);
+    }
   }
 
   function warmOutskirtzImageRasterCache() {
@@ -878,7 +880,7 @@
     decodeOutskirtzImages();
     if (!force && out.warmWidth === canvas.width && out.warmHeight === canvas.height && out.rasterWarmed) return;
     warmOutskirtzFallbackCanvases();
-    window.FNF_WEBGL?.warmOutskirtzPostStack?.();
+    warmOutskirtzShaderSamples();
     warmOutskirtzImageRasterCache();
     if (window.location?.protocol === "file:") {
       window.FNF_WEBGL?.blockSourceUploads?.("file:// canvas source upload is blocked; using warmed Canvas2D fallback");
@@ -900,22 +902,7 @@
     ctx.fillStyle = "#060205";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     if (assetsReady()) drawOutskirtzStage(0);
-    webgl.drawOutskirtzPostStack(canvas, {
-      time: 9.15,
-      mirrorZoom: 3,
-      mirrorAngle: -10,
-      mirrorX: -1,
-      mirrorY: 0,
-      barrelZoom: 1.6,
-      barrel: -10,
-      fish: 0.3,
-      fishbarsEffect: 0.31,
-      fishbarsPower: 0.3,
-      chrom: 0.01,
-      bloomContrast: 4,
-      diAngle: 160,
-      diStrength: 0.02
-    });
+    warmOutskirtzShaderSamples(canvas);
     ctx.restore();
     out.liveWarmWidth = canvas.width;
     out.liveWarmHeight = canvas.height;
@@ -964,13 +951,9 @@
     const dy = Math.sin(radians) * strength;
     ctx.save();
     ctx.globalAlpha = 0.16;
-    const sourceBlocked = outskirtzSourceUploadBlocked();
-    const passes = sourceBlocked ? 2 : 4;
-    for (let i = 1; i <= passes; i++) {
+    for (let i = 1; i <= 4; i++) {
       ctx.drawImage(out.workingCanvas, dx * i * 0.38, dy * i * 0.38, canvas.width, canvas.height);
-      if (!sourceBlocked || i === 1) {
-        ctx.drawImage(out.workingCanvas, -dx * i * 0.25, -dy * i * 0.25, canvas.width, canvas.height);
-      }
+      ctx.drawImage(out.workingCanvas, -dx * i * 0.25, -dy * i * 0.25, canvas.width, canvas.height);
     }
     ctx.restore();
   }
@@ -992,23 +975,11 @@
     const bloom = Math.max(0, Number(fx.bloomContrast || 1) - 1);
     if (bloom > 0.02 && !window.PERFORMANCE_MODE) {
       copyCanvasTo(out.workingCtx);
-      const bw = out.bloomCanvas.width;
-      const bh = out.bloomCanvas.height;
-      out.bloomCtx.save();
-      out.bloomCtx.setTransform(1, 0, 0, 1, 0, 0);
-      out.bloomCtx.globalCompositeOperation = "source-over";
-      out.bloomCtx.globalAlpha = 1;
-      out.bloomCtx.clearRect(0, 0, bw, bh);
-      out.bloomCtx.filter = `blur(${Math.min(9, 2.5 + bloom * 1.35).toFixed(1)}px) brightness(${(1 + bloom * 0.16).toFixed(2)})`;
-      out.bloomCtx.drawImage(out.workingCanvas, -3, -3, bw + 6, bh + 6);
-      out.bloomCtx.filter = "none";
-      out.bloomCtx.restore();
       ctx.save();
       ctx.globalCompositeOperation = "screen";
       ctx.globalAlpha = Math.min(0.75, bloom * 0.22);
-      ctx.imageSmoothingEnabled = true;
-      ctx.filter = "none";
-      ctx.drawImage(out.bloomCanvas, -12, -12, canvas.width + 24, canvas.height + 24);
+      ctx.filter = `blur(${Math.min(30, 5 + bloom * 5).toFixed(1)}px) brightness(${(1 + bloom * 0.16).toFixed(2)})`;
+      ctx.drawImage(out.workingCanvas, -10, -10, canvas.width + 20, canvas.height + 20);
       ctx.restore();
     }
   }
@@ -1296,10 +1267,9 @@
     if (!assetsReady()) return;
     withHudTransform(t, fx => {
       const y = outskirtzReceptorY();
-      const leanFallback = outskirtzSourceUploadBlocked();
       for (let lane = 0; lane < 8; lane++) {
-        const x = outskirtzLaneX(lane, t);
-        drawOutskirtzReceptor(lane, x, y, t, (lane < 4 ? 0.92 : 1) * fx.hudAlpha, leanFallback);
+        const x = outskirtzLaneX(lane, t, fx);
+        drawOutskirtzReceptor(lane, x, y, t, (lane < 4 ? 0.92 : 1) * fx.hudAlpha);
         ctx.strokeStyle = "rgba(255,255,255,0.04)";
         ctx.lineWidth = 1.5;
         ctx.beginPath();
@@ -1314,11 +1284,10 @@
     if (state.selectedSong !== "outskirtz") return baseNotes(t);
     if (!assetsReady() || !state.chart) return;
     withHudTransform(t, fx => {
-      const leanFallback = outskirtzSourceUploadBlocked();
       for (const note of state.chart.notes) {
         if (note.played && note.hit && (!isHoldNote(note) || note.holdDone)) continue;
         if (note.judged && note.side !== "opp" && (!isHoldNote(note) || note.holdDone || !note.hit)) continue;
-        const x = outskirtzLaneX(note.lane, t);
+        const x = outskirtzLaneX(note.lane, t, fx);
         const y = outskirtzNoteY(note.time, t);
         const tailY = outskirtzNoteY(holdEndTime(note), t);
         if ((y < -140 && tailY < -140) || (y > canvas.height + 140 && tailY > canvas.height + 140)) continue;
@@ -1328,7 +1297,7 @@
         const alpha = (note.side === "opp" ? 0.84 : 1) * fx.hudAlpha;
         if (isHoldNote(note)) drawOutskirtzSustain(note, x, note.hit ? outskirtzReceptorY() : y, tailY, alpha * (note.hit ? 0.94 : 1));
         if (note.hit && isHoldNote(note) && t > note.time) continue;
-        drawOutskirtzNote(note.lane, x, y, scale, alpha, leanFallback);
+        drawOutskirtzNote(note.lane, x, y, scale, alpha);
       }
     });
   };
