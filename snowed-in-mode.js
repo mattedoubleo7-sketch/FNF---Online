@@ -11,7 +11,6 @@
     const SOURCE_H = Number(SNOW.stage?.viewport?.[1] || 720);
     const SOURCE_CAMERA_START = { x: 600, y: 400 };
     const SOURCE_CAMERA_TWEEN_SECONDS = 1;
-    const SANS_EDGE_OVERSCAN = 10;
     const scene = {
       initialized: false,
       images: {},
@@ -77,7 +76,15 @@
         body.snowed-in-active .hud .top,
         body.snowed-in-active .hud .bottom,
         body.snowed-in-active #judgments { opacity: 0 !important; pointer-events: none !important; }
-        body.snowed-in-active .overlay:not(.show) { display: none !important; }
+        body.snowed-in-active #app { isolation: isolate; }
+        body.snowed-in-active #canvas {
+          position: absolute !important; inset: 0 !important; z-index: 100 !important;
+        }
+        body.snowed-in-active .hud { z-index: 101 !important; }
+        body.snowed-in-active .overlay:not(.show),
+        body.snowed-in-active #loadingScreen,
+        body.snowed-in-active #deviceDetectPrompt:not(.show),
+        body.snowed-in-active video { display: none !important; }
         #snowedInDialogue {
           position: fixed; inset: 0; z-index: 120; display: none; place-items: center;
           padding: 0; background: #000; cursor: pointer; overflow: hidden;
@@ -619,15 +626,13 @@
       const blackoutEnd = Number(SNOW.stage?.blackout?.endBeat || 32) * spb;
       if (t >= blackoutStart && t < blackoutEnd) return;
       const cameraScroll = cameraScrollAt(t);
-      const sansSide = cameraSideForEvent(sourceEventAt(t, "Camera Movement")) === "opp";
       ctx.save();
       ctx.imageSmoothingEnabled = false;
       for (const layer of SNOW.stage?.layers || []) {
         const image = scene.images[layer.key];
         if (!imageReady(image)) continue;
         const scroll = Number(layer.scroll == null ? 1 : layer.scroll);
-        const edgeOverscan = sansSide && layer.key !== "sky" ? SANS_EDGE_OVERSCAN * scroll : 0;
-        const layerX = Number(layer.x || 0) - cameraScroll.x * scroll - edgeOverscan;
+        const layerX = Number(layer.x || 0) - cameraScroll.x * scroll;
         const layerY = Number(layer.y || 0) - cameraScroll.y * scroll;
         ctx.drawImage(image, Math.round(layerX), Math.round(layerY));
       }
