@@ -227,7 +227,8 @@ function main() {
     },
     hud: {
       boyfriendIcon: copyAsset("images/icons/bf.png", "assets/lazy-bones/icon-bf.png"),
-      sansIcon: copyAsset("images/icons/sans.png", "assets/lazy-bones/icon-sans.png")
+      sansIcon: copyAsset("images/icons/sans.png", "assets/lazy-bones/icon-sans.png"),
+      healthBar: "assets/lazy-bones/healthBar.png"
     },
     notes: {
       image: "assets/lazy-bones/NOTE_assets.png",

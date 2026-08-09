@@ -9,7 +9,9 @@
     const DIR_ANIM = ["singLEFT", "singDOWN", "singUP", "singRIGHT"];
     const SOURCE_W = Number(SNOW.stage?.viewport?.[0] || 1280);
     const SOURCE_H = Number(SNOW.stage?.viewport?.[1] || 720);
-    const CAMERA_FOLLOW_SPEED = 0.04;
+    const SOURCE_CAMERA_START = { x: 600, y: 400 };
+    const SOURCE_CAMERA_TWEEN_SECONDS = 1;
+    const SANS_EDGE_OVERSCAN = 10;
     const scene = {
       initialized: false,
       images: {},
@@ -75,6 +77,7 @@
         body.snowed-in-active .hud .top,
         body.snowed-in-active .hud .bottom,
         body.snowed-in-active #judgments { opacity: 0 !important; pointer-events: none !important; }
+        body.snowed-in-active .overlay:not(.show) { display: none !important; }
         #snowedInDialogue {
           position: fixed; inset: 0; z-index: 120; display: none; place-items: center;
           padding: 0; background: #000; cursor: pointer; overflow: hidden;
@@ -440,29 +443,31 @@
       };
     }
 
-    function followToward(current, target, seconds) {
-      const amount = 1 - Math.pow(1 - CAMERA_FOLLOW_SPEED, Math.max(0, seconds) * 60);
-      return lerp(current, target, amount);
-    }
-
     function cameraScrollAt(t) {
       const cameraEvents = (SNOW.chart?.events || []).filter(event => event.name === "Camera Movement");
-      let side = "opp";
-      let target = cameraTargetForSide(side);
-      let scrollX = target.x - SOURCE_W * 0.5;
-      let scrollY = target.y - SOURCE_H * 0.5;
-      let lastTime = 0;
+      let current = { ...SOURCE_CAMERA_START };
+      let tween = null;
+      const valueAt = time => {
+        if (!tween) return { ...current };
+        const progress = clamp01((time - tween.start) / SOURCE_CAMERA_TWEEN_SECONDS);
+        return {
+          x: lerp(tween.from.x, tween.to.x, progress),
+          y: lerp(tween.from.y, tween.to.y, progress)
+        };
+      };
       for (const event of cameraEvents) {
         if (event.time > t + 0.0001) break;
-        scrollX = followToward(scrollX, target.x - SOURCE_W * 0.5, event.time - lastTime);
-        scrollY = followToward(scrollY, target.y - SOURCE_H * 0.5, event.time - lastTime);
-        side = cameraSideForEvent(event);
-        target = cameraTargetForSide(side);
-        lastTime = event.time;
+        current = valueAt(event.time);
+        tween = {
+          start: event.time,
+          from: current,
+          to: cameraTargetForSide(cameraSideForEvent(event))
+        };
       }
+      const position = valueAt(t);
       return {
-        x: followToward(scrollX, target.x - SOURCE_W * 0.5, t - lastTime),
-        y: followToward(scrollY, target.y - SOURCE_H * 0.5, t - lastTime)
+        x: position.x - SOURCE_W * 0.5,
+        y: position.y - SOURCE_H * 0.5
       };
     }
 
@@ -614,13 +619,15 @@
       const blackoutEnd = Number(SNOW.stage?.blackout?.endBeat || 32) * spb;
       if (t >= blackoutStart && t < blackoutEnd) return;
       const cameraScroll = cameraScrollAt(t);
+      const sansSide = cameraSideForEvent(sourceEventAt(t, "Camera Movement")) === "opp";
       ctx.save();
       ctx.imageSmoothingEnabled = false;
       for (const layer of SNOW.stage?.layers || []) {
         const image = scene.images[layer.key];
         if (!imageReady(image)) continue;
         const scroll = Number(layer.scroll == null ? 1 : layer.scroll);
-        const layerX = Number(layer.x || 0) - cameraScroll.x * scroll;
+        const edgeOverscan = sansSide && layer.key !== "sky" ? SANS_EDGE_OVERSCAN * scroll : 0;
+        const layerX = Number(layer.x || 0) - cameraScroll.x * scroll - edgeOverscan;
         const layerY = Number(layer.y || 0) - cameraScroll.y * scroll;
         ctx.drawImage(image, Math.round(layerX), Math.round(layerY));
       }

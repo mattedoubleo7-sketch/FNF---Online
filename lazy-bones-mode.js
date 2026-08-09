@@ -6,17 +6,25 @@
     const SONG_ID = "lazyBones";
     const SONG_SOURCE = "lazyBones";
     const DIR_ANIM = ["singLEFT", "singDOWN", "singUP", "singRIGHT"];
-    const HOLD_COLORS = ["#c24bff", "#00d9ff", "#12ed36", "#f93954"];
+    const NOTE_RGB = [
+      { red: [194, 75, 153], green: [255, 255, 255], blue: [60, 31, 86] },
+      { red: [0, 255, 255], green: [255, 255, 255], blue: [21, 66, 183] },
+      { red: [18, 250, 5], green: [255, 255, 255], blue: [10, 68, 71] },
+      { red: [249, 57, 63], green: [255, 255, 255], blue: [101, 16, 56] }
+    ];
     const SOURCE_W = Number(LAZY.stage?.viewport?.[0] || 1280);
     const SOURCE_H = Number(LAZY.stage?.viewport?.[1] || 720);
     const scene = {
       initialized: false,
       images: {},
-      holdFrames: {},
       cameraX: null,
       cameraY: null,
       cameraOffsetX: 0,
       cameraOffsetY: 0,
+      cameraOffsetTween: null,
+      cameraOffsetResetAt: -10,
+      cameraOffsetReturning: true,
+      cameraPoseTimes: { player: -10, sans: -10 },
       lastTime: null,
       zoomImpulses: null,
       coloredNoteFrames: {}
@@ -86,7 +94,8 @@
         sans: LAZY.sprites?.sans?.image,
         notes: LAZY.notes?.image,
         boyfriendIcon: LAZY.hud?.boyfriendIcon,
-        sansIcon: LAZY.hud?.sansIcon
+        sansIcon: LAZY.hud?.sansIcon,
+        healthBar: LAZY.hud?.healthBar
       };
       Object.entries(sources).forEach(([key, source]) => {
         if (!source) return;
@@ -344,48 +353,89 @@
       };
     }
 
-    function activeCameraNote(t, side) {
-      const notes = LAZY.charts?.boned?.notes || [];
-      let active = null;
-      for (const note of notes) {
-        if (note.time > t + 0.0001) break;
-        if (note.side !== side) continue;
-        const release = note.time + Math.max(Number(note.sLen || 0), 0.42);
-        if (release >= t) active = note;
+    function easeQuintOut(value) {
+      const p = clamp01(value);
+      return 1 - Math.pow(1 - p, 5);
+    }
+
+    function sampleCameraOffset(now) {
+      const tween = scene.cameraOffsetTween;
+      if (!tween) return;
+      const progress = clamp01((now - tween.start) / Math.max(0.001, tween.duration));
+      const eased = easeQuintOut(progress);
+      scene.cameraOffsetX = lerp(tween.fromX, tween.toX, eased);
+      scene.cameraOffsetY = lerp(tween.fromY, tween.toY, eased);
+      if (progress >= 1) scene.cameraOffsetTween = null;
+    }
+
+    function tweenCameraOffset(now, toX, toY) {
+      sampleCameraOffset(now);
+      scene.cameraOffsetTween = {
+        start: now,
+        duration: Number(LAZY.source?.cameraTweenDuration || 1.7),
+        fromX: scene.cameraOffsetX,
+        fromY: scene.cameraOffsetY,
+        toX,
+        toY
+      };
+    }
+
+    function updateHitCameraOffset(side, now) {
+      const activeKey = side === "player" ? "player" : "sans";
+      for (const poseKey of ["sans", "player"]) {
+        const pose = state.poses?.[poseKey];
+        const poseTime = Number(pose?.time || -10);
+        if (poseTime <= Number(scene.cameraPoseTimes[poseKey] || -10) + 0.000001) continue;
+        scene.cameraPoseTimes[poseKey] = poseTime;
+        const missedPlayerNote = poseKey === "player" && pose?.kind === "miss";
+        if (poseKey !== activeKey && !missedPlayerNote) continue;
+        if (pose?.kind === "miss") {
+          scene.cameraOffsetResetAt = -10;
+          scene.cameraOffsetReturning = true;
+          tweenCameraOffset(now, 0, 0);
+          continue;
+        }
+        const amount = Number(LAZY.source?.cameraOffset || 40);
+        const lane = Number(pose?.lane || 0) % 4;
+        const toX = lane === 0 ? -amount : lane === 3 ? amount : 0;
+        const toY = lane === 1 ? amount : lane === 2 ? -amount : 0;
+        const spriteKey = poseKey === "player" ? "boyfriend" : "sans";
+        const singDuration = Number(LAZY.sprites?.[spriteKey]?.singDuration || 4);
+        const stepSeconds = Number(LAZY.charts?.boned?.spb || 60 / 158) / 4;
+        scene.cameraOffsetResetAt = now + stepSeconds * 1.1 * singDuration;
+        scene.cameraOffsetReturning = false;
+        tweenCameraOffset(now, toX, toY);
       }
-      return active;
+      if (!scene.cameraOffsetReturning && now >= scene.cameraOffsetResetAt) {
+        scene.cameraOffsetReturning = true;
+        tweenCameraOffset(now, 0, 0);
+      }
+      sampleCameraOffset(now);
     }
 
     function updateSourceCamera(t) {
       const section = sectionAt(t);
       const side = section?.turn || "opp";
       const baseTarget = cameraTargetForSide(side);
-      const cameraNote = activeCameraNote(t, side);
-      let offsetX = 0;
-      let offsetY = 0;
-      if (cameraNote) {
-        const amount = Number(LAZY.source?.cameraOffset || 40);
-        const lane = Number(cameraNote.lane || 0) % 4;
-        if (lane === 0) offsetX = -amount;
-        else if (lane === 1) offsetY = amount;
-        else if (lane === 2) offsetY = -amount;
-        else offsetX = amount;
-      }
-
+      const now = performance.now() / 1000;
       let dt = scene.lastTime == null ? 0 : Math.max(0, Math.min(0.1, t - scene.lastTime));
       if (scene.lastTime == null || t < scene.lastTime - 0.05) {
         scene.cameraX = baseTarget.x;
         scene.cameraY = baseTarget.y;
-        scene.cameraOffsetX = offsetX;
-        scene.cameraOffsetY = offsetY;
+        scene.cameraOffsetX = 0;
+        scene.cameraOffsetY = 0;
+        scene.cameraOffsetTween = null;
+        scene.cameraOffsetResetAt = -10;
+        scene.cameraOffsetReturning = true;
+        scene.cameraPoseTimes.player = Number(state.poses?.player?.time || -10);
+        scene.cameraPoseTimes.sans = Number(state.poses?.sans?.time || -10);
         dt = 0;
       }
-      const cameraFollow = 1 - Math.exp(-dt * 5.4 * Number(LAZY.stage?.cameraSpeed || 1));
-      const offsetFollow = 1 - Math.exp(-dt * 3.35 / Math.max(0.1, Number(LAZY.source?.cameraTweenDuration || 1.7)));
+      const followPerFrame = Math.min(0.999, 0.04 * Number(LAZY.stage?.cameraSpeed || 1));
+      const cameraFollow = 1 - Math.pow(1 - followPerFrame, dt * 60);
       scene.cameraX = lerp(scene.cameraX, baseTarget.x, cameraFollow);
       scene.cameraY = lerp(scene.cameraY, baseTarget.y, cameraFollow);
-      scene.cameraOffsetX = lerp(scene.cameraOffsetX, offsetX, offsetFollow);
-      scene.cameraOffsetY = lerp(scene.cameraOffsetY, offsetY, offsetFollow);
+      updateHitCameraOffset(side, now);
       scene.lastTime = t;
       return { x: scene.cameraX + scene.cameraOffsetX, y: scene.cameraY + scene.cameraOffsetY, side };
     }
@@ -467,14 +517,18 @@
       const targetCtx = target.getContext("2d", { willReadFrequently: true });
       targetCtx.drawImage(scene.images.notes, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h);
       const pixels = targetCtx.getImageData(0, 0, target.width, target.height);
-      const color = HOLD_COLORS[lane].match(/[\da-f]{2}/gi).map(value => parseInt(value, 16));
+      const palette = NOTE_RGB[lane];
       for (let index = 0; index < pixels.data.length; index += 4) {
         if (!pixels.data[index + 3]) continue;
-        const light = (pixels.data[index] * 0.2126 + pixels.data[index + 1] * 0.7152 + pixels.data[index + 2] * 0.0722) / 255;
-        const shade = 0.38 + light * 0.9;
-        const highlight = Math.max(0, (light - 0.72) / 0.28) * 0.55;
+        const sourceRed = pixels.data[index] / 255;
+        const sourceGreen = pixels.data[index + 1] / 255;
+        const sourceBlue = pixels.data[index + 2] / 255;
         for (let channel = 0; channel < 3; channel += 1) {
-          pixels.data[index + channel] = Math.min(255, color[channel] * shade * (1 - highlight) + 255 * highlight);
+          pixels.data[index + channel] = Math.min(255,
+            sourceRed * palette.red[channel] +
+            sourceGreen * palette.green[channel] +
+            sourceBlue * palette.blue[channel]
+          );
         }
       }
       targetCtx.putImageData(pixels, 0, 0);
@@ -485,28 +539,18 @@
     function drawColoredNoteFrame(lane, frame, centerX, centerY, scale = 0.7, alpha = 1, kind = "tap") {
       const colored = coloredNoteFrame(lane, frame, kind);
       if (!colored) return;
+      const fw = Number(frame.fw || frame.w || colored.width);
+      const fh = Number(frame.fh || frame.h || colored.height);
       ctx.save();
       ctx.globalAlpha *= alpha;
-      ctx.drawImage(colored, centerX - colored.width * scale * 0.5, centerY - colored.height * scale * 0.5, colored.width * scale, colored.height * scale);
+      ctx.drawImage(
+        colored,
+        centerX - fw * scale * 0.5 - Number(frame.fx || 0) * scale,
+        centerY - fh * scale * 0.5 - Number(frame.fy || 0) * scale,
+        colored.width * scale,
+        colored.height * scale
+      );
       ctx.restore();
-    }
-
-    function tintedHoldFrame(lane, kind) {
-      const key = `${lane}:${kind}`;
-      if (scene.holdFrames[key]) return scene.holdFrames[key];
-      const frame = LAZY.notes?.lanes?.[lane]?.[kind]?.[0];
-      if (!frame || !imageReady(scene.images.notes)) return null;
-      const target = document.createElement("canvas");
-      target.width = frame.w;
-      target.height = frame.h;
-      const targetCtx = target.getContext("2d");
-      targetCtx.drawImage(scene.images.notes, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h);
-      targetCtx.globalCompositeOperation = "source-atop";
-      targetCtx.fillStyle = HOLD_COLORS[lane];
-      targetCtx.fillRect(0, 0, target.width, target.height);
-      targetCtx.globalCompositeOperation = "source-over";
-      scene.holdFrames[key] = target;
-      return target;
     }
 
     function drawHold(note, headCenterY, tailCenterY, alpha) {
@@ -514,12 +558,14 @@
       const layout = noteLayout(note.lane);
       const centerX = layout.x + 55;
       const scale = 0.7;
-      const piece = tintedHoldFrame(localLane, "holdPiece");
-      const end = tintedHoldFrame(localLane, "holdEnd");
+      const pieceFrame = LAZY.notes?.lanes?.[localLane]?.holdPiece?.[0];
+      const endFrame = LAZY.notes?.lanes?.[localLane]?.holdEnd?.[0];
+      const piece = coloredNoteFrame(localLane, pieceFrame, "holdPiece");
+      const end = coloredNoteFrame(localLane, endFrame, "holdEnd");
       const top = Math.min(headCenterY, tailCenterY);
       const bottom = Math.max(headCenterY, tailCenterY);
       ctx.save();
-      ctx.globalAlpha *= alpha;
+      ctx.globalAlpha *= alpha * 0.6;
       if (piece && bottom - top > 18) ctx.drawImage(piece, centerX - piece.width * scale * 0.5, top, piece.width * scale, bottom - top);
       if (end) {
         const endY = layout.down ? tailCenterY - end.height * scale * 0.5 : tailCenterY - end.height * scale * 0.5;
@@ -606,23 +652,26 @@
         judged: 0,
         judgments: { miss: 0 }
       };
-      const barBgX = 339;
-      const barBgY = 641;
+      const barBgX = (SOURCE_W - 601) * 0.5;
+      const barBgY = SOURCE_H * 0.89;
       const barBgW = 601;
       const barBgH = 19;
-      const barX = barBgX + 4;
-      const barY = barBgY + 4;
-      const barW = barBgW - 8;
-      const barH = barBgH - 8;
+      const barX = barBgX + 3;
+      const barY = barBgY + 3;
+      const barW = barBgW - 6;
+      const barH = barBgH - 6;
       const splitX = barX + barW * (1 - health);
       ctx.save();
-      ctx.fillStyle = "#111";
-      ctx.fillRect(barBgX, barBgY, barBgW, barBgH);
+      if (imageReady(scene.images.healthBar)) ctx.drawImage(scene.images.healthBar, barBgX, barBgY, barBgW, barBgH);
+      else {
+        ctx.fillStyle = "#111";
+        ctx.fillRect(barBgX, barBgY, barBgW, barBgH);
+      }
       ctx.fillStyle = "#fff";
       ctx.fillRect(barX, barY, splitX - barX, barH);
       ctx.fillStyle = "#769ee8";
       ctx.fillRect(splitX, barY, barX + barW - splitX, barH);
-      drawHealthIcon(scene.images.sansIcon, health > 0.8 ? 1 : 0, splitX - 124, barY - 75);
+      drawHealthIcon(scene.images.sansIcon, health > 0.8 ? 1 : 0, splitX - 127, barY - 75);
       drawHealthIcon(scene.images.boyfriendIcon, health < 0.2 ? 1 : 0, splitX - 26, barY - 75);
       ctx.fillStyle = "#fff";
       ctx.strokeStyle = "#000";
@@ -630,8 +679,8 @@
       ctx.textAlign = "center";
       ctx.font = "700 20px monospace";
       const scoreText = `Score: ${Number(playerStats.score || 0).toLocaleString()} | Misses: ${Number(playerStats.judgments?.miss || 0)} | Rating: ${(accuracy(playerStats) * 100).toFixed(2)}%`;
-      ctx.strokeText(scoreText, canvas.width * 0.5, barBgY + 38);
-      ctx.fillText(scoreText, canvas.width * 0.5, barBgY + 38);
+      ctx.strokeText(scoreText, canvas.width * 0.5, barBgY + 40);
+      ctx.fillText(scoreText, canvas.width * 0.5, barBgY + 40);
       ctx.restore();
 
       const distance = cinematicDistanceAt(t);
@@ -676,6 +725,11 @@
       scene.cameraY = null;
       scene.cameraOffsetX = 0;
       scene.cameraOffsetY = 0;
+      scene.cameraOffsetTween = null;
+      scene.cameraOffsetResetAt = -10;
+      scene.cameraOffsetReturning = true;
+      scene.cameraPoseTimes.player = -10;
+      scene.cameraPoseTimes.sans = -10;
       scene.lastTime = null;
       state.feeds.player.time = -10;
       state.feeds.opp.time = -10;
@@ -783,9 +837,9 @@
       baseUpdateCamera(t, dt);
       if (!isLazyBones(state.currentSong)) return;
       const camera = updateSourceCamera(t);
-      state.camera.zoom = zoomAt(t, "game");
-      state.camera.focusX = camera.x;
-      state.camera.focusY = camera.y;
+      state.camera.zoom = 1;
+      state.camera.focusX = canvas.width * 0.5;
+      state.camera.focusY = canvas.height * 0.5;
       state.camera.lastSide = camera.side;
       state.camera.highwayX = 0;
       state.camera.highwayY = 0;
