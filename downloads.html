@@ -566,8 +566,8 @@ p, li {
   <img src="assets/icon.ico" alt="Silly Billy app icon">
   <div>
     <span>New update</span>
-    <strong>Lazy Bones Camera + Snowed In Edge Fix</strong>
-    <small>Lazy Bones now uses its source camera follow, hit offsets, Psych RGB notes, and exact HUD asset. Snowed In now uses its one-second linear camera and hides the Sans-side viewport edge without stretching the stage.</small>
+    <strong>Lazy Bones WebGL Snow Update</strong>
+    <small>Lazy Bones now runs Perseverance's official GPU snow through the shared WebGL renderer, warmed before playback and layered behind its arrows and HUD.</small>
   </div>
 </aside>
 <div class="page">
@@ -576,7 +576,7 @@ p, li {
     <div>
       <div class="kicker"><span class="liveDot"></span> Live build updated</div>
       <div class="titleWrap"><h1 data-text="FNF Onliine">FNF Onliine</h1></div>
-      <p>This is the download portal for the browser and app builds. Browser play is the easiest route for friends because it avoids Windows SmartScreen warnings on the unsigned `.exe`. The newest build restores Lazy Bones' source camera timing and Psych RGB rendering, removes Snowed In's Sans-side gameplay edge, and keeps the adaptive blank-WebGL fallback.</p>
+      <p>This is the download portal for the browser and app builds. Browser play is the easiest route for friends because it avoids Windows SmartScreen warnings on the unsigned `.exe`. The newest build gives Lazy Bones the real shared WebGL Dustin pass and Perseverance snow while preserving its source camera, Psych RGB notes, and adaptive Canvas fallback.</p>
       <div class="actions">
         <a class="btn primary" href="/play">Play Online In Browser</a>
         <a class="btn ghost" href="/offline">Play Offline In Browser</a>
@@ -594,14 +594,18 @@ p, li {
   <section class="panel updatePanel">
     <div class="latestBox">
       <div class="version">Update log - 2026.08.09</div>
-      <h2>Lazy Bones Source Camera + Snowed In Edge Repair</h2>
-      <p>Lazy Bones now follows the mod's real 4%-per-frame camera, judged-note directional offsets, `quintOut` returns, exact RGB note palette, full-size icons, and health-bar artwork. Snowed In now uses the supplied one-second linear gameplay camera and isolates its canvas from hidden browser layers, without resizing or shifting the source art.</p>
+      <h2>Lazy Bones Real WebGL + Perseverance Snow</h2>
+      <p>Lazy Bones now sends its world layer through the real WebGL Dustin shader stack with Perseverance's official 14/13-layer snow setup. The shader compiles before audio starts, notes and HUD stay crisp above the effect, and Performance Mode or failed GPU uploads use the Canvas fallback.</p>
       <div class="actions">
         <a class="btn primary" href="/play">Jump Into Online</a>
         <a class="btn secondary" href="/offline">Try Offline</a>
       </div>
     </div>
     <div class="logList">
+      <div class="logItem">
+        <div class="logDate">Latest</div>
+        <div><div class="logTitle">Lazy Bones moved onto real WebGL snow</div><p>The stage now uses the same GPU Dustin post pass as Perseverance, including its two official snow layers, world-aware camera position, and melt setup. A pre-song warmup prevents the first effect frame from compiling during gameplay, while a reduced Canvas version remains available as a fallback.</p></div>
+      </div>
       <div class="logItem">
         <div class="logDate">Latest</div>
         <div><div class="logTitle">Lazy Bones source camera and rendering corrected</div><p>The camera now uses the mod's slower Psych follow and only reacts to notes that were actually judged, with the supplied 40-pixel `quintOut` motion and miss reset. Taps and holds use Psych's RGB matrix colors, the duplicate zoom is gone, and the real health-bar asset and icon geometry are restored.</p></div>
@@ -716,7 +720,7 @@ p, li {
           <h3>Online App</h3>
           <p>Packaged desktop app for online play. It renders the bundled local WebGL files and connects rooms to the hosted online server.</p>
           <div class="actions">
-            <a class="btn primary" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/ONLINE/FNF-Browser-Jam-1.0.0-portable.exe?cache=20260809c">Download Online App</a>
+            <a class="btn primary" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/ONLINE/FNF-Browser-Jam-1.0.0-portable.exe?cache=20260809d">Download Online App</a>
           </div>
         </div>
         <div class="dlBlock">
@@ -755,7 +759,7 @@ p, li {
           <h3>Offline App</h3>
           <p>Packaged offline download with the current local-play build and bundled assets.</p>
           <div class="actions">
-            <a class="btn primary" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/fnf/FNF-Browser-Jam-offline-1.0.0-portable.exe?cache=20260809c">Download Offline App</a>
+            <a class="btn primary" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/fnf/FNF-Browser-Jam-offline-1.0.0-portable.exe?cache=20260809d">Download Offline App</a>
           </div>
         </div>
         <div class="dlBlock">
@@ -787,7 +791,7 @@ p, li {
     <div class="eyebrow">Current Setlist</div>
     <h2>What is in the live build?</h2>
     <div class="setlist">
-      <div class="songTile"><strong>Lazy Bones</strong><span>Psych Engine source import with corrected singer ownership, RGB-matrix taps and supplied holds, exact layered stage, BF/Sans atlas sprites, split receptors, judged-hit `quintOut` camera, source icons, health-bar artwork, fades, flashes, and cinema events.</span><div class="tagRow"><span class="tag hot">UPDATED</span><span class="tag">Undertale</span><span class="tag">Source Import</span></div></div>
+      <div class="songTile"><strong>Lazy Bones</strong><span>Psych Engine source import with corrected singer ownership, RGB-matrix taps and supplied holds, exact layered stage, BF/Sans atlas sprites, split receptors, judged-hit `quintOut` camera, real WebGL Perseverance snow, source HUD, fades, flashes, and cinema events.</span><div class="tagRow"><span class="tag hot">UPDATED</span><span class="tag">Undertale</span><span class="tag">WebGL Snow</span></div></div>
       <div class="songTile"><strong>Snowed In</strong><span>Gumballs source import with the original chart and audio, Snowdin pixel stage, one-second linear event camera, isolated full-screen canvas, centered custom tap/hold lane, hit particles, blackout, native-ratio dialogue, and custom health bar.</span><div class="tagRow"><span class="tag hot">UPDATED</span><span class="tag">Gumballs</span><span class="tag">Sans</span></div></div>
       <div class="songTile"><strong>Outskirtz</strong><span>Outskritz import with the original hard chart, arena stage, Alex and BF Wii source sprites, custom A-D note/hold skin, MoveArrowsToMiddle layout, health drain, and shader-event camera effects.</span><div class="tagRow"><span class="tag hot">NEW</span><span class="tag">Psych Engine</span><span class="tag">Shaders</span></div></div>
       <div class="songTile silly"><strong>Silly Billy</strong><span>Test of Time chart + instrumental against Silly Billy vocals. Pixel BF, shrink phase, mirror break flashbang, flashback cutscene, speed lines with cinema bars, and power-50 drain on the last 10s.</span><div class="tagRow"><span class="tag hot">NEW</span><span class="tag">Test of Time</span><span class="tag">VFX</span></div></div>
@@ -805,7 +809,7 @@ p, li {
     </div>
   </section>
 
-  <div class="footer">FNF Onliine download portal - Lazy Bones source camera and Snowed In edge repair - browser recommended, app builds refreshed</div>
+  <div class="footer">FNF Onliine download portal - Lazy Bones real WebGL and Perseverance snow update - browser recommended, app builds refreshed</div>
 </div>
 </body>
 </html>

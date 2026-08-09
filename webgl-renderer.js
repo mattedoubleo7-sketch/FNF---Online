@@ -1492,6 +1492,12 @@
       }
     }
 
+    function warmDustinPostStack(){
+      if(window.PERFORMANCE_MODE) return false;
+      const gl = ensureContext();
+      return !!(gl && syncSize() && ensureDustinPostPass());
+    }
+
     function runOutskirtzPostStack(source, params, commit){
       if(window.PERFORMANCE_MODE || window.REDUCE_MOTION || !source) return false;
       if(commit && state.sourceUploadBlocked) return false;
@@ -1606,6 +1612,7 @@
       drawParallaxPass,
       drawSpeedLines,
       drawDustinPostStack,
+      warmDustinPostStack,
       drawOutskirtzPostStack,
       warmOutskirtzPostStack,
       blockSourceUploads(reason){

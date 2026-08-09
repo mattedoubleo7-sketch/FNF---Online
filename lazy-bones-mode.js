@@ -27,7 +27,9 @@
       cameraPoseTimes: { player: -10, sans: -10 },
       lastTime: null,
       zoomImpulses: null,
-      coloredNoteFrames: {}
+      coloredNoteFrames: {},
+      webglCanvas: null,
+      webglCtx: null
     };
 
     SONGS[SONG_ID] = {
@@ -490,6 +492,63 @@
       ctx.restore();
     }
 
+    function syncLazyWebglCanvas() {
+      if (!scene.webglCanvas) {
+        scene.webglCanvas = document.createElement("canvas");
+        scene.webglCtx = scene.webglCanvas.getContext("2d", { alpha: false });
+      }
+      if (scene.webglCanvas.width !== canvas.width || scene.webglCanvas.height !== canvas.height) {
+        scene.webglCanvas.width = canvas.width;
+        scene.webglCanvas.height = canvas.height;
+      }
+      return scene.webglCtx;
+    }
+
+    function drawLazyBonesSnow(t) {
+      window.__lazyBonesWebglActive = false;
+      window.__lazyBonesWebglTime = Number(t || 0);
+      const performanceMode = !!(window.PERFORMANCE_MODE || state?.settings?.performance);
+      const webgl = window.FNF_WEBGL;
+      const sourceCtx = !performanceMode && webgl?.drawDustinPostStack ? syncLazyWebglCanvas() : null;
+      if (sourceCtx) {
+        sourceCtx.clearRect(0, 0, scene.webglCanvas.width, scene.webglCanvas.height);
+        sourceCtx.drawImage(canvas, 0, 0, scene.webglCanvas.width, scene.webglCanvas.height);
+        const camera = updateSourceCamera(t);
+        const zoom = Math.max(0.05, zoomAt(t, "game"));
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        const usedWebgl = webgl.drawDustinPostStack(scene.webglCanvas, {
+          time: t,
+          resX: SOURCE_W,
+          resY: SOURCE_H,
+          cameraZoom: zoom,
+          cameraX: camera.x - SOURCE_W * 0.5 / zoom,
+          cameraY: camera.y - SOURCE_H * 0.5 / zoom,
+          snowTime: t * 21,
+          snowLayersA: 14,
+          snowLayersB: 13,
+          snowBrightA: 1,
+          snowBrightB: 1,
+          snowPixely: false,
+          snowMeltsA: true,
+          snowMeltsB: true,
+          snowMeltRect: [1000, 1220, 1500, 100]
+        });
+        ctx.restore();
+        if (usedWebgl) {
+          window.__lazyBonesWebglActive = true;
+          return;
+        }
+      }
+      if (typeof drawSnow === "function") {
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalAlpha = performanceMode ? 0.55 : 1;
+        drawSnow(t * 3);
+        ctx.restore();
+      }
+    }
+
     function noteLayout(lane) {
       const localLane = Number(lane || 0) % 4;
       const opponent = lane < 4;
@@ -777,6 +836,10 @@
       state.nextStepTime = 0;
       resetSceneState();
       document.body.classList.add("lazy-bones-active");
+      window.__lazyBonesWebglActive = false;
+      if (!window.PERFORMANCE_MODE && !state?.settings?.performance) {
+        try { window.FNF_WEBGL?.warmDustinPostStack?.(); } catch {}
+      }
 
       if (isOnlineStart) {
         const now = typeof serverClockNow === "function" ? serverClockNow() : Date.now();
@@ -823,6 +886,7 @@
       if (isLazyBones(state.currentSong)) {
         try { state.audio.lazyBonesInst?.pause(); } catch {}
         document.body.classList.remove("lazy-bones-active");
+        window.__lazyBonesWebglActive = false;
       }
       return baseFinish(failed);
     };
@@ -848,6 +912,7 @@
     stage = function(t) {
       if (!isLazyBones(state.currentSong)) return baseStage(t);
       drawLazyBonesStage(t);
+      drawLazyBonesSnow(t);
     };
 
     receptors = function(t) {
