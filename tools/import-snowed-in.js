@@ -3,6 +3,7 @@ const path = require("path");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const MOD_ROOT = path.resolve("C:/Users/matth/Downloads/gumballs_5cca5/gumballs");
+const CODENAME_ASSET_ROOT = path.resolve("C:/Users/matth/Downloads/dustin-windows/assets");
 const ASSET_ROOT = path.join(PROJECT_ROOT, "assets", "snowed-in");
 
 function ensureDir(dirPath) {
@@ -11,6 +12,14 @@ function ensureDir(dirPath) {
 
 function copyAsset(sourceRelative, targetRelative) {
   const sourcePath = path.join(MOD_ROOT, sourceRelative);
+  const targetPath = path.join(PROJECT_ROOT, targetRelative);
+  ensureDir(path.dirname(targetPath));
+  fs.copyFileSync(sourcePath, targetPath);
+  return targetRelative.replace(/\\/g, "/");
+}
+
+function copyCodenameAsset(sourceRelative, targetRelative) {
+  const sourcePath = path.join(CODENAME_ASSET_ROOT, sourceRelative);
   const targetPath = path.join(PROJECT_ROOT, targetRelative);
   ensureDir(path.dirname(targetPath));
   fs.copyFileSync(sourcePath, targetPath);
@@ -36,9 +45,9 @@ function numberAttr(attrs, key, fallback = 0) {
   return Number.isFinite(value) ? value : fallback;
 }
 
-function parseAtlas(xmlRelative) {
+function parseAtlasText(xmlText) {
   const frames = [];
-  for (const match of readText(xmlRelative).matchAll(/<SubTexture\b([^>]*?)\/>/g)) {
+  for (const match of xmlText.matchAll(/<SubTexture\b([^>]*?)\/>/g)) {
     const attrs = parseAttributes(match[1]);
     frames.push({
       name: String(attrs.name || ""),
@@ -54,6 +63,10 @@ function parseAtlas(xmlRelative) {
     });
   }
   return frames;
+}
+
+function parseAtlas(xmlRelative) {
+  return parseAtlasText(readText(xmlRelative));
 }
 
 function frameNumber(name) {
@@ -109,6 +122,71 @@ function buildHoldCover() {
   return {
     image: copyAsset("images/UI/holdcover.png", "assets/snowed-in/holdcover.png"),
     lanes
+  };
+}
+
+function decodeXmlAttribute(value) {
+  return String(value || "")
+    .replace(/&#34;/g, '"')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
+function buildDialogueUi(dialogue) {
+  const gumFrames = parseAtlas("images/dialogue/boxes/gum.xml");
+  const characterFrames = parseAtlas("images/dialogue/characters/bfDialog.xml");
+  const alphabetXml = fs.readFileSync(path.join(CODENAME_ASSET_ROOT, "images/menus/alphabet.xml"), "utf8");
+  const alphabetConfig = fs.readFileSync(path.join(CODENAME_ASSET_ROOT, "data/alphabet.xml"), "utf8");
+  const normalBlock = alphabetConfig.match(/<normal\b[^>]*>([\s\S]*?)<\/normal>/i)?.[1] || "";
+  const boldBlock = alphabetConfig.match(/<bold\b[^>]*>([\s\S]*?)<\/bold>/i)?.[1] || "";
+  const letterPrefixes = {};
+  for (const match of normalBlock.matchAll(/<letter\b([^>]*?)\/>/g)) {
+    const attrs = parseAttributes(match[1]);
+    letterPrefixes[decodeXmlAttribute(attrs.char)] = decodeXmlAttribute(attrs.anim);
+  }
+  const packedPrefixes = {};
+  for (const match of boldBlock.matchAll(/<letter\b([^>]*?)\/>/g)) {
+    const attrs = parseAttributes(match[1]);
+    packedPrefixes[decodeXmlAttribute(attrs.char)] = decodeXmlAttribute(attrs.anim);
+  }
+  const alphabetFrames = parseAtlasText(alphabetXml);
+  const glyphs = {};
+  const usedCharacters = new Set(dialogue.flatMap(line => [...String(line.text || "")]));
+  for (const character of usedCharacters) {
+    const candidates = [letterPrefixes[character]];
+    if (/^[a-z]$/.test(character)) candidates.push(`character-${character}-lowercase`);
+    if (/^[A-Z]$/.test(character)) candidates.push(`character-${character.toLowerCase()}-capital`);
+    candidates.push(packedPrefixes[character]);
+    for (const prefix of candidates) {
+      if (!prefix) continue;
+      const frames = framesByPrefix(alphabetFrames, prefix);
+      if (frames.length) {
+        glyphs[character] = frames;
+        break;
+      }
+    }
+  }
+
+  return {
+    background: copyAsset("images/menus/menuBG.png", "assets/snowed-in/dialogue-bg.png"),
+    box: {
+      image: copyAsset("images/dialogue/boxes/gum.png", "assets/snowed-in/dialogue-gum.png"),
+      open: framesByPrefix(gumFrames, "normal open"),
+      idle: framesByPrefix(gumFrames, "normal0")
+    },
+    characters: {
+      image: copyAsset("images/dialogue/characters/bfDialog.png", "assets/snowed-in/dialogue-characters.png"),
+      bf: { frames: framesByPrefix(characterFrames, "bf"), x: 590, y: 716, scale: 1, offsetY: 527, flipX: true },
+      gf: { frames: framesByPrefix(characterFrames, "gf"), x: 390, y: 716, scale: 0.9, offsetY: 671.5, flipX: false },
+      sans: { frames: framesByPrefix(characterFrames, "sans"), x: 240, y: 716, scale: 1, offsetY: 470, flipX: false }
+    },
+    alphabet: {
+      image: copyCodenameAsset("images/menus/alphabet.png", "assets/snowed-in/dialogue-alphabet.png"),
+      glyphs
+    }
   };
 }
 
@@ -182,6 +260,13 @@ function convertChart() {
 
 function main() {
   ensureDir(ASSET_ROOT);
+  const dialogue = [
+    { character: "bf", text: "whew! how lucky we are to have runned away from your big bad brother", speed: 0.049 },
+    { character: "gf", text: "mhm", speed: 0.05 },
+    { character: "bf", text: "say.. where are we? it feels as if we have fallen into a deep cavern inside of an mountain..", speed: 0.04 },
+    { character: "sans", text: "*how was it. how was the fall", speed: 0.055 },
+    { character: "gf", text: "Hooooooooooooooooooooly fucking Shit", speed: 0.02 }
+  ];
   const data = {
     song: {
       title: "Snowed In",
@@ -198,8 +283,8 @@ function main() {
     },
     chart: convertChart(),
     stage: {
-      viewport: [960, 720],
-      camera: [600, 400],
+      viewport: [1280, 720],
+      camera: [488.5, 380],
       zoom: 1,
       layers: [
         { key: "sky", image: copyAsset("images/stages/snowdin/sky.png", "assets/snowed-in/sky.png"), x: -112, y: -146.05, scroll: 0.1 },
@@ -230,13 +315,8 @@ function main() {
       player: copyAsset("images/UI/healthbars/bf.png", "assets/snowed-in/health-bf.png"),
       pointer: copyAsset("images/UI/healthPointer.png", "assets/snowed-in/health-pointer.png")
     },
-    dialogue: [
-      { character: "bf", text: "whew! how lucky we are to have runned away from your big bad brother", speed: 0.049 },
-      { character: "gf", text: "mhm", speed: 0.05 },
-      { character: "bf", text: "say.. where are we? it feels as if we have fallen into a deep cavern inside of an mountain..", speed: 0.04 },
-      { character: "sans", text: "*how was it. how was the fall", speed: 0.055 },
-      { character: "gf", text: "Hooooooooooooooooooooly fucking Shit", speed: 0.02 }
-    ]
+    dialogue,
+    dialogueUi: buildDialogueUi(dialogue)
   };
 
   fs.writeFileSync(path.join(PROJECT_ROOT, "snowed-in-data.js"), `window.SNOWED_IN_DATA=${JSON.stringify(data)};\n`, "utf8");

@@ -7,11 +7,9 @@
     const SONG_SOURCE = "snowedIn";
     const DIR = ["left", "down", "up", "right"];
     const DIR_ANIM = ["singLEFT", "singDOWN", "singUP", "singRIGHT"];
-    const SOURCE_W = Number(SNOW.stage?.viewport?.[0] || 960);
+    const SOURCE_W = Number(SNOW.stage?.viewport?.[0] || 1280);
     const SOURCE_H = Number(SNOW.stage?.viewport?.[1] || 720);
-    const SOURCE_CAMERA_X = Number(SNOW.stage?.camera?.[0] || 600);
-    const SOURCE_CAMERA_Y = Number(SNOW.stage?.camera?.[1] || 400);
-    const CAMERA_TWEEN_SECONDS = 1;
+    const CAMERA_FOLLOW_SPEED = 0.04;
     const scene = {
       initialized: false,
       images: {},
@@ -20,7 +18,10 @@
       lastParticleTime: -1,
       dialogueActive: false,
       dialogueIndex: 0,
-      dialogueDone: null
+      dialogueDone: null,
+      dialogueLineStarted: 0,
+      dialogueRevealAll: false,
+      dialogueFrameHandle: 0
     };
 
     SONGS[SONG_ID] = {
@@ -75,19 +76,14 @@
         body.snowed-in-active .hud .bottom,
         body.snowed-in-active #judgments { opacity: 0 !important; pointer-events: none !important; }
         #snowedInDialogue {
-          position: fixed; inset: 0; z-index: 120; display: none; place-items: end center;
-          padding: 0 24px 48px; background: rgba(0,0,0,0.12); cursor: pointer;
+          position: fixed; inset: 0; z-index: 120; display: none; place-items: center;
+          padding: 0; background: #000; cursor: pointer; overflow: hidden;
         }
         #snowedInDialogue.show { display: grid; }
-        #snowedInDialogueBox {
-          width: min(900px, calc(100vw - 40px)); min-height: 130px; padding: 22px 28px;
-          border: 4px solid #fff; border-radius: 4px; background: #08080d;
-          box-shadow: 0 0 0 4px #171721, 0 14px 40px rgba(0,0,0,0.62);
-          color: #fff; font-family: Consolas, "Courier New", monospace; image-rendering: pixelated;
+        #snowedInDialogueCanvas {
+          width: min(100vw, calc(100vh * 16 / 9)); height: auto; max-height: 100vh;
+          aspect-ratio: 16 / 9; display: block; image-rendering: auto;
         }
-        #snowedInDialogueName { color: #ff5d98; font-size: 18px; font-weight: 900; text-transform: uppercase; }
-        #snowedInDialogueText { margin-top: 12px; font-size: clamp(17px, 2.1vw, 26px); line-height: 1.35; }
-        #snowedInDialogueHint { margin-top: 10px; color: #a9a9b7; font-size: 12px; }
       `;
       document.head.appendChild(style);
     }
@@ -106,6 +102,10 @@
       sources.barOpp = SNOW.hud?.opponent;
       sources.barPlayer = SNOW.hud?.player;
       sources.pointer = SNOW.hud?.pointer;
+      sources.dialogueBg = SNOW.dialogueUi?.background;
+      sources.dialogueGum = SNOW.dialogueUi?.box?.image;
+      sources.dialogueCharacters = SNOW.dialogueUi?.characters?.image;
+      sources.dialogueAlphabet = SNOW.dialogueUi?.alphabet?.image;
       (SNOW.stage?.comicSans || []).forEach((source, index) => { sources[`comic${index}`] = source; });
       Object.entries(sources).forEach(([key, source]) => {
         if (!source) return;
@@ -158,19 +158,162 @@
       overlay.id = "snowedInDialogue";
       overlay.setAttribute("role", "dialog");
       overlay.setAttribute("aria-label", "Snowed In dialogue");
-      overlay.innerHTML = `<div id="snowedInDialogueBox"><div id="snowedInDialogueName"></div><div id="snowedInDialogueText"></div><div id="snowedInDialogueHint">Click, Enter, or Space to continue</div></div>`;
+      overlay.innerHTML = `<canvas id="snowedInDialogueCanvas" width="1280" height="720"></canvas>`;
       overlay.addEventListener("click", advanceDialogue);
       document.body.appendChild(overlay);
       return overlay;
     }
 
+    function drawDialogueAtlas(renderCtx, image, frame, x, y, scale = 1, alpha = 1, flipX = false) {
+      if (!imageReady(image) || !frame) return;
+      const fw = Number(frame.fw || frame.w || 0);
+      const fx = Number(frame.fx || 0);
+      const fy = Number(frame.fy || 0);
+      renderCtx.save();
+      renderCtx.globalAlpha = alpha;
+      renderCtx.imageSmoothingEnabled = false;
+      renderCtx.translate(x, y);
+      if (flipX) {
+        renderCtx.translate(fw * scale, 0);
+        renderCtx.scale(-1, 1);
+      }
+      renderCtx.drawImage(
+        image,
+        frame.x,
+        frame.y,
+        frame.w,
+        frame.h,
+        -fx * scale,
+        -fy * scale,
+        frame.w * scale,
+        frame.h * scale
+      );
+      renderCtx.restore();
+    }
+
+    function dialogueOpenDuration() {
+      return Number(SNOW.dialogueUi?.box?.open?.length || 0) / 24;
+    }
+
+    function dialogueTypedCount(now = performance.now() / 1000) {
+      const line = SNOW.dialogue?.[scene.dialogueIndex];
+      if (!line) return 0;
+      if (scene.dialogueRevealAll) return String(line.text || "").length;
+      const openDelay = scene.dialogueIndex === 0 ? dialogueOpenDuration() : 0;
+      const age = Math.max(0, now - scene.dialogueLineStarted - openDelay);
+      return Math.min(String(line.text || "").length, Math.floor(age / Math.max(0.001, Number(line.speed || 0.05))));
+    }
+
+    function dialogueGlyph(character) {
+      const frames = SNOW.dialogueUi?.alphabet?.glyphs?.[character];
+      return frames?.length ? frames[frames.length - 1] : null;
+    }
+
+    function dialogueGlyphWidth(character) {
+      const frame = dialogueGlyph(character);
+      return frame ? Number(frame.fw || frame.w || 40) : 40;
+    }
+
+    function drawDialogueText(renderCtx, line, visibleCharacters) {
+      const image = scene.images.dialogueAlphabet;
+      if (!imageReady(image)) return;
+      const text = String(line?.text || "");
+      const lineHeight = 60;
+      let x = 60;
+      let baseline = 565;
+      renderCtx.save();
+      renderCtx.imageSmoothingEnabled = true;
+      for (let index = 0; index < Math.min(text.length, visibleCharacters); index += 1) {
+        const character = text[index];
+        if (character === "\n") {
+          x = 60;
+          baseline += lineHeight;
+          continue;
+        }
+        const frame = dialogueGlyph(character);
+        if (frame) {
+          renderCtx.drawImage(
+            image,
+            frame.x,
+            frame.y,
+            frame.w,
+            frame.h,
+            Math.round(x),
+            Math.round(baseline - Number(frame.fh || frame.h || 0)),
+            frame.w,
+            frame.h
+          );
+        }
+        x += dialogueGlyphWidth(character);
+      }
+      renderCtx.restore();
+    }
+
+    function renderDialogueFrame() {
+      if (!scene.dialogueActive) return;
+      const dialogueCanvas = document.getElementById("snowedInDialogueCanvas");
+      const renderCtx = dialogueCanvas?.getContext("2d");
+      const line = SNOW.dialogue?.[scene.dialogueIndex];
+      if (!dialogueCanvas || !renderCtx || !line) return;
+      const now = performance.now() / 1000;
+      const lineAge = Math.max(0, now - scene.dialogueLineStarted);
+      renderCtx.clearRect(0, 0, dialogueCanvas.width, dialogueCanvas.height);
+      renderCtx.fillStyle = "#000";
+      renderCtx.fillRect(0, 0, dialogueCanvas.width, dialogueCanvas.height);
+
+      const background = scene.images.dialogueBg;
+      if (imageReady(background)) {
+        renderCtx.drawImage(background, Math.round((1280 - background.naturalWidth) * 0.5), Math.round((720 - background.naturalHeight) * 0.5));
+      }
+
+      const characterDef = SNOW.dialogueUi?.characters?.[String(line.character || "")];
+      const characterImage = scene.images.dialogueCharacters;
+      if (characterDef?.frames?.length && imageReady(characterImage)) {
+        const frame = characterDef.frames[Math.floor(now * 24) % characterDef.frames.length];
+        const pop = 1 - Math.pow(1 - clamp01(lineAge / 0.2), 5);
+        drawDialogueAtlas(
+          renderCtx,
+          characterImage,
+          frame,
+          Number(characterDef.x || 0),
+          Number(characterDef.y || 0) - Number(characterDef.offsetY || 0) + (1 - pop) * 100,
+          Number(characterDef.scale || 1),
+          pop,
+          !!characterDef.flipX
+        );
+      }
+
+      const boxImage = scene.images.dialogueGum;
+      const openFrames = SNOW.dialogueUi?.box?.open || [];
+      const idleFrames = SNOW.dialogueUi?.box?.idle || [];
+      const opening = scene.dialogueIndex === 0 && lineAge < dialogueOpenDuration() && openFrames.length;
+      const boxFrames = opening ? openFrames : idleFrames;
+      if (boxFrames.length && imageReady(boxImage)) {
+        const boxIndex = opening
+          ? Math.min(boxFrames.length - 1, Math.floor(lineAge * 24))
+          : Math.floor(now * 24) % boxFrames.length;
+        const frame = boxFrames[boxIndex];
+        drawDialogueAtlas(
+          renderCtx,
+          boxImage,
+          frame,
+          (1280 - Number(frame.fw || frame.w || 0)) * 0.5,
+          720 - Number(frame.fh || frame.h || 0),
+          1,
+          1,
+          String(line.character || "") === "sans"
+        );
+      }
+
+      drawDialogueText(renderCtx, line, dialogueTypedCount(now));
+      scene.dialogueFrameHandle = requestAnimationFrame(renderDialogueFrame);
+    }
+
     function renderDialogueLine() {
       const line = SNOW.dialogue?.[scene.dialogueIndex];
       if (!line) return closeDialogue(true);
-      const name = document.getElementById("snowedInDialogueName");
-      const text = document.getElementById("snowedInDialogueText");
-      if (name) name.textContent = String(line.character || "");
-      if (text) text.textContent = String(line.text || "");
+      scene.dialogueLineStarted = performance.now() / 1000;
+      scene.dialogueRevealAll = false;
     }
 
     function showDialogue(done) {
@@ -182,12 +325,16 @@
       ui.menu.classList.remove("show");
       overlay.classList.add("show");
       renderDialogueLine();
+      cancelAnimationFrame(scene.dialogueFrameHandle);
+      scene.dialogueFrameHandle = requestAnimationFrame(renderDialogueFrame);
     }
 
     function closeDialogue(continueSong) {
       const overlay = document.getElementById("snowedInDialogue");
       overlay?.classList.remove("show");
       scene.dialogueActive = false;
+      cancelAnimationFrame(scene.dialogueFrameHandle);
+      scene.dialogueFrameHandle = 0;
       const done = scene.dialogueDone;
       scene.dialogueDone = null;
       if (continueSong && typeof done === "function") done();
@@ -197,6 +344,11 @@
     function advanceDialogue(event) {
       if (event) event.preventDefault();
       if (!scene.dialogueActive) return;
+      const line = SNOW.dialogue?.[scene.dialogueIndex];
+      if (line && dialogueTypedCount() < String(line.text || "").length) {
+        scene.dialogueRevealAll = true;
+        return;
+      }
       scene.dialogueIndex += 1;
       if (scene.dialogueIndex >= Number(SNOW.dialogue?.length || 0)) closeDialogue(true);
       else renderDialogueLine();
@@ -207,13 +359,6 @@
       if (event.key === "Enter" || event.key === " ") advanceDialogue(event);
       else if (event.key === "Escape") closeDialogue(false);
     });
-
-    function sourceOrigin() {
-      return {
-        x: (canvas.width - SOURCE_W) * 0.5 - (SOURCE_CAMERA_X - SOURCE_W * 0.5),
-        y: (canvas.height - SOURCE_H) * 0.5 - (SOURCE_CAMERA_Y - SOURCE_H * 0.5)
-      };
-    }
 
     function sourceEventAt(t, name) {
       let found = null;
@@ -228,31 +373,51 @@
       return Number(event?.params?.[0] || 0) === 1 ? "player" : "opp";
     }
 
-    function cameraSceneOffsetForSide(side) {
-      const origin = sourceOrigin();
+    function cameraTargetForSide(side) {
       if (side === "player") {
         const bf = SNOW.stage.positions.boyfriend;
-        const logicalWidth = 261;
-        const cameraOffset = Number(SNOW.sprites?.boyfriend?.camera?.[0] || 0);
-        return canvas.width * 0.5 - (origin.x + Number(bf[0]) + logicalWidth * 0.5 + cameraOffset);
+        const idleFrame = SNOW.sprites?.boyfriend?.animations?.idle?.frames?.[0];
+        const width = Number(idleFrame?.fw || idleFrame?.w || 261);
+        const height = Number(idleFrame?.fh || idleFrame?.h || 336);
+        return {
+          x: Number(bf[0]) + width * 0.5 - 100 + Number(SNOW.sprites?.boyfriend?.camera?.[0] || 0),
+          y: Number(bf[1]) + height * 0.5 - 100 + Number(SNOW.sprites?.boyfriend?.camera?.[1] || 0)
+        };
       }
       const sans = SNOW.stage.positions.sans;
-      const logicalWidth = 283;
-      return canvas.width * 0.5 - (origin.x + Number(sans[0]) + logicalWidth * 0.5);
+      const idleFrame = SNOW.sprites?.sans?.animations?.idle?.frames?.[0];
+      const width = Number(idleFrame?.fw || idleFrame?.w || 283);
+      const height = Number(idleFrame?.fh || idleFrame?.h || 414);
+      return {
+        x: Number(sans[0]) + width * 0.5 + 150 + Number(SNOW.sprites?.sans?.camera?.[0] || 0),
+        y: Number(sans[1]) + height * 0.5 - 100 + Number(SNOW.sprites?.sans?.camera?.[1] || 0)
+      };
     }
 
-    function cameraSceneX(t) {
+    function followToward(current, target, seconds) {
+      const amount = 1 - Math.pow(1 - CAMERA_FOLLOW_SPEED, Math.max(0, seconds) * 60);
+      return lerp(current, target, amount);
+    }
+
+    function cameraScrollAt(t) {
       const cameraEvents = (SNOW.chart?.events || []).filter(event => event.name === "Camera Movement");
-      let index = -1;
-      for (let i = 0; i < cameraEvents.length; i++) {
-        if (cameraEvents[i].time <= t + 0.0001) index = i;
-        else break;
+      let side = "opp";
+      let target = cameraTargetForSide(side);
+      let scrollX = target.x - SOURCE_W * 0.5;
+      let scrollY = target.y - SOURCE_H * 0.5;
+      let lastTime = 0;
+      for (const event of cameraEvents) {
+        if (event.time > t + 0.0001) break;
+        scrollX = followToward(scrollX, target.x - SOURCE_W * 0.5, event.time - lastTime);
+        scrollY = followToward(scrollY, target.y - SOURCE_H * 0.5, event.time - lastTime);
+        side = cameraSideForEvent(event);
+        target = cameraTargetForSide(side);
+        lastTime = event.time;
       }
-      if (index < 0) return 0;
-      const event = cameraEvents[index];
-      const to = cameraSceneOffsetForSide(cameraSideForEvent(event));
-      const from = index > 0 ? cameraSceneOffsetForSide(cameraSideForEvent(cameraEvents[index - 1])) : 0;
-      return lerp(from, to, (t - event.time) / CAMERA_TWEEN_SECONDS);
+      return {
+        x: followToward(scrollX, target.x - SOURCE_W * 0.5, t - lastTime),
+        y: followToward(scrollY, target.y - SOURCE_H * 0.5, t - lastTime)
+      };
     }
 
     function cameraModuloAt(t) {
@@ -323,7 +488,7 @@
       return { animation: idle, frame: frameForAnimation(idle, t % Math.max(0.001, idleDuration), false) };
     }
 
-    function drawCharacter(key, t, sceneX) {
+    function drawCharacter(key, t, cameraScroll) {
       const sprite = SNOW.sprites[key];
       const image = scene.images[key];
       const stagePosition = key === "boyfriend" ? SNOW.stage.positions.boyfriend : SNOW.stage.positions.sans;
@@ -336,16 +501,16 @@
         frame = frameForAnimation(animation, t, true);
       }
       if (!frame) return;
-      const origin = sourceOrigin();
       const offset = animation?.offset || [0, 0];
+      const finalFlipX = key === "boyfriend" ? !sprite.flipX : !!sprite.flipX;
       drawAtlasTopLeft(
         image,
         frame,
-        origin.x + Number(stagePosition[0]) + sceneX - Number(offset[0] || 0),
-        origin.y + Number(stagePosition[1]) - Number(offset[1] || 0),
+        Number(stagePosition[0]) - Number(cameraScroll.x || 0) - Number(offset[0] || 0),
+        Number(stagePosition[1]) - Number(cameraScroll.y || 0) - Number(offset[1] || 0),
         1,
         1,
-        !!sprite.flipX
+        finalFlipX
       );
     }
 
@@ -380,15 +545,14 @@
       scene.particles = scene.particles.filter(particle => t - particle.born <= 1.02);
     }
 
-    function drawParticles(t, sceneX) {
+    function drawParticles(t, cameraScroll) {
       if (state.playing) updateParticles(t);
-      const origin = sourceOrigin();
       for (const particle of scene.particles) {
         const age = Math.max(0, t - particle.born);
         const image = scene.images[`comic${particle.lane}`];
         if (!imageReady(image) || age > 1) continue;
-        const x = origin.x + 397 + sceneX + particle.vx * age;
-        const y = origin.y + 303 - 500 * age + 500 * age * age;
+        const x = 397 - Number(cameraScroll.x || 0) + particle.vx * age;
+        const y = 303 - Number(cameraScroll.y || 0) - 500 * age + 500 * age * age;
         ctx.save();
         ctx.globalAlpha = 1 - age;
         ctx.imageSmoothingEnabled = false;
@@ -403,20 +567,20 @@
       const blackoutStart = Number(SNOW.stage?.blackout?.startBeat || 28) * spb;
       const blackoutEnd = Number(SNOW.stage?.blackout?.endBeat || 32) * spb;
       if (t >= blackoutStart && t < blackoutEnd) return;
-      const origin = sourceOrigin();
-      const sceneX = cameraSceneX(t);
+      const cameraScroll = cameraScrollAt(t);
       ctx.save();
       ctx.imageSmoothingEnabled = false;
       for (const layer of SNOW.stage?.layers || []) {
         const image = scene.images[layer.key];
         if (!imageReady(image)) continue;
-        const layerX = origin.x + Number(layer.x || 0) + sceneX * Number(layer.scroll == null ? 1 : layer.scroll);
-        const layerY = origin.y + Number(layer.y || 0);
+        const scroll = Number(layer.scroll == null ? 1 : layer.scroll);
+        const layerX = Number(layer.x || 0) - cameraScroll.x * scroll;
+        const layerY = Number(layer.y || 0) - cameraScroll.y * scroll;
         ctx.drawImage(image, Math.round(layerX), Math.round(layerY));
       }
-      drawCharacter("sans", t, sceneX);
-      drawCharacter("boyfriend", t, sceneX);
-      drawParticles(t, sceneX);
+      drawCharacter("sans", t, cameraScroll);
+      drawCharacter("boyfriend", t, cameraScroll);
+      drawParticles(t, cameraScroll);
       ctx.restore();
     }
 
@@ -743,7 +907,11 @@
     };
 
     cameraTargets = function() {
-      if (isSnowedIn(state.currentSong)) return { oppX: 384, playerX: 920, focusY: 400 };
+      if (isSnowedIn(state.currentSong)) {
+        const opp = cameraTargetForSide("opp");
+        const player = cameraTargetForSide("player");
+        return { oppX: opp.x, playerX: player.x, focusY: (opp.y + player.y) * 0.5 };
+      }
       return baseCameraTargets();
     };
 
