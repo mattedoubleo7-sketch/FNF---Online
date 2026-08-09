@@ -566,8 +566,8 @@ p, li {
   <img src="assets/icon.ico" alt="Silly Billy app icon">
   <div>
     <span>New update</span>
-    <strong>Lazy Bones WebGL Snow Update</strong>
-    <small>Lazy Bones now runs Perseverance's official GPU snow through the shared WebGL renderer, warmed before playback and layered behind its arrows and HUD.</small>
+    <strong>Practice Mode Added</strong>
+    <small>Practice Mode prevents Game Over at a 1% health floor while misses, score, accuracy, drain, and every song mechanic continue normally.</small>
   </div>
 </aside>
 <div class="page">
@@ -576,7 +576,7 @@ p, li {
     <div>
       <div class="kicker"><span class="liveDot"></span> Live build updated</div>
       <div class="titleWrap"><h1 data-text="FNF Onliine">FNF Onliine</h1></div>
-      <p>This is the download portal for the browser and app builds. Browser play is the easiest route for friends because it avoids Windows SmartScreen warnings on the unsigned `.exe`. The newest build gives Lazy Bones the real shared WebGL Dustin pass and Perseverance snow while preserving its source camera, Psych RGB notes, and adaptive Canvas fallback.</p>
+      <p>This is the download portal for the browser and app builds. Browser play is the easiest route for friends because it avoids Windows SmartScreen warnings on the unsigned `.exe`. The newest build adds a saved Practice Mode to every song while keeping misses, accuracy, health drain, mechanics, and online match rules intact.</p>
       <div class="actions">
         <a class="btn primary" href="/play">Play Online In Browser</a>
         <a class="btn ghost" href="/offline">Play Offline In Browser</a>
@@ -587,21 +587,25 @@ p, li {
   <section class="statsRow">
     <div class="statChip"><span>Newest song</span><strong>Lazy Bones</strong></div>
     <div class="statChip"><span>Now supports</span><strong>Mobile + Gamepad</strong></div>
-    <div class="statChip"><span>Latest polish</span><strong>Source Accuracy</strong></div>
+    <div class="statChip"><span>Latest mode</span><strong>Practice</strong></div>
     <div class="statChip"><span>Best route</span><strong>Browser</strong></div>
   </section>
 
   <section class="panel updatePanel">
     <div class="latestBox">
       <div class="version">Update log - 2026.08.09</div>
-      <h2>Lazy Bones Real WebGL + Perseverance Snow</h2>
-      <p>Lazy Bones now sends its world layer through the real WebGL Dustin shader stack with Perseverance's official 14/13-layer snow setup. The shader compiles before audio starts, notes and HUD stay crisp above the effect, and Performance Mode or failed GPU uploads use the Canvas fallback.</p>
+      <h2>Practice Mode Across Every Song</h2>
+      <p>Enable Practice beside the Play button or in Gameplay settings. Health stops at 1%, songs and mechanics keep running, misses still lower score and accuracy, completion results are marked as Practice Mode, and online matches retain their normal fail behavior.</p>
       <div class="actions">
         <a class="btn primary" href="/play">Jump Into Online</a>
         <a class="btn secondary" href="/offline">Try Offline</a>
       </div>
     </div>
     <div class="logList">
+      <div class="logItem">
+        <div class="logDate">Latest</div>
+        <div><div class="logTitle">Saved no-death Practice Mode</div><p>The new menu and Gameplay toggles stay synchronized and persist between launches. Practice catches the final composed fail path used by standard songs and custom mechanic wrappers, so zero-health attacks and drain events cannot end local play while all judgments and mechanics remain active.</p></div>
+      </div>
       <div class="logItem">
         <div class="logDate">Latest</div>
         <div><div class="logTitle">Lazy Bones moved onto real WebGL snow</div><p>The stage now uses the same GPU Dustin post pass as Perseverance, including its two official snow layers, world-aware camera position, and melt setup. A pre-song warmup prevents the first effect frame from compiling during gameplay, while a reduced Canvas version remains available as a fallback.</p></div>
@@ -720,7 +724,7 @@ p, li {
           <h3>Online App</h3>
           <p>Packaged desktop app for online play. It renders the bundled local WebGL files and connects rooms to the hosted online server.</p>
           <div class="actions">
-            <a class="btn primary" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/ONLINE/FNF-Browser-Jam-1.0.0-portable.exe?cache=20260809d">Download Online App</a>
+            <a class="btn primary" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/ONLINE/FNF-Browser-Jam-1.0.0-portable.exe?cache=20260809e">Download Online App</a>
           </div>
         </div>
         <div class="dlBlock">
@@ -759,7 +763,7 @@ p, li {
           <h3>Offline App</h3>
           <p>Packaged offline download with the current local-play build and bundled assets.</p>
           <div class="actions">
-            <a class="btn primary" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/fnf/FNF-Browser-Jam-offline-1.0.0-portable.exe?cache=20260809d">Download Offline App</a>
+            <a class="btn primary" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/fnf/FNF-Browser-Jam-offline-1.0.0-portable.exe?cache=20260809e">Download Offline App</a>
           </div>
         </div>
         <div class="dlBlock">
@@ -809,7 +813,7 @@ p, li {
     </div>
   </section>
 
-  <div class="footer">FNF Onliine download portal - Lazy Bones real WebGL and Perseverance snow update - browser recommended, app builds refreshed</div>
+  <div class="footer">FNF Onliine download portal - Practice Mode update - browser recommended, app builds refreshed</div>
 </div>
 </body>
 </html>

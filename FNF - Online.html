@@ -1411,6 +1411,7 @@ body.mobile .chatLog { max-height: 130px !important; font-size: 12px !important;
             </div>
             <div class="selectedTrackActions">
                 <label class="modeToggle"><input type="checkbox" id="versusToggle"><span>Versus</span></label>
+                <label class="modeToggle"><input type="checkbox" id="practiceToggle"><span>Practice</span></label>
                 <select class="cameraSelect" id="cameraMode">
                     <option value="off">📷 Off</option>
                     <option value="center">📷 Center</option>
@@ -1471,6 +1472,10 @@ body.mobile .chatLog { max-height: 130px !important; font-size: 12px !important;
                 <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:15px;">
                     <input type="checkbox" id="downScrollToggle" style="width:18px; height:18px; margin-top:2px; flex-shrink:0;">
                     <span><strong>Downscroll</strong> - puts the receptors near the bottom and makes notes fall down toward them.</span>
+                </label>
+                <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:15px; margin-top:12px;">
+                    <input type="checkbox" id="practiceModeToggle" style="width:18px; height:18px; margin-top:2px; flex-shrink:0;">
+                    <span><strong>Practice Mode</strong> - prevents Game Over while misses, score, accuracy, health drain, and song mechanics continue normally. Online matches keep normal fail rules.</span>
                 </label>
             </div>
             <div class="block" style="margin-top:14px;">
@@ -1662,7 +1667,7 @@ const STORAGE = "fnf-browser-jam-v1";
 const DIRS = ["left", "down", "up", "right"];
 const COLORS = ["#ff5a91", "#ff9d42", "#b7ff65", "#4de3ff", "#ff5a91", "#ff9d42", "#b7ff65", "#4de3ff"];
 const MOTIFS = [[0,1,2,3,2,1],[0,2,1,3,2,0],[3,2,1,0,1,2],[1,1,2,3,2,0],[0,3,1,2,3,1],[2,0,3,1,2,1]];
-const DEFAULTS = { solo:{left:"a",down:"s",up:"w",right:"d"}, p1:{left:"a",down:"s",up:"w",right:"d"}, p2:{left:"arrowleft",down:"arrowdown",up:"arrowup",right:"arrowright"}, mobile: false, console: false, performance: false, fpsCounter: false, reduceMotion: false, downScroll: false, muteVoices: false };
+const DEFAULTS = { solo:{left:"a",down:"s",up:"w",right:"d"}, p1:{left:"a",down:"s",up:"w",right:"d"}, p2:{left:"arrowleft",down:"arrowdown",up:"arrowup",right:"arrowright"}, mobile: false, console: false, performance: false, fpsCounter: false, reduceMotion: false, downScroll: false, practice: false, muteVoices: false };
 const SONGS = {
     sporting:{ title:"Sporting", subtitle:"Wii Funkin original hard chart + shaders", diff:"Hard (Original Chart)", tempo:300, root:45, scale:[0,2,3,5,7,8,10], prog:[0,5,3,7], scroll:1125, seed:29, introBeats:0, outroBeats:4, palette:["#0f1422","#1b2f46","#314f74","#0b0e16","#4de3ff","#ff9d42"], blurb:"The supplied Wii Funkin Sporting hard chart with its original audio, boxing sprites, layered arena, and complete game/HUD shader timeline.", chartSource:"sporting"},
     boxingMatch:{ title:"Boxing Match", subtitle:"Wii Funkin original hard chart + shaders", diff:"Hard (Original Chart)", tempo:339, root:45, scale:[0,2,3,5,7,8,10], prog:[0,5,3,7], scroll:1090, seed:31, introBeats:0, outroBeats:4, palette:["#0f1422","#1b2f46","#314f74","#0b0e16","#4de3ff","#ff9d42"], blurb:"The supplied Wii Funkin Boxing Match hard chart with its original audio, boxing sprites, layered arena, mid-song cutscene, and complete game/HUD shader timeline.", chartSource:"boxingMatch"},
@@ -2591,7 +2596,7 @@ const state = {
     hitGlow: []
 };
 function copy(v){ return JSON.parse(JSON.stringify(v)); }
-function loadSettings(){ try { const s = JSON.parse(localStorage.getItem(STORAGE)); return s ? { solo:{...DEFAULTS.solo,...s.solo}, p1:{...DEFAULTS.p1,...s.p1}, p2:{...DEFAULTS.p2,...s.p2}, mobile: !!s.mobile, console: !!s.console, performance: !!s.performance, fpsCounter: !!s.fpsCounter, reduceMotion: !!s.reduceMotion, downScroll: !!s.downScroll, muteVoices: !!s.muteVoices } : copy(DEFAULTS); } catch { return copy(DEFAULTS); } }
+function loadSettings(){ try { const s = JSON.parse(localStorage.getItem(STORAGE)); return s ? { solo:{...DEFAULTS.solo,...s.solo}, p1:{...DEFAULTS.p1,...s.p1}, p2:{...DEFAULTS.p2,...s.p2}, mobile: !!s.mobile, console: !!s.console, performance: !!s.performance, fpsCounter: !!s.fpsCounter, reduceMotion: !!s.reduceMotion, downScroll: !!s.downScroll, practice: !!s.practice, muteVoices: !!s.muteVoices } : copy(DEFAULTS); } catch { return copy(DEFAULTS); } }
 function saveSettings(){ localStorage.setItem(STORAGE, JSON.stringify(state.settings)); }
 function keyName(k){ if(k === " ") return "Space"; if(k.startsWith("arrow")) return "Arrow " + k.slice(5,6).toUpperCase() + k.slice(6); return k.length === 1 ? k.toUpperCase() : k.replace(/^\w/, c => c.toUpperCase()); }
 function clamp(v,a,b){ return Math.min(b, Math.max(a, v)); }
@@ -4057,7 +4062,7 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 (function () {
     // === Performance Mode + FPS counter + Reduce Motion + Mute Voices ===
     if (typeof state === "undefined") return;
-    const S = state.settings;
+    let S = state.settings;
     if (S.performance === undefined) S.performance = false;
     if (S.fpsCounter === undefined) S.fpsCounter = false;
     if (S.reduceMotion === undefined) S.reduceMotion = false;
@@ -4146,6 +4151,39 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
     // --- Reduce Motion: gate via window flag; song modes can check ---
     function applyReduceMotion() { window.REDUCE_MOTION = !!S.reduceMotion; }
     function applyDownScroll() {}
+    function practiceActive() {
+        const active = !!S.practice && state.mode !== "online";
+        window.PRACTICE_MODE = active;
+        return active;
+    }
+    function applyPracticeMode() {
+        practiceActive();
+        for (const id of ["practiceToggle", "practiceModeToggle"]) {
+            const el = document.getElementById(id);
+            if (el) el.checked = !!S.practice;
+        }
+        if (practiceActive() && (!Number.isFinite(state.health) || state.health <= 0)) state.health = 0.01;
+    }
+
+    const refreshBeforePractice = refreshHUD;
+    refreshHUD = function(t) {
+        if (practiceActive() && (!Number.isFinite(state.health) || state.health <= 0)) state.health = 0.01;
+        const result = refreshBeforePractice(t);
+        if (practiceActive() && ui.modeLabel) ui.modeLabel.textContent = state.mode === "versus" ? "Versus Practice" : "Practice Mode";
+        return result;
+    };
+
+    const finishBeforePractice = finish;
+    finish = function(failed = false) {
+        const active = practiceActive();
+        if (failed && active) {
+            state.health = Math.max(0.01, Number(state.health) || 0);
+            return null;
+        }
+        const result = finishBeforePractice(failed);
+        if (!failed && active && ui.resultSummary) ui.resultSummary.textContent += " - Practice Mode";
+        return result;
+    };
 
     // Wire toggle inputs
     function wire(id, key, applyFn) {
@@ -4162,6 +4200,8 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
     wire("fpsCounterToggle",   "fpsCounter",   applyFpsCounter);
     wire("reduceMotionToggle", "reduceMotion", applyReduceMotion);
     wire("downScrollToggle",   "downScroll",   applyDownScroll);
+    wire("practiceToggle",     "practice",     applyPracticeMode);
+    wire("practiceModeToggle", "practice",     applyPracticeMode);
     wire("muteVoicesToggle",   "muteVoices",   applyMuteVoices);
 
     // Chain into Reset Defaults so the new toggles reset cleanly
@@ -4169,19 +4209,21 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
         const _r = ui.resetBtn.onclick;
         ui.resetBtn.onclick = () => {
             if (_r) _r();
-            S.performance = false; S.fpsCounter = false; S.reduceMotion = false; S.downScroll = false; S.muteVoices = false;
+            S = state.settings;
+            S.performance = false; S.fpsCounter = false; S.reduceMotion = false; S.downScroll = false; S.practice = false; S.muteVoices = false;
             try { saveSettings(); } catch (e) {}
-            for (const id of ["perfModeToggle","fpsCounterToggle","reduceMotionToggle","downScrollToggle","muteVoicesToggle"]) {
+            for (const id of ["perfModeToggle","fpsCounterToggle","reduceMotionToggle","downScrollToggle","practiceToggle","practiceModeToggle","muteVoicesToggle"]) {
                 const el = document.getElementById(id);
                 if (el) el.checked = false;
             }
-            applyPerformanceMode(); applyFpsCounter(); applyReduceMotion(); applyDownScroll(); applyMuteVoices();
+            applyPerformanceMode(); applyFpsCounter(); applyReduceMotion(); applyDownScroll(); applyPracticeMode(); applyMuteVoices();
         };
     }
     applyPerformanceMode();
     applyFpsCounter();
     applyReduceMotion();
     applyDownScroll();
+    applyPracticeMode();
     applyMuteVoices();
 })();
 
