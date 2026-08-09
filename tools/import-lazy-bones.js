@@ -127,8 +127,9 @@ function convertChart(sourceRelative, difficulty) {
     for (const sourceNote of section.sectionNotes || []) {
       const rawLane = Number(sourceNote[1] || 0);
       const localLane = ((rawLane % 4) + 4) % 4;
-      let mustPress = rawLane > 3;
-      if (section.mustHitSection) mustPress = !mustPress;
+      const convertedV1 = String(raw.format || "").toLowerCase() === "psych_v1_convert";
+      let mustPress = convertedV1 ? rawLane < 4 : rawLane > 3;
+      if (!convertedV1 && section.mustHitSection) mustPress = !mustPress;
       const side = mustPress ? "player" : "opp";
       notes.push({
         id: `lazy-bones-${difficulty}-${noteIndex++}`,

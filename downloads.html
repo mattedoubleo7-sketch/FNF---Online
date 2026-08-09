@@ -566,8 +566,8 @@ p, li {
   <img src="assets/icon.ico" alt="Silly Billy app icon">
   <div>
     <span>New update</span>
-    <strong>Lazy Bones + Browser Rendering Fix</strong>
-    <small>Lazy Bones joins the setlist, Snowed In dialogue is readable edge to edge, and the HTML build now falls back cleanly when WebGL returns a blank frame.</small>
+    <strong>Lazy Bones Source UI + Snowed In Dialogue Fix</strong>
+    <small>Lazy Bones now uses the chart's correct singer ownership, colored source notes, and proper Psych HUD. Snowed In fills every screen at the source aspect ratio without stretching or exposed edges.</small>
   </div>
 </aside>
 <div class="page">
@@ -576,7 +576,7 @@ p, li {
     <div>
       <div class="kicker"><span class="liveDot"></span> Live build updated</div>
       <div class="titleWrap"><h1 data-text="FNF Onliine">FNF Onliine</h1></div>
-      <p>This is the download portal for the browser and app builds. Browser play is the easiest route for friends because it avoids Windows SmartScreen warnings on the unsigned `.exe`. The newest build imports Lazy Bones from its supplied Psych Engine source, fixes Snowed In's dialogue presentation, and repairs blank HTML rendering with deferred asset loading plus an adaptive Canvas fallback.</p>
+      <p>This is the download portal for the browser and app builds. Browser play is the easiest route for friends because it avoids Windows SmartScreen warnings on the unsigned `.exe`. The newest build corrects Lazy Bones chart ownership and source HUD rendering, reproduces Snowed In's native 960x720 dialogue camera without distortion, and keeps the adaptive blank-WebGL fallback.</p>
       <div class="actions">
         <a class="btn primary" href="/play">Play Online In Browser</a>
         <a class="btn ghost" href="/offline">Play Offline In Browser</a>
@@ -587,15 +587,15 @@ p, li {
   <section class="statsRow">
     <div class="statChip"><span>Newest song</span><strong>Lazy Bones</strong></div>
     <div class="statChip"><span>Now supports</span><strong>Mobile + Gamepad</strong></div>
-    <div class="statChip"><span>Latest polish</span><strong>HTML Stability</strong></div>
+    <div class="statChip"><span>Latest polish</span><strong>Source Accuracy</strong></div>
     <div class="statChip"><span>Best route</span><strong>Browser</strong></div>
   </section>
 
   <section class="panel updatePanel">
     <div class="latestBox">
       <div class="version">Update log - 2026.08.09</div>
-      <h2>Lazy Bones + HTML Rendering Repair</h2>
-      <p>Lazy Bones now runs its supplied Boned chart, audio, stage, atlas sprites, split receptor layout, camera events, fades, flashes, cinema bars, and source HUD behavior. Heavy song atlases now load on demand, and WebGL automatically preserves the Canvas frame when a browser returns blank GPU output.</p>
+      <h2>Lazy Bones Source UI + Snowed In Camera Repair</h2>
+      <p>Lazy Bones now assigns the converted Psych chart to the correct singers and uses colored source notes, full-size two-frame icons, and the source-style health bar. Snowed In now reproduces the source's 960x720 dialogue camera with a uniform full-screen crop, never stretching the artwork or exposing Sans's edge.</p>
       <div class="actions">
         <a class="btn primary" href="/play">Jump Into Online</a>
         <a class="btn secondary" href="/offline">Try Offline</a>
@@ -604,7 +604,7 @@ p, li {
     <div class="logList">
       <div class="logItem">
         <div class="logDate">Latest</div>
-        <div><div class="logTitle">Lazy Bones imported from source</div><p>Added the supplied Boned chart and instrumental, exact stage layers, BF and Sans atlas animations, Psych note and hold skin, split upscroll/downscroll receptor layout, directional camera, HUD fades, flashes, cinema bars, and camera zoom events.</p></div>
+        <div><div class="logTitle">Lazy Bones chart and HUD corrected</div><p>The converted Psych chart now gives all 134 Sans notes and 110 BF notes to the right singer. Taps use the source purple, cyan, green, and red lane colors; holds keep their supplied skin; and the health bar crops the real two-frame icons instead of squeezing each full sheet.</p></div>
       </div>
       <div class="logItem">
         <div class="logDate">Latest</div>
@@ -612,7 +612,7 @@ p, li {
       </div>
       <div class="logItem">
         <div class="logDate">Latest</div>
-        <div><div class="logTitle">Snowed In dialogue repaired</div><p>The dialogue backdrop now covers the full viewport without exposing Sans's edge, and the source font wraps and scales inside the speech box so every line remains readable.</p></div>
+        <div><div class="logTitle">Snowed In source camera restored</div><p>The dialogue now follows Gumballs' actual 960x720 camera and native centered menu background. A single uniform cover scale fills wide screens without stretching, preserves the complete speech bubble, and removes the visible edge on Sans's side.</p></div>
       </div>
       <div class="logItem">
         <div class="logDate">Included</div>
@@ -716,7 +716,7 @@ p, li {
           <h3>Online App</h3>
           <p>Packaged desktop app for online play. It renders the bundled local WebGL files and connects rooms to the hosted online server.</p>
           <div class="actions">
-            <a class="btn primary" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/ONLINE/FNF-Browser-Jam-1.0.0-portable.exe?cache=20260809a">Download Online App</a>
+            <a class="btn primary" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/ONLINE/FNF-Browser-Jam-1.0.0-portable.exe?cache=20260809b">Download Online App</a>
           </div>
         </div>
         <div class="dlBlock">
@@ -755,7 +755,7 @@ p, li {
           <h3>Offline App</h3>
           <p>Packaged offline download with the current local-play build and bundled assets.</p>
           <div class="actions">
-            <a class="btn primary" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/fnf/FNF-Browser-Jam-offline-1.0.0-portable.exe?cache=20260809a">Download Offline App</a>
+            <a class="btn primary" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/fnf/FNF-Browser-Jam-offline-1.0.0-portable.exe?cache=20260809b">Download Offline App</a>
           </div>
         </div>
         <div class="dlBlock">
@@ -787,8 +787,8 @@ p, li {
     <div class="eyebrow">Current Setlist</div>
     <h2>What is in the live build?</h2>
     <div class="setlist">
-      <div class="songTile"><strong>Lazy Bones</strong><span>Psych Engine source import with the Boned chart and audio, exact layered stage, BF/Sans atlas sprites, source split receptor layout, custom taps and holds, directional camera, fades, flashes, cinema bars, and HUD events.</span><div class="tagRow"><span class="tag hot">NEW</span><span class="tag">Undertale</span><span class="tag">Source Import</span></div></div>
-      <div class="songTile"><strong>Snowed In</strong><span>Gumballs source import with the original chart and audio, Snowdin pixel stage, smooth event camera, centered custom tap/hold lane, Sans hit particles, blackout, readable full-screen dialogue, and custom bottom health bar.</span><div class="tagRow"><span class="tag hot">UPDATED</span><span class="tag">Gumballs</span><span class="tag">Sans</span></div></div>
+      <div class="songTile"><strong>Lazy Bones</strong><span>Psych Engine source import with corrected singer ownership, colored taps and supplied holds, exact layered stage, BF/Sans atlas sprites, split receptor layout, directional camera, source-size icons, health bar, fades, flashes, and cinema events.</span><div class="tagRow"><span class="tag hot">NEW</span><span class="tag">Undertale</span><span class="tag">Source Import</span></div></div>
+      <div class="songTile"><strong>Snowed In</strong><span>Gumballs source import with the original chart and audio, Snowdin pixel stage, smooth event camera, centered custom tap/hold lane, Sans hit particles, blackout, native-ratio full-screen dialogue, and custom bottom health bar.</span><div class="tagRow"><span class="tag hot">UPDATED</span><span class="tag">Gumballs</span><span class="tag">Sans</span></div></div>
       <div class="songTile"><strong>Outskirtz</strong><span>Outskritz import with the original hard chart, arena stage, Alex and BF Wii source sprites, custom A-D note/hold skin, MoveArrowsToMiddle layout, health drain, and shader-event camera effects.</span><div class="tagRow"><span class="tag hot">NEW</span><span class="tag">Psych Engine</span><span class="tag">Shaders</span></div></div>
       <div class="songTile silly"><strong>Silly Billy</strong><span>Test of Time chart + instrumental against Silly Billy vocals. Pixel BF, shrink phase, mirror break flashbang, flashback cutscene, speed lines with cinema bars, and power-50 drain on the last 10s.</span><div class="tagRow"><span class="tag hot">NEW</span><span class="tag">Test of Time</span><span class="tag">VFX</span></div></div>
       <div class="songTile"><strong>Ballistic</strong><span>Whitty alley import with the hard chart, real split audio, crazy Whitty sprites, camera hits, flashes, shakes, smoke, and full-stage VFX.</span><div class="tagRow"><span class="tag">Whitty</span><span class="tag">VFX</span></div></div>
@@ -805,7 +805,7 @@ p, li {
     </div>
   </section>
 
-  <div class="footer">FNF Onliine download portal - Lazy Bones and HTML rendering repair - browser recommended, app builds refreshed</div>
+  <div class="footer">FNF Onliine download portal - Lazy Bones source UI and Snowed In camera repair - browser recommended, app builds refreshed</div>
 </div>
 </body>
 </html>

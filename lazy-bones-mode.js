@@ -18,7 +18,8 @@
       cameraOffsetX: 0,
       cameraOffsetY: 0,
       lastTime: null,
-      zoomImpulses: null
+      zoomImpulses: null,
+      coloredNoteFrames: {}
     };
 
     SONGS[SONG_ID] = {
@@ -456,6 +457,40 @@
       drawAtlasTopLeft(scene.images.notes, frame, centerX - fw * scale * 0.5, centerY - fh * scale * 0.5, scale, alpha, false);
     }
 
+    function coloredNoteFrame(lane, frame, kind) {
+      if (!frame || !imageReady(scene.images.notes)) return null;
+      const key = `${lane}:${kind}:${frame.name || `${frame.x},${frame.y}`}`;
+      if (scene.coloredNoteFrames[key]) return scene.coloredNoteFrames[key];
+      const target = document.createElement("canvas");
+      target.width = Number(frame.w || 1);
+      target.height = Number(frame.h || 1);
+      const targetCtx = target.getContext("2d", { willReadFrequently: true });
+      targetCtx.drawImage(scene.images.notes, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h);
+      const pixels = targetCtx.getImageData(0, 0, target.width, target.height);
+      const color = HOLD_COLORS[lane].match(/[\da-f]{2}/gi).map(value => parseInt(value, 16));
+      for (let index = 0; index < pixels.data.length; index += 4) {
+        if (!pixels.data[index + 3]) continue;
+        const light = (pixels.data[index] * 0.2126 + pixels.data[index + 1] * 0.7152 + pixels.data[index + 2] * 0.0722) / 255;
+        const shade = 0.38 + light * 0.9;
+        const highlight = Math.max(0, (light - 0.72) / 0.28) * 0.55;
+        for (let channel = 0; channel < 3; channel += 1) {
+          pixels.data[index + channel] = Math.min(255, color[channel] * shade * (1 - highlight) + 255 * highlight);
+        }
+      }
+      targetCtx.putImageData(pixels, 0, 0);
+      scene.coloredNoteFrames[key] = target;
+      return target;
+    }
+
+    function drawColoredNoteFrame(lane, frame, centerX, centerY, scale = 0.7, alpha = 1, kind = "tap") {
+      const colored = coloredNoteFrame(lane, frame, kind);
+      if (!colored) return;
+      ctx.save();
+      ctx.globalAlpha *= alpha;
+      ctx.drawImage(colored, centerX - colored.width * scale * 0.5, centerY - colored.height * scale * 0.5, colored.width * scale, colored.height * scale);
+      ctx.restore();
+    }
+
     function tintedHoldFrame(lane, kind) {
       const key = `${lane}:${kind}`;
       if (scene.holdFrames[key]) return scene.holdFrames[key];
@@ -529,7 +564,8 @@
       else if (pressed) frames = LAZY.notes?.lanes?.[localLane]?.press;
       const frameIndex = confirming ? Math.floor(Math.max(0, hitAge) * 24) : Math.floor(t * 24);
       const frame = frames?.[Math.max(0, frameIndex) % Math.max(1, frames?.length || 1)];
-      drawNoteFrame(frame, centerX, centerY, 0.7, 0.72 + (confirming ? 0.28 : 0));
+      if (confirming || pressed) drawColoredNoteFrame(localLane, frame, centerX, centerY, 0.7, 1, confirming ? "confirm" : "press");
+      else drawNoteFrame(frame, centerX, centerY, 0.7, 0.72);
     }
 
     function drawLazyNotes(t) {
@@ -549,9 +585,17 @@
         if (isHoldNote(note)) drawHold(note, headCenter, tailCenter, note.hit ? 0.9 : 1);
         if (!(note.hit && isHoldNote(note) && t > note.time)) {
           const frame = LAZY.notes?.lanes?.[note.lane % 4]?.tap?.[0];
-          drawNoteFrame(frame, layout.x + 55, headTop + 55, 0.7, 1);
+          drawColoredNoteFrame(note.lane % 4, frame, layout.x + 55, headTop + 55, 0.7, 1, "tap");
         }
       }
+    }
+
+    function drawHealthIcon(image, frameIndex, x, y) {
+      if (!imageReady(image)) return;
+      const frameSize = image.naturalHeight;
+      const frameCount = Math.max(1, Math.floor(image.naturalWidth / frameSize));
+      const sourceFrame = Math.max(0, Math.min(frameCount - 1, frameIndex));
+      ctx.drawImage(image, sourceFrame * frameSize, 0, frameSize, frameSize, x, y, 150, 150);
     }
 
     function drawSourceHud(t) {
@@ -562,28 +606,32 @@
         judged: 0,
         judgments: { miss: 0 }
       };
-      const barX = 308;
-      const barY = 648;
-      const barW = 664;
-      const barH = 18;
+      const barBgX = 339;
+      const barBgY = 641;
+      const barBgW = 601;
+      const barBgH = 19;
+      const barX = barBgX + 4;
+      const barY = barBgY + 4;
+      const barW = barBgW - 8;
+      const barH = barBgH - 8;
       const splitX = barX + barW * (1 - health);
       ctx.save();
       ctx.fillStyle = "#111";
-      ctx.fillRect(barX - 4, barY - 4, barW + 8, barH + 8);
+      ctx.fillRect(barBgX, barBgY, barBgW, barBgH);
       ctx.fillStyle = "#fff";
-      ctx.fillRect(barX, barY, barW, barH);
+      ctx.fillRect(barX, barY, splitX - barX, barH);
       ctx.fillStyle = "#769ee8";
       ctx.fillRect(splitX, barY, barX + barW - splitX, barH);
-      if (imageReady(scene.images.sansIcon)) ctx.drawImage(scene.images.sansIcon, splitX - 102, barY - 46, 90, 90);
-      if (imageReady(scene.images.boyfriendIcon)) ctx.drawImage(scene.images.boyfriendIcon, splitX + 12, barY - 46, 90, 90);
+      drawHealthIcon(scene.images.sansIcon, health > 0.8 ? 1 : 0, splitX - 124, barY - 75);
+      drawHealthIcon(scene.images.boyfriendIcon, health < 0.2 ? 1 : 0, splitX - 26, barY - 75);
       ctx.fillStyle = "#fff";
       ctx.strokeStyle = "#000";
       ctx.lineWidth = 4;
       ctx.textAlign = "center";
-      ctx.font = "700 18px Arial, sans-serif";
+      ctx.font = "700 20px monospace";
       const scoreText = `Score: ${Number(playerStats.score || 0).toLocaleString()} | Misses: ${Number(playerStats.judgments?.miss || 0)} | Rating: ${(accuracy(playerStats) * 100).toFixed(2)}%`;
-      ctx.strokeText(scoreText, canvas.width * 0.5, 700);
-      ctx.fillText(scoreText, canvas.width * 0.5, 700);
+      ctx.strokeText(scoreText, canvas.width * 0.5, barBgY + 38);
+      ctx.fillText(scoreText, canvas.width * 0.5, barBgY + 38);
       ctx.restore();
 
       const distance = cinematicDistanceAt(t);

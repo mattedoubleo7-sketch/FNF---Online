@@ -81,8 +81,7 @@
         }
         #snowedInDialogue.show { display: grid; }
         #snowedInDialogueCanvas {
-          width: min(100vw, calc(100vh * 16 / 9)); height: auto; max-height: 100vh;
-          aspect-ratio: 16 / 9; display: block; image-rendering: auto;
+          width: 100vw; height: 100vh; display: block; image-rendering: auto;
         }
       `;
       document.head.appendChild(style);
@@ -273,15 +272,43 @@
       const renderCtx = dialogueCanvas?.getContext("2d");
       const line = SNOW.dialogue?.[scene.dialogueIndex];
       if (!dialogueCanvas || !renderCtx || !line) return;
+      const displayWidth = Math.max(1, Math.round(dialogueCanvas.clientWidth || window.innerWidth || 1280));
+      const displayHeight = Math.max(1, Math.round(dialogueCanvas.clientHeight || window.innerHeight || 720));
+      if (dialogueCanvas.width !== displayWidth || dialogueCanvas.height !== displayHeight) {
+        dialogueCanvas.width = displayWidth;
+        dialogueCanvas.height = displayHeight;
+      }
       const now = performance.now() / 1000;
       const lineAge = Math.max(0, now - scene.dialogueLineStarted);
       renderCtx.clearRect(0, 0, dialogueCanvas.width, dialogueCanvas.height);
       renderCtx.fillStyle = "#000";
       renderCtx.fillRect(0, 0, dialogueCanvas.width, dialogueCanvas.height);
 
+      const referenceWidth = 1280;
+      const referenceHeight = 720;
+      const coverScale = Math.max(dialogueCanvas.width / referenceWidth, dialogueCanvas.height / referenceHeight);
+      renderCtx.save();
+      renderCtx.translate(
+        (dialogueCanvas.width - referenceWidth * coverScale) * 0.5,
+        dialogueCanvas.height - referenceHeight * coverScale
+      );
+      renderCtx.scale(coverScale, coverScale);
+
       const background = scene.images.dialogueBg;
       if (imageReady(background)) {
-        renderCtx.drawImage(background, 0, 0, dialogueCanvas.width, dialogueCanvas.height);
+        // Gumballs switches FlxG to 960x720, keeps menuBG at scale 1, then
+        // screen-centers it. Scale that source camera uniformly to our width;
+        // the extra height is cropped instead of distorting the artwork.
+        const sourceWidth = 960;
+        const sourceHeight = 720;
+        const sourceScale = referenceWidth / sourceWidth;
+        const drawWidth = background.naturalWidth * sourceScale;
+        const drawHeight = background.naturalHeight * sourceScale;
+        const sourceCenterX = (sourceWidth - background.naturalWidth) * 0.5;
+        const sourceCenterY = (sourceHeight - background.naturalHeight) * 0.5;
+        const drawX = sourceCenterX * sourceScale;
+        const drawY = sourceCenterY * sourceScale + (referenceHeight - sourceHeight * sourceScale) * 0.5;
+        renderCtx.drawImage(background, drawX, drawY, drawWidth, drawHeight);
       }
 
       const characterDef = SNOW.dialogueUi?.characters?.[String(line.character || "")];
@@ -324,6 +351,7 @@
       }
 
       drawDialogueText(renderCtx, line, dialogueTypedCount(now));
+      renderCtx.restore();
       scene.dialogueFrameHandle = requestAnimationFrame(renderDialogueFrame);
     }
 
