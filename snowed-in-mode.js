@@ -218,17 +218,35 @@
       const image = scene.images.dialogueAlphabet;
       if (!imageReady(image)) return;
       const text = String(line?.text || "");
-      const lineHeight = 60;
-      let x = 60;
-      let baseline = 565;
+      const scale = 0.64;
+      const startX = 220;
+      const maxX = 1060;
+      const lineHeight = 43;
+      let x = startX;
+      let baseline = 580;
       renderCtx.save();
       renderCtx.imageSmoothingEnabled = true;
       for (let index = 0; index < Math.min(text.length, visibleCharacters); index += 1) {
         const character = text[index];
         if (character === "\n") {
-          x = 60;
+          x = startX;
           baseline += lineHeight;
           continue;
+        }
+        if (character !== " " && (index === 0 || text[index - 1] === " " || text[index - 1] === "\n")) {
+          let wordWidth = 0;
+          for (let wordIndex = index; wordIndex < text.length && text[wordIndex] !== " " && text[wordIndex] !== "\n"; wordIndex += 1) {
+            wordWidth += dialogueGlyphWidth(text[wordIndex]) * scale;
+          }
+          if (x > startX && wordWidth <= maxX - startX && x + wordWidth > maxX) {
+            x = startX;
+            baseline += lineHeight;
+          }
+        }
+        const advance = dialogueGlyphWidth(character) * scale;
+        if (character !== " " && x + advance > maxX) {
+          x = startX;
+          baseline += lineHeight;
         }
         const frame = dialogueGlyph(character);
         if (frame) {
@@ -239,12 +257,12 @@
             frame.w,
             frame.h,
             Math.round(x),
-            Math.round(baseline - Number(frame.fh || frame.h || 0)),
-            frame.w,
-            frame.h
+            Math.round(baseline - Number(frame.fh || frame.h || 0) * scale),
+            frame.w * scale,
+            frame.h * scale
           );
         }
-        x += dialogueGlyphWidth(character);
+        x += advance;
       }
       renderCtx.restore();
     }
@@ -263,7 +281,7 @@
 
       const background = scene.images.dialogueBg;
       if (imageReady(background)) {
-        renderCtx.drawImage(background, Math.round((1280 - background.naturalWidth) * 0.5), Math.round((720 - background.naturalHeight) * 0.5));
+        renderCtx.drawImage(background, 0, 0, dialogueCanvas.width, dialogueCanvas.height);
       }
 
       const characterDef = SNOW.dialogueUi?.characters?.[String(line.character || "")];
@@ -953,7 +971,6 @@
     }
 
     injectStyle();
-    initAssets();
     renderSongs();
   } catch (error) {
     console.error("Snowed In mode failed to initialize", error);

@@ -50,7 +50,9 @@
       dustinPost: null,
       outskirtzPost: null,
       warmCanvas: null,
-      sourceUploadBlocked: false
+      sourceUploadBlocked: false,
+      outputValidated: false,
+      probeCanvas: null
     };
 
     function markFailed(error){
@@ -111,6 +113,44 @@
       state.fxCanvas.width = canvas.width;
       state.fxCanvas.height = canvas.height;
       return state.width > 0 && state.height > 0;
+    }
+
+    function sourceHasVisibleColor(source){
+      try {
+        if(!state.probeCanvas) state.probeCanvas = document.createElement("canvas");
+        state.probeCanvas.width = 8;
+        state.probeCanvas.height = 8;
+        const probeCtx = state.probeCanvas.getContext("2d", { willReadFrequently: true });
+        probeCtx.clearRect(0, 0, 8, 8);
+        probeCtx.drawImage(source, 0, 0, 8, 8);
+        const pixels = probeCtx.getImageData(0, 0, 8, 8).data;
+        for(let index = 0; index < pixels.length; index += 4){
+          if(pixels[index] + pixels[index + 1] + pixels[index + 2] > 18 && pixels[index + 3] > 8) return true;
+        }
+      } catch(error) {
+        return false;
+      }
+      return false;
+    }
+
+    function rejectBlankOutput(gl, source){
+      if(state.outputValidated || !sourceHasVisibleColor(source)) return false;
+      const sample = new Uint8Array(4);
+      const points = [
+        [0.2, 0.2], [0.5, 0.2], [0.8, 0.2],
+        [0.2, 0.5], [0.5, 0.5], [0.8, 0.5],
+        [0.2, 0.8], [0.5, 0.8], [0.8, 0.8]
+      ];
+      for(const point of points){
+        gl.readPixels(Math.floor(state.width * point[0]), Math.floor(state.height * point[1]), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, sample);
+        if(sample[0] + sample[1] + sample[2] > 6){
+          state.outputValidated = true;
+          return false;
+        }
+      }
+      state.sourceUploadBlocked = true;
+      state.failReason = "WebGL returned a blank frame; Canvas fallback enabled";
+      return true;
     }
 
     function warmSourceCanvas(){
@@ -1258,6 +1298,7 @@
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         const error = gl.getError();
         if(error !== gl.NO_ERROR) throw new Error("WebGL error " + error);
+        if(rejectBlankOutput(gl, source)) return false;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(state.fxCanvas, 0, 0, canvas.width, canvas.height);
         return true;
@@ -1297,6 +1338,7 @@
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         const error = gl.getError();
         if(error !== gl.NO_ERROR) throw new Error("WebGL error " + error);
+        if(rejectBlankOutput(gl, source)) return false;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(state.fxCanvas, 0, 0, canvas.width, canvas.height);
         return true;
@@ -1337,6 +1379,7 @@
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         const error = gl.getError();
         if(error !== gl.NO_ERROR) throw new Error("WebGL error " + error);
+        if(rejectBlankOutput(gl, source)) return false;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(state.fxCanvas, 0, 0, canvas.width, canvas.height);
         return true;
@@ -1440,6 +1483,7 @@
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         const error = gl.getError();
         if(error !== gl.NO_ERROR) throw new Error("WebGL error " + error);
+        if(rejectBlankOutput(gl, source)) return false;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(state.fxCanvas, 0, 0, canvas.width, canvas.height);
         return true;
@@ -1503,6 +1547,7 @@
         const error = gl.getError();
         if(error !== gl.NO_ERROR) throw new Error("WebGL error " + error);
         if(commit){
+          if(rejectBlankOutput(gl, source)) return false;
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           ctx.drawImage(state.fxCanvas, 0, 0, canvas.width, canvas.height);
         }

@@ -24,7 +24,8 @@
     genocide: 0.54,
     overthrone: 0.56,
     sillyBilly: 0.48,
-    snowedIn: 0
+    snowedIn: 0,
+    lazyBones: 0
   };
 
   function clamp(value, min, max){

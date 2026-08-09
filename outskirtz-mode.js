@@ -1440,7 +1440,5 @@
 
   state.poses.alex = state.poses.alex || { lane: 1, time: -10, kind: "hit" };
   state.poses.outskirtzBf = state.poses.outskirtzBf || { lane: 2, time: -10, kind: "hit" };
-  initAssets();
-  scheduleOutskirtzWarmup();
   renderSongs();
 })();

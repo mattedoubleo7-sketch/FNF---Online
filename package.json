@@ -54,6 +54,8 @@
       "outskirtz-mode.js",
       "snowed-in-data.js",
       "snowed-in-mode.js",
+      "lazy-bones-data.js",
+      "lazy-bones-mode.js",
       "combat-visual-data.js",
       "shimmy-visual-data.js",
       "combat-mode.js",

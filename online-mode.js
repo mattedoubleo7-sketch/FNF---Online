@@ -177,6 +177,10 @@ function importedTracksForSong(songId = state.selectedSong) {
     if (typeof window.ensureSnowedInAudio === "function") return mediaListFrom(window.ensureSnowedInAudio());
     return [state.audio.snowedInInst, state.audio.snowedInVoices];
   }
+  if (chartSource === "lazyBones") {
+    if (typeof window.ensureLazyBonesAudio === "function") return mediaListFrom(window.ensureLazyBonesAudio());
+    return [state.audio.lazyBonesInst];
+  }
   return [];
 }
 
@@ -356,6 +360,15 @@ async function preloadSongForMatch(songId, matchId) {
     const media = mediaListFrom(prepared);
     const tracks = media.length ? media : [state.audio.snowedInInst, state.audio.snowedInVoices];
     await Promise.all(tracks.filter(Boolean).map(track => waitForTrackReady(track)));
+  } else if (SONGS[songId]?.chartSource === "lazyBones") {
+    const prepared = typeof window.prepareLazyBonesOnlineStart === "function"
+      ? window.prepareLazyBonesOnlineStart()
+      : (typeof window.ensureLazyBonesAudio === "function"
+        ? window.ensureLazyBonesAudio()
+        : []);
+    const media = mediaListFrom(prepared);
+    const tracks = media.length ? media : [state.audio.lazyBonesInst];
+    await Promise.all(tracks.filter(Boolean).map(track => waitForTrackReady(track)));
   }
   if (state.network.prepareMatchId !== matchId) return false;
   state.network.preparedSongId = songId;
@@ -493,6 +506,9 @@ function syncOnlinePlayback(force = false) {
     if (typeof window.ensureSnowedInAudio === "function") window.ensureSnowedInAudio();
     syncTrackToTime(state.audio.snowedInInst, targetTime, shouldPlay, syncOptions);
     syncTrackToTime(state.audio.snowedInVoices, targetTime, shouldPlay, { ...syncOptions, isSecondary: true });
+  } else if (state.currentSong.chartSource === "lazyBones") {
+    if (typeof window.ensureLazyBonesAudio === "function") window.ensureLazyBonesAudio();
+    syncTrackToTime(state.audio.lazyBonesInst, targetTime, shouldPlay, syncOptions);
   }
   return targetTime;
 }
