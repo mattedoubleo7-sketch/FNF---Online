@@ -39,6 +39,8 @@
           return [state.audio.sansationalInst, state.audio.sansationalVoices];
         case "lastReel":
           return [state.audio.lastReelInst, state.audio.lastReelVoices];
+        case "snowedIn":
+          return [state.audio.snowedInInst, state.audio.snowedInVoices];
         default:
           return [];
       }

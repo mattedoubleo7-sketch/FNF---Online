@@ -44,6 +44,7 @@
       width: 0,
       height: 0,
       camera: null,
+      vsMattPost: null,
       parallax: null,
       speedLines: null,
       dustinPost: null,
@@ -211,6 +212,185 @@
           uMirror: gl.getUniformLocation(program, "uMirror")
         };
         return state.camera;
+      } catch(error) {
+        markFailed(error);
+        return null;
+      }
+    }
+
+    function ensureVsMattPostPass(){
+      const gl = ensureContext();
+      if(!gl) return null;
+      if(state.vsMattPost) return state.vsMattPost;
+      try {
+        const program = createProgram(gl, `
+          attribute vec2 aPosition;
+          attribute vec2 aTexCoord;
+          varying vec2 vUv;
+          void main(){
+            vUv = aTexCoord;
+            gl_Position = vec4(aPosition, 0.0, 1.0);
+          }
+        `, `
+          precision highp float;
+          uniform sampler2D uTexture;
+          uniform vec2 uResolution;
+          uniform float uTime;
+          uniform float uGreyscale;
+          uniform float uBlur;
+          uniform float uBloomEffect;
+          uniform float uBloomStrength;
+          uniform float uSpeed;
+          uniform float uBars;
+          uniform float uColorFillFade;
+          uniform vec4 uMirror;
+          uniform float uMirrorWarp;
+          uniform vec4 uMirrorOther;
+          uniform float uMirrorOtherWarp;
+          varying vec2 vUv;
+
+          float mirrorRepeatAxis(float value){
+            float repeated = mod(value, 2.0);
+            return repeated <= 1.0 ? repeated : 2.0 - repeated;
+          }
+
+          vec2 mirrorRepeat(vec2 uv){
+            vec2 repeated = vec2(mirrorRepeatAxis(uv.x), mirrorRepeatAxis(uv.y));
+            vec2 pixelOffset = (1.0 / uResolution) * 2.0;
+            return min(repeated, vec2(1.0) - pixelOffset);
+          }
+
+          vec2 applyMirror(vec2 uv, vec4 data, float warp){
+            vec2 centered = (uResolution * uv - 0.5 * uResolution) / uResolution.y;
+            centered *= max(0.0001, data.x);
+            centered *= 1.0 + warp * dot(centered, centered);
+            float angle = radians(data.y);
+            float s = sin(angle);
+            float c = cos(angle);
+            centered = mat2(c, -s, s, c) * centered;
+            centered.x *= 0.5625;
+            return mirrorRepeat(centered + 0.5 + data.zw);
+          }
+
+          vec4 greyscaleSample(vec2 uv){
+            vec4 color = texture2D(uTexture, clamp(uv, 0.0, 1.0));
+            float grey = dot(color.rgb, vec3(0.299, 0.587, 0.114));
+            color.rgb = mix(color.rgb, vec3(grey), clamp(uGreyscale, 0.0, 1.0));
+            return color;
+          }
+
+          vec4 blurSample(vec2 uv){
+            vec2 offset = vec2(1.3333333333 * uBlur, 0.0) / uResolution;
+            vec4 color = greyscaleSample(uv) * 0.2941176471;
+            color += greyscaleSample(uv + offset) * 0.3529411765;
+            color += greyscaleSample(uv - offset) * 0.3529411765;
+            return color;
+          }
+
+          vec4 bloomSample(vec2 uv){
+            vec4 color = blurSample(uv);
+            if(uBloomEffect <= 0.0) return color;
+            vec2 off1 = vec2(1.3846153846 * uBloomEffect) / uResolution;
+            vec2 off2 = vec2(3.2307692308 * uBloomEffect) / uResolution;
+            color += blurSample(uv) * 0.2270270270 * uBloomStrength;
+            color += blurSample(uv + off1) * 0.3162162162 * uBloomStrength;
+            color += blurSample(uv - off1) * 0.3162162162 * uBloomStrength;
+            color += blurSample(uv + off2) * 0.0702702703 * uBloomStrength;
+            color += blurSample(uv - off2) * 0.0702702703 * uBloomStrength;
+            return color;
+          }
+
+          float mod289(float x){
+            return x - floor(x * (1.0 / 289.0)) * 289.0;
+          }
+
+          vec4 mod289(vec4 x){
+            return x - floor(x * (1.0 / 289.0)) * 289.0;
+          }
+
+          vec4 perm(vec4 x){
+            return mod289(((x * 34.0) + 1.0) * x);
+          }
+
+          float speedNoise(vec3 p){
+            vec3 a = floor(p);
+            vec3 d = p - a;
+            d = d * d * (3.0 - 2.0 * d);
+            vec4 b = a.xxyy + vec4(0.0, 1.0, 0.0, 1.0);
+            vec4 k1 = perm(b.xyxy);
+            vec4 k2 = perm(k1.xyxy + b.zzww);
+            vec4 c = k2 + a.zzzz;
+            vec4 k3 = perm(c);
+            vec4 k4 = perm(c + 1.0);
+            vec4 o1 = fract(k3 * (1.0 / 41.0));
+            vec4 o2 = fract(k4 * (1.0 / 41.0));
+            vec4 o3 = o2 * d.z + o1 * (1.0 - d.z);
+            vec2 o4 = o3.yw * d.x + o3.xz * (1.0 - d.x);
+            return o4.y * d.y + o4.x * (1.0 - d.y);
+          }
+
+          float speedAmount(vec2 uv){
+            if(uSpeed <= 0.0) return 0.0;
+            vec2 centered = uv - 0.5;
+            float distanceFromCenter = length(centered);
+            vec2 direction = centered / max(distanceFromCenter, 0.0001);
+            direction *= 50.0 + speedNoise(vec3(uTime));
+            float amount = speedNoise(vec3(direction, uTime * 25.0));
+            amount *= speedNoise(vec3(direction, uTime * 30.0));
+            amount *= smoothstep(0.2, 0.7, distanceFromCenter);
+            amount = amount > 0.2 ? amount * 3.0 : 0.0;
+            if(speedNoise(vec3(direction, uTime)) > uSpeed) amount = 0.0;
+            return amount;
+          }
+
+          void main(){
+            vec2 sampleUv = applyMirror(vUv, uMirrorOther, uMirrorOtherWarp);
+            sampleUv = applyMirror(sampleUv, uMirror, uMirrorWarp);
+            vec4 color = bloomSample(sampleUv);
+            color.rgb += speedAmount(vUv);
+            if(vUv.y < uBars || vUv.y > 1.0 - uBars){
+              color = vec4(0.0, 0.0, 0.0, 1.0);
+            }
+            color.rgb = mix(vec3(0.0) * color.a, color.rgb, clamp(uColorFillFade, 0.0, 1.0));
+            gl_FragColor = color;
+          }
+        `);
+        const buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+          -1, -1, 0, 0,
+           1, -1, 1, 0,
+          -1,  1, 0, 1,
+           1,  1, 1, 1
+        ]), gl.STATIC_DRAW);
+        const texture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        state.vsMattPost = {
+          program,
+          buffer,
+          texture,
+          aPosition: gl.getAttribLocation(program, "aPosition"),
+          aTexCoord: gl.getAttribLocation(program, "aTexCoord"),
+          uTexture: gl.getUniformLocation(program, "uTexture"),
+          uResolution: gl.getUniformLocation(program, "uResolution"),
+          uTime: gl.getUniformLocation(program, "uTime"),
+          uGreyscale: gl.getUniformLocation(program, "uGreyscale"),
+          uBlur: gl.getUniformLocation(program, "uBlur"),
+          uBloomEffect: gl.getUniformLocation(program, "uBloomEffect"),
+          uBloomStrength: gl.getUniformLocation(program, "uBloomStrength"),
+          uSpeed: gl.getUniformLocation(program, "uSpeed"),
+          uBars: gl.getUniformLocation(program, "uBars"),
+          uColorFillFade: gl.getUniformLocation(program, "uColorFillFade"),
+          uMirror: gl.getUniformLocation(program, "uMirror"),
+          uMirrorWarp: gl.getUniformLocation(program, "uMirrorWarp"),
+          uMirrorOther: gl.getUniformLocation(program, "uMirrorOther"),
+          uMirrorOtherWarp: gl.getUniformLocation(program, "uMirrorOtherWarp")
+        };
+        return state.vsMattPost;
       } catch(error) {
         markFailed(error);
         return null;
@@ -1025,6 +1205,67 @@
       }
     }
 
+    function drawVsMattPostStack(source, params){
+      if(window.PERFORMANCE_MODE || !source) return false;
+      if(state.sourceUploadBlocked) return false;
+      const gl = ensureContext();
+      const pass = gl && ensureVsMattPostPass();
+      if(!gl || !pass || !syncSize()) return false;
+      if(typeof gl.isContextLost === "function" && gl.isContextLost()) return markFailed("WebGL context lost");
+      try {
+        const mirror = params?.mirror || {};
+        const mirrorOther = params?.mirrorOther || {};
+        gl.viewport(0, 0, state.width, state.height);
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.useProgram(pass.program);
+        gl.bindBuffer(gl.ARRAY_BUFFER, pass.buffer);
+        gl.enableVertexAttribArray(pass.aPosition);
+        gl.vertexAttribPointer(pass.aPosition, 2, gl.FLOAT, false, 16, 0);
+        gl.enableVertexAttribArray(pass.aTexCoord);
+        gl.vertexAttribPointer(pass.aTexCoord, 2, gl.FLOAT, false, 16, 8);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, pass.texture);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+        gl.uniform1i(pass.uTexture, 0);
+        gl.uniform2f(pass.uResolution, state.width, state.height);
+        gl.uniform1f(pass.uTime, Number(params?.time || 0));
+        gl.uniform1f(pass.uGreyscale, clamp(params?.greyscale ?? 0, 0, 1));
+        gl.uniform1f(pass.uBlur, clamp(params?.blur ?? 0, 0, 20));
+        gl.uniform1f(pass.uBloomEffect, clamp(params?.bloomEffect ?? 0, 0, 6));
+        gl.uniform1f(pass.uBloomStrength, clamp(params?.bloomStrength ?? 0, 0, 6));
+        gl.uniform1f(pass.uSpeed, clamp(params?.speed ?? 0, 0, 1));
+        gl.uniform1f(pass.uBars, clamp(params?.bars ?? 0, 0, 0.6));
+        gl.uniform1f(pass.uColorFillFade, clamp(params?.colorFillFade ?? 1, 0, 1));
+        gl.uniform4f(
+          pass.uMirror,
+          clamp(mirror.zoom ?? 1, 0, 3),
+          clamp(mirror.angle ?? 0, -180, 180),
+          clamp(mirror.x ?? 0, -8, 8),
+          clamp(mirror.y ?? 0, -8, 8)
+        );
+        gl.uniform1f(pass.uMirrorWarp, clamp(mirror.warp ?? 0, -2, 2));
+        gl.uniform4f(
+          pass.uMirrorOther,
+          clamp(mirrorOther.zoom ?? 1, 0, 3),
+          clamp(mirrorOther.angle ?? 0, -180, 180),
+          clamp(mirrorOther.x ?? 0, -8, 8),
+          clamp(mirrorOther.y ?? 0, -8, 8)
+        );
+        gl.uniform1f(pass.uMirrorOtherWarp, clamp(mirrorOther.warp ?? 0, -2, 2));
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        const error = gl.getError();
+        if(error !== gl.NO_ERROR) throw new Error("WebGL error " + error);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(state.fxCanvas, 0, 0, canvas.width, canvas.height);
+        return true;
+      } catch(error) {
+        return handleSourcePassError(error);
+      }
+    }
+
     function drawCameraPass(source, params){
       if(window.PERFORMANCE_MODE || !source) return false;
       if(state.sourceUploadBlocked) return false;
@@ -1316,6 +1557,7 @@
 
     return {
       drawCameraPass,
+      drawVsMattPostStack,
       drawParallaxPass,
       drawSpeedLines,
       drawDustinPostStack,

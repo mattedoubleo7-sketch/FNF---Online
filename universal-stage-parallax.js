@@ -23,7 +23,8 @@
     fallenStars: 0.56,
     genocide: 0.54,
     overthrone: 0.56,
-    sillyBilly: 0.48
+    sillyBilly: 0.48,
+    snowedIn: 0
   };
 
   function clamp(value, min, max){

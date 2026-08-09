@@ -173,6 +173,10 @@ function importedTracksForSong(songId = state.selectedSong) {
     if (typeof window.ensureOverthroneAudio === "function") return mediaListFrom(window.ensureOverthroneAudio());
     return [state.audio.overthroneInst, state.audio.overthroneVoices];
   }
+  if (chartSource === "snowedIn") {
+    if (typeof window.ensureSnowedInAudio === "function") return mediaListFrom(window.ensureSnowedInAudio());
+    return [state.audio.snowedInInst, state.audio.snowedInVoices];
+  }
   return [];
 }
 
@@ -343,6 +347,15 @@ async function preloadSongForMatch(songId, matchId) {
     const media = mediaListFrom(prepared);
     const tracks = media.length ? media : [state.audio.overthroneInst, state.audio.overthroneVoices];
     await Promise.all(tracks.filter(Boolean).map(track => waitForTrackReady(track)));
+  } else if (SONGS[songId]?.chartSource === "snowedIn") {
+    const prepared = typeof window.prepareSnowedInOnlineStart === "function"
+      ? window.prepareSnowedInOnlineStart()
+      : (typeof window.ensureSnowedInAudio === "function"
+        ? window.ensureSnowedInAudio()
+        : []);
+    const media = mediaListFrom(prepared);
+    const tracks = media.length ? media : [state.audio.snowedInInst, state.audio.snowedInVoices];
+    await Promise.all(tracks.filter(Boolean).map(track => waitForTrackReady(track)));
   }
   if (state.network.prepareMatchId !== matchId) return false;
   state.network.preparedSongId = songId;
@@ -476,6 +489,10 @@ function syncOnlinePlayback(force = false) {
     if (typeof window.ensureOverthroneAudio === "function") window.ensureOverthroneAudio();
     syncTrackToTime(state.audio.overthroneInst, targetTime, shouldPlay, syncOptions);
     syncTrackToTime(state.audio.overthroneVoices, targetTime, shouldPlay, { ...syncOptions, isSecondary: true });
+  } else if (state.currentSong.chartSource === "snowedIn") {
+    if (typeof window.ensureSnowedInAudio === "function") window.ensureSnowedInAudio();
+    syncTrackToTime(state.audio.snowedInInst, targetTime, shouldPlay, syncOptions);
+    syncTrackToTime(state.audio.snowedInVoices, targetTime, shouldPlay, { ...syncOptions, isSecondary: true });
   }
   return targetTime;
 }
@@ -1325,4 +1342,3 @@ setInterval(() => {
   if (state.network.preparing || (state.network.pendingStartAt && state.network.pendingStartAt > serverClockNow())) updateOnlinePanel();
 }, 250);
 ensureOnlineSocket();
-

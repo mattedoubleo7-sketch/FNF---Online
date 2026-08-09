@@ -29,6 +29,7 @@
       if (chartSource === "genocide") return [state.audio.genocideInst, state.audio.genocideVoices];
       if (chartSource === "sansational") return [state.audio.sansationalInst, state.audio.sansationalVoices];
       if (chartSource === "lastReel") return [state.audio.lastReelInst, state.audio.lastReelVoices];
+      if (chartSource === "snowedIn") return [state.audio.snowedInInst, state.audio.snowedInVoices];
       return [];
     }
 
@@ -47,6 +48,7 @@
       else if (chartSource === "genocide" && typeof window.ensureGenocideAudio === "function") window.ensureGenocideAudio();
       else if (chartSource === "sansational" && typeof window.ensureSansationalAudio === "function") window.ensureSansationalAudio();
       else if (chartSource === "lastReel" && typeof window.ensureLastReelAudio === "function") window.ensureLastReelAudio();
+      else if (chartSource === "snowedIn" && typeof window.ensureSnowedInAudio === "function") window.ensureSnowedInAudio();
       return importedTracksForSong(song).filter(Boolean);
     }
 
