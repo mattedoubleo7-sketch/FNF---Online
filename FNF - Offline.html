@@ -1336,7 +1336,7 @@ body.gamepadOn.gameRunning #consoleHud { display: none; }
 <script src="snowed-in-data.js?v=20260809b"></script>
 <script src="lazy-bones-data.js?v=20260809e"></script>
 <script src="client-config.js?v=20260723a"></script>
-<script src="webgl-renderer.js?v=20260810b"></script>
+<script src="webgl-renderer.js?v=20260810c"></script>
 <script>
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
@@ -1450,11 +1450,11 @@ function superHeavyHitLight(){
     return { strength, x, y, color: colorToUnitRgb(selected?.color, [0.3, 0.9, 1]) };
 }
 function superHeavyShaderProfile(songId){
-    const base = { bloomStrength:0.9, rayStrength:0.72, dustStrength:0.26, reflectionStrength:0.9, aoStrength:1, anamorphicStrength:0.35 };
-    if(["combat","oneHit","shimmy"].includes(songId)) return { ...base, bloomStrength:1.05, rayStrength:1.15, dustStrength:0.34, reflectionStrength:0.85, anamorphicStrength:1.15 };
-    if(["sporting","boxingMatch","boxingMatchWg","boxingFight"].includes(songId)) return { ...base, rayStrength:0.5, dustStrength:0.12, reflectionStrength:1.18, anamorphicStrength:0.55 };
-    if(["perseverance","brokenReality","snowedIn","lazyBones"].includes(songId)) return { ...base, bloomStrength:0.76, rayStrength:0.68, dustStrength:0.58, reflectionStrength:0.62, aoStrength:1.2, anamorphicStrength:0.18 };
-    if(["outskirtz","overthrone","sillyBilly","ballistic"].includes(songId)) return { ...base, bloomStrength:1.02, rayStrength:0.86, dustStrength:0.2, reflectionStrength:1.12, aoStrength:1.18, anamorphicStrength:0.7 };
+    const base = { intensity:1.2, bloomStrength:0.9, rayStrength:0.72, dustStrength:0.22, reflectionStrength:0.95, aoStrength:1.08, anamorphicStrength:0.35, sharpenStrength:0.18 };
+    if(["combat","oneHit","shimmy"].includes(songId)) return { ...base, intensity:1.23, bloomStrength:1.02, rayStrength:1.08, dustStrength:0.28, reflectionStrength:0.92, anamorphicStrength:1.05 };
+    if(["sporting","boxingMatch","boxingMatchWg","boxingFight"].includes(songId)) return { ...base, intensity:1.18, rayStrength:0.5, dustStrength:0.1, reflectionStrength:1.24, anamorphicStrength:0.5, sharpenStrength:0.22 };
+    if(["perseverance","brokenReality","snowedIn","lazyBones"].includes(songId)) return { ...base, intensity:1.17, bloomStrength:0.74, rayStrength:0.68, dustStrength:0.46, reflectionStrength:0.72, aoStrength:1.28, anamorphicStrength:0.18 };
+    if(["outskirtz","overthrone","sillyBilly","ballistic"].includes(songId)) return { ...base, intensity:1.24, bloomStrength:0.98, rayStrength:0.84, dustStrength:0.16, reflectionStrength:1.18, aoStrength:1.24, anamorphicStrength:0.64 };
     return base;
 }
 function drawSuperHeavyCanvasFallback(t, keyColor, fillColor, hitStrength){

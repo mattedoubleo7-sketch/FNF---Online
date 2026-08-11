@@ -702,7 +702,7 @@
             float keyLight = max(0.0, dot(surfaceNormal, lightVector)) * (0.48 + attenuation * 0.72);
             float edge = smoothstep(0.035, 0.38, abs(gradientX) + abs(gradientY));
             float neighborLum = (leftLum + rightLum + downLum + upLum) * 0.25;
-            float contactShadow = clamp((neighborLum - centerLum) * 0.34 * uAoStrength, 0.0, 0.17);
+            float contactShadow = clamp((neighborLum - centerLum) * 0.46 * uAoStrength, 0.0, 0.22);
             vec3 halfVector = normalize(lightVector + vec3(0.0, 0.0, 1.0));
             float roughness = clamp(0.8 - edge * 0.46 + (1.0 - centerLum) * 0.08, 0.24, 0.9);
             float specularPower = mix(46.0, 9.0, roughness);
@@ -735,18 +735,18 @@
             dust *= uDustStrength * dustVisibility;
 
             vec3 color = base * (1.0 - contactShadow * uIntensity);
-            color += base * uKeyColor * keyLight * (0.055 + edge * 0.075) * uIntensity;
-            color += uKeyColor * edge * (0.04 + uHitStrength * 0.035) * uIntensity;
-            color += uKeyColor * specular * (0.12 + uHitStrength * 0.08) * uIntensity;
-            color += screenReflection * uKeyColor * edge * 0.055 * attenuation * uReflectionStrength * uIntensity;
-            color += base * uHitColor * hitDiffuse * 0.16 * uIntensity;
-            color += uHitColor * hitSpecular * 0.18 * uIntensity;
-            color += bloom * (0.16 + uHitStrength * 0.10) * uBloomStrength * uIntensity;
-            color += uKeyColor * shaft * 0.055 * uIntensity;
+            color += base * uKeyColor * keyLight * (0.09 + edge * 0.12) * uIntensity;
+            color += uKeyColor * edge * (0.07 + uHitStrength * 0.05) * uIntensity;
+            color += uKeyColor * specular * (0.21 + uHitStrength * 0.11) * uIntensity;
+            color += screenReflection * uKeyColor * edge * 0.085 * attenuation * uReflectionStrength * uIntensity;
+            color += base * uHitColor * hitDiffuse * 0.25 * uIntensity;
+            color += uHitColor * hitSpecular * 0.3 * uIntensity;
+            color += bloom * (0.19 + uHitStrength * 0.12) * uBloomStrength * uIntensity;
+            color += uKeyColor * shaft * 0.08 * uIntensity;
             color += mix(uFillColor, uKeyColor, hash21(vUv * uResolution + floor(uTime))) * dust * 0.07 * uIntensity;
 
             vec3 filmic = (color * (2.51 * color + 0.03)) / (color * (2.43 * color + 0.59) + 0.14);
-            color = mix(color, filmic, 0.16 * uIntensity);
+            color = mix(color, filmic, 0.22 * uIntensity);
             float vignette = 1.0 - dot(vUv - 0.5, vUv - 0.5) * 0.12 * uIntensity;
             color *= vignette;
             vec3 lightingDelta = clamp(color - base, -1.0, 1.0);
@@ -767,6 +767,7 @@
           uniform sampler2D uLightingTexture;
           uniform vec2 uResolution;
           uniform float uTime;
+          uniform float uSharpenStrength;
           varying vec2 vUv;
 
           float hash21(vec2 point){
@@ -776,7 +777,16 @@
           }
 
           void main(){
+            vec2 texel = 1.0 / max(uResolution, vec2(1.0));
             vec3 base = texture2D(uSourceTexture, vUv).rgb;
+            vec3 neighbors = texture2D(uSourceTexture, vUv + vec2(texel.x, 0.0)).rgb;
+            neighbors += texture2D(uSourceTexture, vUv - vec2(texel.x, 0.0)).rgb;
+            neighbors += texture2D(uSourceTexture, vUv + vec2(0.0, texel.y)).rgb;
+            neighbors += texture2D(uSourceTexture, vUv - vec2(0.0, texel.y)).rgb;
+            neighbors *= 0.25;
+            vec3 detail = base - neighbors;
+            float detailMask = smoothstep(0.018, 0.18, length(detail));
+            base += detail * uSharpenStrength * detailMask;
             vec3 lightingDelta = (texture2D(uLightingTexture, vUv).rgb - 0.5) * 2.0;
             float grain = (hash21(vUv * uResolution + fract(uTime) * 911.0) - 0.5) * 0.006;
             gl_FragColor = vec4(max(base + lightingDelta + grain, vec3(0.0)), 1.0);
@@ -837,7 +847,8 @@
           uSourceTexture: gl.getUniformLocation(combineProgram, "uSourceTexture"),
           uLightingTexture: gl.getUniformLocation(combineProgram, "uLightingTexture"),
           uCombineResolution: gl.getUniformLocation(combineProgram, "uResolution"),
-          uCombineTime: gl.getUniformLocation(combineProgram, "uTime")
+          uCombineTime: gl.getUniformLocation(combineProgram, "uTime"),
+          uSharpenStrength: gl.getUniformLocation(combineProgram, "uSharpenStrength")
         };
         return state.ultraLighting;
       } catch(error) {
@@ -1757,6 +1768,7 @@
         gl.uniform1i(pass.uLightingTexture, 1);
         gl.uniform2f(pass.uCombineResolution, state.width, state.height);
         gl.uniform1f(pass.uCombineTime, Number(params?.time || 0));
+        gl.uniform1f(pass.uSharpenStrength, clamp(params?.sharpenStrength ?? 0.18, 0, 0.32));
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         const error = gl.getError();
         if(error !== gl.NO_ERROR) throw new Error("WebGL error " + error);
@@ -1798,7 +1810,8 @@
         dustStrength: 0.55,
         reflectionStrength: 1,
         aoStrength: 1,
-        anamorphicStrength: 0.5
+        anamorphicStrength: 0.5,
+        sharpenStrength: 0.18
       }, false);
     }
 
