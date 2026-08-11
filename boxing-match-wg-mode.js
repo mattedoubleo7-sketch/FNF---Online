@@ -262,17 +262,39 @@
       return { key, age, lane: pose.lane || 1, frame: frameFromList(frames, key === "idle" ? t : age, fps, key === "idle") };
     }
 
+    function sourcePoseOffset(sprite, poseKey, scale){
+      const sourceName = {
+        idle:"idle",
+        left:"singLEFT",
+        down:"singDOWN",
+        up:"singUP",
+        right:"singRIGHT",
+        leftMiss:"singLEFTmiss",
+        downMiss:"singDOWNmiss",
+        upMiss:"singUPmiss",
+        rightMiss:"singRIGHTmiss"
+      }[poseKey] || "idle";
+      let offsets = sprite.offsets;
+      if(!offsets && sprite.char?.animations){
+        offsets = sprite._sourcePoseOffsets ||= Object.fromEntries(
+          sprite.char.animations.map(anim => [anim.anim, anim.offsets || [0, 0]])
+        );
+      }
+      const idle = offsets?.idle || [0, 0];
+      const active = offsets?.[poseKey] || offsets?.[sourceName] || idle;
+      return {
+        x: -(active[0] - idle[0]) * scale,
+        y: -(active[1] - idle[1]) * scale
+      };
+    }
+
     function drawAtlasCharacter(spriteKey, imageKey, characterKey, x, y, scale, t, options = {}){
       const sprite = DATA.sprites[spriteKey];
       const image = wgState.images[imageKey || spriteKey];
       if(!sprite || !imgReady(image)) return;
       const pose = currentPose(characterKey, sprite, t);
       if(!pose.frame) return;
-      const hit = pose.age >= 0 && pose.age < 0.16 ? 1 - pose.age / 0.16 : 0;
-      const lane = pose.lane % 4;
-      const poseShift = options.poseShiftScale ?? 1;
-      const dx = (lane === 0 ? -10 : lane === 3 ? 12 : 0) * hit * poseShift;
-      const dy = (lane === 2 ? -12 : lane === 1 ? 8 : 0) * hit * poseShift;
+      const sourceOffset = sourcePoseOffset(sprite, pose.key, scale);
       const bob = options.noBob ? 0 : Math.sin(t * Math.PI * 2 * 1.5 + (characterKey === "matt" ? 0.4 : 1.1)) * 2;
       ctx.save();
       ctx.imageSmoothingEnabled = true;
@@ -283,11 +305,11 @@
       }
       ctx.translate(x, y);
       if(options.lean) ctx.rotate(options.lean);
-      drawAtlasFrame(image, pose.frame, dx, dy + bob, scale, options.alpha ?? 1, options.flipX ?? sprite.flipX);
+      drawAtlasFrame(image, pose.frame, sourceOffset.x, sourceOffset.y + bob, scale, options.alpha ?? 1, options.flipX ?? sprite.flipX);
       if(options.afterImage){
         ctx.globalCompositeOperation = "screen";
         ctx.globalAlpha = 0.18;
-        drawAtlasFrame(image, pose.frame, dx - 6, dy + bob - 2, scale, 1, options.flipX ?? sprite.flipX);
+        drawAtlasFrame(image, pose.frame, sourceOffset.x - 6, sourceOffset.y + bob - 2, scale, 1, options.flipX ?? sprite.flipX);
       }
       ctx.restore();
     }
@@ -383,6 +405,8 @@
       const frameOffset = label === (sprite.labelMap?.idle || "idle")
         ? Math.floor(t * 24) % len
         : Math.min(len - 1, Math.max(0, Math.floor(age * 24)));
+      const poseKey = Object.entries(sprite.labelMap || {}).find(([, value]) => value === label)?.[0] || "idle";
+      const sourceOffset = sourcePoseOffset(sprite, poseKey, scale);
       const anchor = spriteKey === "mattFinal"
         ? { centerX:36.139, bottomY:536.05 }
         : { centerX:132.217, bottomY:570.597 };
@@ -394,7 +418,7 @@
         ctx.shadowBlur = options.glowBlur || 18;
       }
       ctx.globalAlpha = options.alpha ?? 1;
-      ctx.translate(x, y);
+      ctx.translate(x + sourceOffset.x, y + sourceOffset.y);
       if(options.lean) ctx.rotate(options.lean);
       ctx.scale((options.flipX ?? sprite.char?.flip_x) ? -scale : scale, scale);
       ctx.translate(-anchor.centerX, -anchor.bottomY);
@@ -641,8 +665,8 @@
         glowAlpha: 0.5,
         glowBlur: 36
       });
-      drawAtlasCharacter("mattFly", "mattFly", "matt", mattX, mattY, WG_FLY_LAYOUT.matt.scale, t, { glow:"rgba(255,70,45,0.5)", glowBlur:16, lean, noBob:true, poseShiftScale:0.2 });
-      drawAtlasCharacter("bfFly", "bfFly", "player", bfX, bfY, WG_FLY_LAYOUT.bf.scale, t, { glow:"rgba(80,200,255,0.56)", glowBlur:16, lean:-lean, noBob:true, poseShiftScale:0.2 });
+      drawAtlasCharacter("mattFly", "mattFly", "matt", mattX, mattY, WG_FLY_LAYOUT.matt.scale, t, { glow:"rgba(255,70,45,0.5)", glowBlur:16, lean, noBob:true });
+      drawAtlasCharacter("bfFly", "bfFly", "player", bfX, bfY, WG_FLY_LAYOUT.bf.scale, t, { glow:"rgba(80,200,255,0.56)", glowBlur:16, lean:-lean, noBob:true });
     }
 
     function drawArenaPhase(t, step){
@@ -665,8 +689,8 @@
         ctx.stroke();
         ctx.restore();
       }
-      drawAtlasCharacter("matt", "matt", "matt", 392, 642, 0.64, t, { glow:"rgba(255,160,72,0.24)", glowBlur:8, noBob:true, poseShiftScale:0 });
-      drawAtlasCharacter("bf", "bf", "player", 890, 646, 0.78, t, { glow:"rgba(75,194,255,0.28)", glowBlur:10, noBob:true, poseShiftScale:0, flipX:false });
+      drawAtlasCharacter("matt", "matt", "matt", 392, 642, 0.64, t, { glow:"rgba(255,160,72,0.24)", glowBlur:8, noBob:true });
+      drawAtlasCharacter("bf", "bf", "player", 890, 646, 0.78, t, { glow:"rgba(75,194,255,0.28)", glowBlur:10, noBob:true, flipX:false });
     }
 
     function drawFinalObjects(t){
@@ -693,17 +717,7 @@
       drawImageKey("astF", -40 - pan * 45, 360, 0.7, 0.72);
       ctx.restore();
       drawFinalObjects(t);
-      const orbit = { x: Math.cos(t * 2.15) * 46, y: Math.sin(t * 2.15) * 30 };
-      ctx.save();
-      ctx.globalCompositeOperation = "screen";
-      for(let i = 4; i >= 1; i--){
-        const lag = i * 0.12;
-        const ox = Math.cos((t - lag) * 2.15) * 46;
-        const oy = Math.sin((t - lag) * 2.15) * 30;
-        drawAnimateCharacter("mattFinal", "matt", 640 + ox, 386 + oy, 0.48, t - lag, { glow:"rgba(255,130,34,0.45)", glowBlur:18, alpha:0.08 + (5 - i) * 0.025 });
-      }
-      ctx.restore();
-      drawAnimateCharacter("mattFinal", "matt", 640 + orbit.x, 386 + orbit.y, 0.48, t, { glow:"rgba(255,175,70,0.24)", glowBlur:10 });
+      drawAnimateCharacter("mattFinal", "matt", 270, 286, 0.48, t, { glow:"rgba(255,175,70,0.24)", glowBlur:10 });
       drawAnimateCharacter("bfFinal", "player", 640, 852, 0.38, t, { glow:"rgba(92,198,255,0.32)", glowBlur:12 });
     }
 

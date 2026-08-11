@@ -566,8 +566,8 @@ p, li {
   <img src="assets/icon.ico" alt="Silly Billy app icon">
   <div>
     <span>New update</span>
-    <strong>Practice Mode Added</strong>
-    <small>Practice Mode prevents Game Over at a 1% health floor while misses, score, accuracy, drain, and every song mechanic continue normally.</small>
+    <strong>WG Matt Source Fix</strong>
+    <small>Boxing Match WG now uses Matt's real character offsets and scripted final-phase placement from Wii Funkin instead of generic pose shifts and a fake orbit.</small>
   </div>
 </aside>
 <div class="page">
@@ -576,7 +576,7 @@ p, li {
     <div>
       <div class="kicker"><span class="liveDot"></span> Live build updated</div>
       <div class="titleWrap"><h1 data-text="FNF Onliine">FNF Onliine</h1></div>
-      <p>This is the download portal for the browser and app builds. Browser play is the easiest route for friends because it avoids Windows SmartScreen warnings on the unsigned `.exe`. The newest build adds a saved Practice Mode to every song while keeping misses, accuracy, health drain, mechanics, and online match rules intact.</p>
+      <p>This is the download portal for the browser and app builds. Browser play is the easiest route for friends because it avoids Windows SmartScreen warnings on the unsigned `.exe`. The newest build corrects Matt across all three Boxing Match WG forms using the original Wii Funkin stage and character code.</p>
       <div class="actions">
         <a class="btn primary" href="/play">Play Online In Browser</a>
         <a class="btn ghost" href="/offline">Play Offline In Browser</a>
@@ -587,15 +587,15 @@ p, li {
   <section class="statsRow">
     <div class="statChip"><span>Newest song</span><strong>Lazy Bones</strong></div>
     <div class="statChip"><span>Now supports</span><strong>Mobile + Gamepad</strong></div>
-    <div class="statChip"><span>Latest mode</span><strong>Practice</strong></div>
+    <div class="statChip"><span>Latest fix</span><strong>WG Matt</strong></div>
     <div class="statChip"><span>Best route</span><strong>Browser</strong></div>
   </section>
 
   <section class="panel updatePanel">
     <div class="latestBox">
-      <div class="version">Update log - 2026.08.09</div>
-      <h2>Practice Mode Across Every Song</h2>
-      <p>Enable Practice beside the Play button or in Gameplay settings. Health stops at 1%, songs and mechanics keep running, misses still lower score and accuracy, completion results are marked as Practice Mode, and online matches retain their normal fail behavior.</p>
+      <div class="version">Update log - 2026.08.10</div>
+      <h2>Boxing Match WG Matt Repaired From Source</h2>
+      <p>Matt's flying and arena poses now use the offset tables from the original character JSON files. The final form follows the stage script's fixed screen-center offset, and the non-source orbit and afterimages have been removed.</p>
       <div class="actions">
         <a class="btn primary" href="/play">Jump Into Online</a>
         <a class="btn secondary" href="/offline">Try Offline</a>
@@ -604,6 +604,10 @@ p, li {
     <div class="logList">
       <div class="logItem">
         <div class="logDate">Latest</div>
+        <div><div class="logTitle">All three WG Matt forms corrected</div><p>The browser renderer now applies the supplied `wgmatt-fly`, `wgmatt2`, and `wgmatt-final` animation offsets. Final Matt follows `screenCenter`, `x - 370`, and `y - 100` from `eclipsewg.lua`, keeping his source placement instead of drifting around the center.</p></div>
+      </div>
+      <div class="logItem">
+        <div class="logDate">Included</div>
         <div><div class="logTitle">Saved no-death Practice Mode</div><p>The new menu and Gameplay toggles stay synchronized and persist between launches. Practice catches the final composed fail path used by standard songs and custom mechanic wrappers, so zero-health attacks and drain events cannot end local play while all judgments and mechanics remain active.</p></div>
       </div>
       <div class="logItem">
@@ -724,7 +728,7 @@ p, li {
           <h3>Online App</h3>
           <p>Packaged desktop app for online play. It renders the bundled local WebGL files and connects rooms to the hosted online server.</p>
           <div class="actions">
-            <a class="btn primary" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/ONLINE/FNF-Browser-Jam-1.0.0-portable.exe?cache=20260809e">Download Online App</a>
+            <a class="btn primary" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/ONLINE/FNF-Browser-Jam-1.0.0-portable.exe?cache=20260810a">Download Online App</a>
           </div>
         </div>
         <div class="dlBlock">
@@ -763,7 +767,7 @@ p, li {
           <h3>Offline App</h3>
           <p>Packaged offline download with the current local-play build and bundled assets.</p>
           <div class="actions">
-            <a class="btn primary" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/fnf/FNF-Browser-Jam-offline-1.0.0-portable.exe?cache=20260809e">Download Offline App</a>
+            <a class="btn primary" href="https://github.com/mattedoubleo7-sketch/FNF---Online/releases/download/fnf/FNF-Browser-Jam-offline-1.0.0-portable.exe?cache=20260810a">Download Offline App</a>
           </div>
         </div>
         <div class="dlBlock">
@@ -802,6 +806,7 @@ p, li {
       <div class="songTile"><strong>Ballistic</strong><span>Whitty alley import with the hard chart, real split audio, crazy Whitty sprites, camera hits, flashes, shakes, smoke, and full-stage VFX.</span><div class="tagRow"><span class="tag">Whitty</span><span class="tag">VFX</span></div></div>
       <div class="songTile"><strong>Sporting</strong><span>Wii Funkin source hard chart and audio with the original Sporting Matt/BF sprites, layered night arena, centered HUD, and complete game/HUD shader timeline.</span><div class="tagRow"><span class="tag hot">UPDATED</span><span class="tag">Matt</span><span class="tag">Shaders</span></div></div>
       <div class="songTile"><strong>Boxing Match</strong><span>Wii Funkin source hard chart and audio with the original boxing sprites, layered night arena, mid-song cutscene, and complete game/HUD shader timeline.</span><div class="tagRow"><span class="tag hot">UPDATED</span><span class="tag">Boxing</span><span class="tag">Shaders</span></div></div>
+      <div class="songTile"><strong>Boxing Match WG</strong><span>White Gloves source chart with the eclipse flight, impact transform, final object field, original shaders, and all three Matt forms using their supplied source offsets and scripted positions.</span><div class="tagRow"><span class="tag hot">UPDATED</span><span class="tag">White Gloves</span><span class="tag">Source Positions</span></div></div>
       <div class="songTile"><strong>Combat</strong><span>Wii Funkin hard chart, sword BF, rock stage, faster scroll, Wiik Z stage coordinates, platform-rock motion, CamMovement-style camera nudges, and imported shader timeline pulses.</span><div class="tagRow"><span class="tag">VFX</span><span class="tag">Wiik Z</span></div></div>
       <div class="songTile"><strong>One Hit</strong><span>Wii Funkin import with the original hard chart, Combat's rock stage, imported shader bursts, moving rock space section, and Challenge Edd hold-note skin.</span><div class="tagRow"><span class="tag">Wii Funkin</span><span class="tag">Hold Notes</span></div></div>
       <div class="songTile"><strong>Shimmy</strong><span>Wii Funkin import - original hard chart, real split audio, Combat's 3D stage, imported SpeedEffect windows, modchart shader pulses, and the "Not bad, kid" dialogue bloom.</span><div class="tagRow"><span class="tag hot">NEW</span><span class="tag">Wii Funkin</span><span class="tag">Modchart</span></div></div>
@@ -813,7 +818,7 @@ p, li {
     </div>
   </section>
 
-  <div class="footer">FNF Onliine download portal - Practice Mode update - browser recommended, app builds refreshed</div>
+  <div class="footer">FNF Onliine download portal - Boxing Match WG Matt source fix - browser recommended, app builds refreshed</div>
 </div>
 </body>
 </html>
