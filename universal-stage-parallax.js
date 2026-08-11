@@ -98,19 +98,21 @@
     const naturalSway = Math.sin(t * 0.52 + cam.side * 0.7);
     const beatSway = Math.sin(beat * 0.25);
     const native = nativeDepthSongs.has(selectedSongId()) ? 0 : 1;
+    const depthBoost = window.SUPER_HEAVY_EFFECTS ? 1.7 : 1;
+    const scaleBoost = window.SUPER_HEAVY_EFFECTS ? 1.4 : 1;
     const layerScale = layer === "bg" ? 0.42 : 1;
     const direction = layer === "bg" ? -1 : 1;
-    const sidePush = cam.side * 22 * layerScale;
-    const cameraPush = cam.x * 76 * layerScale;
-    const lift = cam.y * -34 * layerScale;
+    const sidePush = cam.side * 22 * layerScale * depthBoost;
+    const cameraPush = cam.x * 76 * layerScale * depthBoost;
+    const lift = cam.y * -34 * layerScale * depthBoost;
     const zoomPulse = Math.max(0, cam.zoom - 1);
     return {
       x: direction * (cameraPush + sidePush + naturalSway * 7) * strength * native,
       y: (lift + beatSway * 4) * strength * native,
-      skewX: (cam.x * 0.034 + cam.side * 0.016 + naturalSway * 0.004) * strength * native,
-      skewY: (-cam.x * 0.006 + cam.side * 0.004) * strength * native,
-      scaleX: 1 + (layer === "bg" ? 0.078 : 0.026) * strength + zoomPulse * 0.08 * layerScale,
-      scaleY: 1 + (layer === "bg" ? 0.046 : 0.014) * strength + Math.cos(beat * 0.25) * 0.004 * strength,
+      skewX: ((cam.x * 0.034 + cam.side * 0.016) * depthBoost + naturalSway * 0.004) * strength * native,
+      skewY: (-cam.x * 0.006 + cam.side * 0.004) * depthBoost * strength * native,
+      scaleX: 1 + (layer === "bg" ? 0.078 : 0.026) * strength * scaleBoost + zoomPulse * 0.08 * layerScale * depthBoost,
+      scaleY: 1 + (layer === "bg" ? 0.046 : 0.014) * strength * scaleBoost + Math.cos(beat * 0.25) * 0.004 * strength,
       alpha: strength
     };
   }

@@ -47,6 +47,7 @@
       vsMattPost: null,
       parallax: null,
       speedLines: null,
+      ultraLighting: null,
       dustinPost: null,
       outskirtzPost: null,
       warmCanvas: null,
@@ -589,6 +590,256 @@
           uCenter: gl.getUniformLocation(program, "uCenter")
         };
         return state.speedLines;
+      } catch(error) {
+        markFailed(error);
+        return null;
+      }
+    }
+
+    function ensureUltraLightingPass(){
+      const gl = ensureContext();
+      if(!gl) return null;
+      if(state.ultraLighting) return state.ultraLighting;
+      try {
+        const program = createProgram(gl, `
+          attribute vec2 aPosition;
+          attribute vec2 aTexCoord;
+          varying vec2 vUv;
+          void main(){
+            vUv = aTexCoord;
+            gl_Position = vec4(aPosition, 0.0, 1.0);
+          }
+        `, `
+          precision highp float;
+          uniform sampler2D uTexture;
+          uniform vec2 uResolution;
+          uniform vec2 uLightPosition;
+          uniform vec2 uHitLightPosition;
+          uniform vec3 uKeyColor;
+          uniform vec3 uFillColor;
+          uniform vec3 uHitColor;
+          uniform float uTime;
+          uniform float uIntensity;
+          uniform float uHitStrength;
+          uniform float uBloomStrength;
+          uniform float uRayStrength;
+          uniform float uDustStrength;
+          uniform float uReflectionStrength;
+          uniform float uAoStrength;
+          uniform float uAnamorphicStrength;
+          varying vec2 vUv;
+
+          float luminance(vec3 color){
+            return dot(color, vec3(0.2126, 0.7152, 0.0722));
+          }
+
+          float hash21(vec2 point){
+            point = fract(point * vec2(123.34, 456.21));
+            point += dot(point, point + 45.32);
+            return fract(point.x * point.y);
+          }
+
+          vec3 brightSample(vec2 uv){
+            vec3 color = texture2D(uTexture, clamp(uv, 0.0, 1.0)).rgb;
+            float gate = smoothstep(0.46, 1.08, luminance(color));
+            return color * gate;
+          }
+
+          float dustLayer(vec2 uv, float cells, float speed, float seed){
+            vec2 aspect = vec2(uResolution.x / max(1.0, uResolution.y), 1.0);
+            vec2 drift = vec2(uTime * speed * 0.27, -uTime * speed);
+            vec2 gridUv = uv * aspect * cells + drift + seed;
+            vec2 cell = floor(gridUv);
+            vec2 local = fract(gridUv);
+            vec2 point = vec2(hash21(cell + seed), hash21(cell + seed + 19.17));
+            float radius = mix(0.018, 0.07, hash21(cell + seed + 7.31));
+            float particle = 1.0 - smoothstep(radius, radius * 2.8, length(local - point));
+            float twinkle = 0.45 + 0.55 * sin(uTime * (1.1 + hash21(cell) * 2.2) + hash21(cell + 3.0) * 6.28318);
+            return particle * max(0.15, twinkle) * step(0.57, hash21(cell + 11.0));
+          }
+
+          void main(){
+            vec2 texel = 1.0 / max(uResolution, vec2(1.0));
+            vec3 base = texture2D(uTexture, vUv).rgb;
+            vec3 left1 = texture2D(uTexture, vUv - vec2(texel.x, 0.0) * 1.5).rgb;
+            vec3 right1 = texture2D(uTexture, vUv + vec2(texel.x, 0.0) * 1.5).rgb;
+            vec3 down1 = texture2D(uTexture, vUv - vec2(0.0, texel.y) * 1.5).rgb;
+            vec3 up1 = texture2D(uTexture, vUv + vec2(0.0, texel.y) * 1.5).rgb;
+
+            vec2 nearOffset = texel * 3.0;
+            vec2 wideOffset = texel * 8.0;
+            vec3 bloom = brightSample(vUv) * 0.16;
+            bloom += brightSample(vUv + vec2(nearOffset.x, 0.0)) * 0.09;
+            bloom += brightSample(vUv - vec2(nearOffset.x, 0.0)) * 0.09;
+            bloom += brightSample(vUv + vec2(0.0, nearOffset.y)) * 0.09;
+            bloom += brightSample(vUv - vec2(0.0, nearOffset.y)) * 0.09;
+            bloom += brightSample(vUv + nearOffset) * 0.065;
+            bloom += brightSample(vUv - nearOffset) * 0.065;
+            bloom += brightSample(vUv + vec2(nearOffset.x, -nearOffset.y)) * 0.065;
+            bloom += brightSample(vUv + vec2(-nearOffset.x, nearOffset.y)) * 0.065;
+            bloom += brightSample(vUv + vec2(wideOffset.x, 0.0)) * 0.045;
+            bloom += brightSample(vUv - vec2(wideOffset.x, 0.0)) * 0.045;
+            bloom += brightSample(vUv + vec2(0.0, wideOffset.y)) * 0.045;
+            bloom += brightSample(vUv - vec2(0.0, wideOffset.y)) * 0.045;
+            bloom += brightSample(vUv + wideOffset) * 0.035;
+            bloom += brightSample(vUv - wideOffset) * 0.035;
+            bloom += brightSample(vUv + vec2(wideOffset.x, -wideOffset.y)) * 0.035;
+            bloom += brightSample(vUv + vec2(-wideOffset.x, wideOffset.y)) * 0.035;
+            bloom += brightSample(vUv + vec2(texel.x * 18.0, 0.0)) * 0.028 * uAnamorphicStrength;
+            bloom += brightSample(vUv - vec2(texel.x * 18.0, 0.0)) * 0.028 * uAnamorphicStrength;
+
+            float centerLum = luminance(base);
+            float leftLum = luminance(left1);
+            float rightLum = luminance(right1);
+            float downLum = luminance(down1);
+            float upLum = luminance(up1);
+            float gradientX = rightLum - leftLum;
+            float gradientY = upLum - downLum;
+            vec3 surfaceNormal = normalize(vec3(-gradientX * 3.2, -gradientY * 3.2, 0.34));
+            vec3 lightVector = normalize(vec3(uLightPosition - vUv, 0.42));
+            float lightDistance = length(uLightPosition - vUv);
+            float attenuation = 1.0 / (1.0 + lightDistance * lightDistance * 5.5);
+            float keyLight = max(0.0, dot(surfaceNormal, lightVector)) * (0.48 + attenuation * 0.72);
+            float edge = smoothstep(0.035, 0.38, abs(gradientX) + abs(gradientY));
+            float neighborLum = (leftLum + rightLum + downLum + upLum) * 0.25;
+            float contactShadow = clamp((neighborLum - centerLum) * 0.34 * uAoStrength, 0.0, 0.17);
+            vec3 halfVector = normalize(lightVector + vec3(0.0, 0.0, 1.0));
+            float roughness = clamp(0.8 - edge * 0.46 + (1.0 - centerLum) * 0.08, 0.24, 0.9);
+            float specularPower = mix(46.0, 9.0, roughness);
+            float fresnel = pow(1.0 - max(0.0, surfaceNormal.z), 3.0);
+            float specular = pow(max(0.0, dot(surfaceNormal, halfVector)), specularPower) * (edge + fresnel * 0.35) * attenuation;
+            vec2 reflectionDirection = reflect(vec3(-lightVector.xy, lightVector.z), surfaceNormal).xy;
+            vec3 screenReflection = brightSample(vUv + reflectionDirection * texel * (5.0 + edge * 7.0));
+
+            vec2 hitDelta = uHitLightPosition - vUv;
+            float hitDistance = length(hitDelta);
+            float hitAttenuation = 1.0 / (1.0 + hitDistance * hitDistance * 76.0);
+            vec3 hitLightVector = normalize(vec3(hitDelta, 0.25));
+            float hitDiffuse = max(0.0, dot(surfaceNormal, hitLightVector)) * hitAttenuation * uHitStrength;
+            vec3 hitHalfVector = normalize(hitLightVector + vec3(0.0, 0.0, 1.0));
+            float hitSpecular = pow(max(0.0, dot(surfaceNormal, hitHalfVector)), mix(34.0, 8.0, roughness)) * edge * hitAttenuation * uHitStrength;
+
+            vec2 ray = uLightPosition - vUv;
+            float shaft = 0.0;
+            shaft += smoothstep(0.68, 1.18, luminance(texture2D(uTexture, clamp(vUv + ray * 0.07, 0.0, 1.0)).rgb)) * 0.27;
+            shaft += smoothstep(0.68, 1.18, luminance(texture2D(uTexture, clamp(vUv + ray * 0.15, 0.0, 1.0)).rgb)) * 0.23;
+            shaft += smoothstep(0.68, 1.18, luminance(texture2D(uTexture, clamp(vUv + ray * 0.24, 0.0, 1.0)).rgb)) * 0.20;
+            shaft += smoothstep(0.68, 1.18, luminance(texture2D(uTexture, clamp(vUv + ray * 0.34, 0.0, 1.0)).rgb)) * 0.17;
+            shaft += smoothstep(0.68, 1.18, luminance(texture2D(uTexture, clamp(vUv + ray * 0.45, 0.0, 1.0)).rgb)) * 0.13;
+            shaft *= (1.0 - smoothstep(0.08, 1.05, length(ray))) * uRayStrength;
+
+            float dust = dustLayer(vUv, 34.0, 0.11, 2.7);
+            dust += dustLayer(vUv, 58.0, 0.18, 9.2) * 0.72;
+            dust += dustLayer(vUv, 91.0, 0.28, 17.4) * 0.42;
+            float dustVisibility = clamp(shaft * 2.2 + attenuation * 0.12, 0.0, 1.0);
+            dust *= uDustStrength * dustVisibility;
+
+            vec3 color = base * (1.0 - contactShadow * uIntensity);
+            color += base * uKeyColor * keyLight * (0.055 + edge * 0.075) * uIntensity;
+            color += uKeyColor * edge * (0.04 + uHitStrength * 0.035) * uIntensity;
+            color += uKeyColor * specular * (0.12 + uHitStrength * 0.08) * uIntensity;
+            color += screenReflection * uKeyColor * edge * 0.055 * attenuation * uReflectionStrength * uIntensity;
+            color += base * uHitColor * hitDiffuse * 0.16 * uIntensity;
+            color += uHitColor * hitSpecular * 0.18 * uIntensity;
+            color += bloom * (0.16 + uHitStrength * 0.10) * uBloomStrength * uIntensity;
+            color += uKeyColor * shaft * 0.055 * uIntensity;
+            color += mix(uFillColor, uKeyColor, hash21(vUv * uResolution + floor(uTime))) * dust * 0.07 * uIntensity;
+
+            vec3 filmic = (color * (2.51 * color + 0.03)) / (color * (2.43 * color + 0.59) + 0.14);
+            color = mix(color, filmic, 0.16 * uIntensity);
+            float vignette = 1.0 - dot(vUv - 0.5, vUv - 0.5) * 0.12 * uIntensity;
+            color *= vignette;
+            vec3 lightingDelta = clamp(color - base, -1.0, 1.0);
+            gl_FragColor = vec4(lightingDelta * 0.5 + 0.5, 1.0);
+          }
+        `);
+        const combineProgram = createProgram(gl, `
+          attribute vec2 aPosition;
+          attribute vec2 aTexCoord;
+          varying vec2 vUv;
+          void main(){
+            vUv = aTexCoord;
+            gl_Position = vec4(aPosition, 0.0, 1.0);
+          }
+        `, `
+          precision highp float;
+          uniform sampler2D uSourceTexture;
+          uniform sampler2D uLightingTexture;
+          uniform vec2 uResolution;
+          uniform float uTime;
+          varying vec2 vUv;
+
+          float hash21(vec2 point){
+            point = fract(point * vec2(123.34, 456.21));
+            point += dot(point, point + 45.32);
+            return fract(point.x * point.y);
+          }
+
+          void main(){
+            vec3 base = texture2D(uSourceTexture, vUv).rgb;
+            vec3 lightingDelta = (texture2D(uLightingTexture, vUv).rgb - 0.5) * 2.0;
+            float grain = (hash21(vUv * uResolution + fract(uTime) * 911.0) - 0.5) * 0.006;
+            gl_FragColor = vec4(max(base + lightingDelta + grain, vec3(0.0)), 1.0);
+          }
+        `);
+        const buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+          -1, -1, 0, 0,
+           1, -1, 1, 0,
+          -1,  1, 0, 1,
+           1,  1, 1, 1
+        ]), gl.STATIC_DRAW);
+        const texture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        const lightingTexture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, lightingTexture);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        const framebuffer = gl.createFramebuffer();
+        state.ultraLighting = {
+          program,
+          combineProgram,
+          buffer,
+          texture,
+          lightingTexture,
+          framebuffer,
+          uploadedWidth: 0,
+          uploadedHeight: 0,
+          lightingWidth: 0,
+          lightingHeight: 0,
+          aPosition: gl.getAttribLocation(program, "aPosition"),
+          aTexCoord: gl.getAttribLocation(program, "aTexCoord"),
+          uTexture: gl.getUniformLocation(program, "uTexture"),
+          uResolution: gl.getUniformLocation(program, "uResolution"),
+          uLightPosition: gl.getUniformLocation(program, "uLightPosition"),
+          uHitLightPosition: gl.getUniformLocation(program, "uHitLightPosition"),
+          uKeyColor: gl.getUniformLocation(program, "uKeyColor"),
+          uFillColor: gl.getUniformLocation(program, "uFillColor"),
+          uHitColor: gl.getUniformLocation(program, "uHitColor"),
+          uTime: gl.getUniformLocation(program, "uTime"),
+          uIntensity: gl.getUniformLocation(program, "uIntensity"),
+          uHitStrength: gl.getUniformLocation(program, "uHitStrength"),
+          uBloomStrength: gl.getUniformLocation(program, "uBloomStrength"),
+          uRayStrength: gl.getUniformLocation(program, "uRayStrength"),
+          uDustStrength: gl.getUniformLocation(program, "uDustStrength"),
+          uReflectionStrength: gl.getUniformLocation(program, "uReflectionStrength"),
+          uAoStrength: gl.getUniformLocation(program, "uAoStrength"),
+          uAnamorphicStrength: gl.getUniformLocation(program, "uAnamorphicStrength"),
+          combinePosition: gl.getAttribLocation(combineProgram, "aPosition"),
+          combineTexCoord: gl.getAttribLocation(combineProgram, "aTexCoord"),
+          uSourceTexture: gl.getUniformLocation(combineProgram, "uSourceTexture"),
+          uLightingTexture: gl.getUniformLocation(combineProgram, "uLightingTexture"),
+          uCombineResolution: gl.getUniformLocation(combineProgram, "uResolution"),
+          uCombineTime: gl.getUniformLocation(combineProgram, "uTime")
+        };
+        return state.ultraLighting;
       } catch(error) {
         markFailed(error);
         return null;
@@ -1350,7 +1601,7 @@
     function drawParallaxPass(source, params){
       if(window.PERFORMANCE_MODE || window.REDUCE_MOTION || !source) return false;
       if(state.sourceUploadBlocked) return false;
-      const amount = clamp(params?.amount ?? 0, 0, 1);
+      const amount = clamp((params?.amount ?? 0) * (window.SUPER_HEAVY_EFFECTS ? 1.4 : 1), 0, 1.35);
       if(amount <= 0.003) return false;
       const gl = ensureContext();
       const pass = gl && ensureParallaxPass();
@@ -1421,6 +1672,134 @@
       } catch(error) {
         return markFailed(error);
       }
+    }
+
+    function runUltraLighting(source, params, commit){
+      if(window.PERFORMANCE_MODE || !source) return false;
+      if(commit && state.sourceUploadBlocked) return false;
+      const gl = ensureContext();
+      const pass = gl && ensureUltraLightingPass();
+      if(!gl || !pass || !syncSize()) return false;
+      if(typeof gl.isContextLost === "function" && gl.isContextLost()) return markFailed("WebGL context lost");
+      try {
+        const keyColor = Array.isArray(params?.keyColor) ? params.keyColor : [0.72, 0.9, 1];
+        const fillColor = Array.isArray(params?.fillColor) ? params.fillColor : [1, 0.42, 0.64];
+        const hitColor = Array.isArray(params?.hitColor) ? params.hitColor : keyColor;
+        const lightScale = clamp(params?.lightScale ?? 0.68, 0.5, 1);
+        const lightingWidth = Math.max(1, Math.round(state.width * lightScale));
+        const lightingHeight = Math.max(1, Math.round(state.height * lightScale));
+        if(pass.lightingWidth !== lightingWidth || pass.lightingHeight !== lightingHeight){
+          gl.activeTexture(gl.TEXTURE1);
+          gl.bindTexture(gl.TEXTURE_2D, pass.lightingTexture);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, lightingWidth, lightingHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, pass.framebuffer);
+          gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, pass.lightingTexture, 0);
+          if(gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error("Ultra lighting framebuffer incomplete");
+          pass.lightingWidth = lightingWidth;
+          pass.lightingHeight = lightingHeight;
+        }
+
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, pass.texture);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+        if(pass.uploadedWidth === state.width && pass.uploadedHeight === state.height){
+          gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, source);
+        } else {
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+          pass.uploadedWidth = state.width;
+          pass.uploadedHeight = state.height;
+        }
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, pass.framebuffer);
+        gl.viewport(0, 0, lightingWidth, lightingHeight);
+        gl.clearColor(0.5, 0.5, 0.5, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.useProgram(pass.program);
+        gl.bindBuffer(gl.ARRAY_BUFFER, pass.buffer);
+        gl.enableVertexAttribArray(pass.aPosition);
+        gl.vertexAttribPointer(pass.aPosition, 2, gl.FLOAT, false, 16, 0);
+        gl.enableVertexAttribArray(pass.aTexCoord);
+        gl.vertexAttribPointer(pass.aTexCoord, 2, gl.FLOAT, false, 16, 8);
+        gl.uniform1i(pass.uTexture, 0);
+        gl.uniform2f(pass.uResolution, state.width, state.height);
+        gl.uniform2f(pass.uLightPosition, clamp(params?.lightX ?? 0.5, 0, 1), clamp(params?.lightY ?? 0.36, 0, 1));
+        gl.uniform2f(pass.uHitLightPosition, clamp(params?.hitLightX ?? 0.5, 0, 1), clamp(params?.hitLightY ?? 0.18, 0, 1));
+        gl.uniform3f(pass.uKeyColor, clamp(keyColor[0] ?? 0.72, 0, 1.5), clamp(keyColor[1] ?? 0.9, 0, 1.5), clamp(keyColor[2] ?? 1, 0, 1.5));
+        gl.uniform3f(pass.uFillColor, clamp(fillColor[0] ?? 1, 0, 1.5), clamp(fillColor[1] ?? 0.42, 0, 1.5), clamp(fillColor[2] ?? 0.64, 0, 1.5));
+        gl.uniform3f(pass.uHitColor, clamp(hitColor[0] ?? 0.72, 0, 1.5), clamp(hitColor[1] ?? 0.9, 0, 1.5), clamp(hitColor[2] ?? 1, 0, 1.5));
+        gl.uniform1f(pass.uTime, Number(params?.time || 0));
+        gl.uniform1f(pass.uIntensity, clamp(params?.intensity ?? 1, 0, 1.35));
+        gl.uniform1f(pass.uHitStrength, clamp(params?.hitStrength ?? 0, 0, 1));
+        gl.uniform1f(pass.uBloomStrength, clamp(params?.bloomStrength ?? 1, 0, 1.6));
+        gl.uniform1f(pass.uRayStrength, clamp(params?.rayStrength ?? 1, 0, 1.6));
+        gl.uniform1f(pass.uDustStrength, clamp(params?.dustStrength ?? 0.55, 0, 1.5));
+        gl.uniform1f(pass.uReflectionStrength, clamp(params?.reflectionStrength ?? 1, 0, 1.6));
+        gl.uniform1f(pass.uAoStrength, clamp(params?.aoStrength ?? 1, 0, 1.5));
+        gl.uniform1f(pass.uAnamorphicStrength, clamp(params?.anamorphicStrength ?? 0.5, 0, 1.5));
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, state.width, state.height);
+        gl.clearColor(0, 0, 0, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.useProgram(pass.combineProgram);
+        gl.bindBuffer(gl.ARRAY_BUFFER, pass.buffer);
+        gl.enableVertexAttribArray(pass.combinePosition);
+        gl.vertexAttribPointer(pass.combinePosition, 2, gl.FLOAT, false, 16, 0);
+        gl.enableVertexAttribArray(pass.combineTexCoord);
+        gl.vertexAttribPointer(pass.combineTexCoord, 2, gl.FLOAT, false, 16, 8);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, pass.texture);
+        gl.uniform1i(pass.uSourceTexture, 0);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, pass.lightingTexture);
+        gl.uniform1i(pass.uLightingTexture, 1);
+        gl.uniform2f(pass.uCombineResolution, state.width, state.height);
+        gl.uniform1f(pass.uCombineTime, Number(params?.time || 0));
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        const error = gl.getError();
+        if(error !== gl.NO_ERROR) throw new Error("WebGL error " + error);
+        if(commit){
+          if(rejectBlankOutput(gl, source)) return false;
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(state.fxCanvas, 0, 0, canvas.width, canvas.height);
+        } else if(typeof gl.finish === "function") {
+          gl.finish();
+        }
+        return true;
+      } catch(error) {
+        try { gl.bindFramebuffer(gl.FRAMEBUFFER, null); } catch {}
+        return handleSourcePassError(error);
+      }
+    }
+
+    function drawUltraLighting(source, params){
+      return runUltraLighting(source, params || {}, true);
+    }
+
+    function warmUltraLighting(){
+      if(window.PERFORMANCE_MODE) return false;
+      const gl = ensureContext();
+      if(!gl || !syncSize()) return false;
+      return runUltraLighting(warmSourceCanvas(), {
+        time: 1.25,
+        lightX: 0.5,
+        lightY: 0.32,
+        keyColor: [0.72, 0.9, 1],
+        fillColor: [1, 0.42, 0.64],
+        hitColor: [0.3, 0.9, 1],
+        hitLightX: 0.72,
+        hitLightY: 0.18,
+        intensity: 1,
+        hitStrength: 0.5,
+        bloomStrength: 1,
+        rayStrength: 1,
+        dustStrength: 0.55,
+        reflectionStrength: 1,
+        aoStrength: 1,
+        anamorphicStrength: 0.5
+      }, false);
     }
 
     function drawDustinPostStack(source, params){
@@ -1611,6 +1990,8 @@
       drawVsMattPostStack,
       drawParallaxPass,
       drawSpeedLines,
+      drawUltraLighting,
+      warmUltraLighting,
       drawDustinPostStack,
       warmDustinPostStack,
       drawOutskirtzPostStack,

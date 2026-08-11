@@ -227,6 +227,7 @@
     const focusX = Number.isFinite(state?.camera?.focusX) ? state.camera.focusX : 640;
     const focusY = Number.isFinite(state?.camera?.focusY) ? state.camera.focusY : 420;
     const reduce = !!window.REDUCE_MOTION;
+    const depthQuality = window.SUPER_HEAVY_EFFECTS ? 1.55 : 1;
     const pan = reduce ? 0 : clampValue((focusX - 640) / 520, -1.15, 1.15);
     const lift = reduce ? 0 : clampValue((focusY - 430) / 430, -1, 1);
     const zoomPush = reduce ? 0 : clampValue((camZoom - 1.05) / 0.75, 0, 1);
@@ -235,20 +236,20 @@
     const mid = wiiLayerDepth("mid", pan * 0.72, sourceDrift * 0.72, t);
     const near = wiiLayerDepth("near", pan * 1.02, sourceDrift, t);
     return {
-      far: far.x * (0.45 + zoomPush * 0.45),
-      mid: mid.x * (0.65 + zoomPush * 0.55),
-      near: near.x * (0.85 + zoomPush * 0.75),
-      farY: far.y + lift * 3,
-      midY: mid.y + lift * 8,
-      nearY: near.y + lift * 15,
-      lean: pan * 0.018 * zoomPush,
+      far: far.x * (0.45 + zoomPush * 0.45) * depthQuality,
+      mid: mid.x * (0.65 + zoomPush * 0.55) * depthQuality,
+      near: near.x * (0.85 + zoomPush * 0.75) * depthQuality,
+      farY: far.y + lift * 3 * depthQuality,
+      midY: mid.y + lift * 8 * depthQuality,
+      nearY: near.y + lift * 15 * depthQuality,
+      lean: pan * 0.018 * zoomPush * depthQuality,
       bgX: 0,
       bgY: 0,
       scale: {
-        far: far.scale,
-        mid: mid.scale,
-        near: near.scale,
-        platform: 1 + zoomPush * 0.012
+        far: 1 + (far.scale - 1) * depthQuality,
+        mid: 1 + (mid.scale - 1) * depthQuality,
+        near: 1 + (near.scale - 1) * depthQuality,
+        platform: 1 + zoomPush * 0.012 * depthQuality
       },
       angle: {
         far: far.angle,
