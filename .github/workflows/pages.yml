@@ -1,0 +1,64 @@
+name: Deploy Browser Game
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Prepare browser site
+        shell: bash
+        run: |
+          mkdir -p _site/play _site/offline
+          rsync -a \
+            --exclude '.git/' \
+            --exclude '.github/' \
+            --exclude '.claude/' \
+            --exclude 'node_modules/' \
+            --exclude 'dist/' \
+            --exclude 'dist-*/' \
+            --exclude 'release/' \
+            --exclude 'release-*/' \
+            --exclude '_site/' \
+            ./ _site/
+
+          cp downloads.html _site/index.html
+          cp 'FNF - Online.html' _site/play/index.html
+          cp 'FNF - Offline.html' _site/offline/index.html
+
+          sed -i 's|<head>|<head><base href="/FNF---Online/">|' _site/play/index.html
+          sed -i 's|<head>|<head><base href="/FNF---Online/">|' _site/offline/index.html
+          sed -i 's|href="/play"|href="play/"|g; s|href="/offline"|href="offline/"|g' _site/index.html
+          touch _site/.nojekyll
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+      - name: Deploy Pages site
+        id: deployment
+        uses: actions/deploy-pages@v4
