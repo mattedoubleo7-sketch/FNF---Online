@@ -51,6 +51,8 @@
       dustinPost: null,
       outskirtzPost: null,
       warmCanvas: null,
+      uploadCanvas: null,
+      uploadCtx: null,
       sourceUploadBlocked: false,
       outputValidated: false,
       probeCanvas: null
@@ -176,6 +178,26 @@
         warmCtx.fillRect(w * 0.4, h * 0.36, w * 0.2, h * 0.24);
       }
       return state.warmCanvas;
+    }
+
+    function stableUploadSource(source){
+      if(source !== canvas) return source;
+      if(!state.uploadCanvas){
+        state.uploadCanvas = document.createElement("canvas");
+        state.uploadCtx = state.uploadCanvas.getContext("2d", { alpha: false });
+      }
+      if(state.uploadCanvas.width !== state.width || state.uploadCanvas.height !== state.height){
+        state.uploadCanvas.width = state.width;
+        state.uploadCanvas.height = state.height;
+      }
+      const uploadCtx = state.uploadCtx;
+      uploadCtx.setTransform(1, 0, 0, 1, 0, 0);
+      uploadCtx.globalAlpha = 1;
+      uploadCtx.globalCompositeOperation = "copy";
+      uploadCtx.filter = "none";
+      uploadCtx.drawImage(source, 0, 0, state.width, state.height);
+      uploadCtx.globalCompositeOperation = "source-over";
+      return state.uploadCanvas;
     }
 
     function ensureCameraPass(){
@@ -627,6 +649,11 @@
           uniform float uReflectionStrength;
           uniform float uAoStrength;
           uniform float uAnamorphicStrength;
+          uniform float uDepthStrength;
+          uniform float uRimStrength;
+          uniform vec2 uPerspectiveFocus;
+          uniform float uPerspectiveStrength;
+          uniform float uSharpenStrength;
           varying vec2 vUv;
 
           float luminance(vec3 color){
@@ -659,6 +686,85 @@
           }
 
           void main(){
+            vec2 texelStable = 1.0 / max(uResolution, vec2(1.0));
+            float foregroundStable = smoothstep(0.14, 0.98, vUv.y);
+            vec2 fromFocusStable = vUv - uPerspectiveFocus;
+            float perspectiveScaleStable = 1.0 - uPerspectiveStrength * (foregroundStable - 0.28) * 0.04;
+            vec2 uv = clamp(uPerspectiveFocus + fromFocusStable * perspectiveScaleStable, texelStable * 2.0, vec2(1.0) - texelStable * 2.0);
+
+            vec3 baseStable = texture2D(uTexture, uv).rgb;
+            vec3 leftStable = texture2D(uTexture, uv - vec2(texelStable.x * 2.0, 0.0)).rgb;
+            vec3 rightStable = texture2D(uTexture, uv + vec2(texelStable.x * 2.0, 0.0)).rgb;
+            vec3 downStable = texture2D(uTexture, uv - vec2(0.0, texelStable.y * 2.0)).rgb;
+            vec3 upStable = texture2D(uTexture, uv + vec2(0.0, texelStable.y * 2.0)).rgb;
+            vec3 diagA = texture2D(uTexture, uv + texelStable * 5.0).rgb;
+            vec3 diagB = texture2D(uTexture, uv - texelStable * 5.0).rgb;
+            vec3 diagC = texture2D(uTexture, uv + vec2(texelStable.x, -texelStable.y) * 5.0).rgb;
+            vec3 diagD = texture2D(uTexture, uv + vec2(-texelStable.x, texelStable.y) * 5.0).rgb;
+
+            vec3 neighborStable = (leftStable + rightStable + downStable + upStable) * 0.25;
+            vec3 detailStable = baseStable - neighborStable;
+            float detailMaskStable = smoothstep(0.025, 0.2, length(detailStable));
+            baseStable += detailStable * uSharpenStrength * detailMaskStable;
+
+            float centerStable = luminance(baseStable);
+            float leftLumaStable = luminance(leftStable);
+            float rightLumaStable = luminance(rightStable);
+            float downLumaStable = luminance(downStable);
+            float upLumaStable = luminance(upStable);
+            vec2 gradientStable = vec2(rightLumaStable - leftLumaStable, upLumaStable - downLumaStable);
+            float edgeStable = smoothstep(0.12, 0.62, length(gradientStable));
+            vec3 normalStable = normalize(vec3(-gradientStable * (1.15 + uDepthStrength * 0.32), 0.92));
+            vec3 lightStable = normalize(vec3(uLightPosition - vUv, 0.58));
+            float distanceStable = length(uLightPosition - vUv);
+            float attenuationStable = 1.0 / (1.0 + distanceStable * distanceStable * 4.8);
+            float diffuseStable = max(0.0, dot(normalStable, lightStable)) * (0.46 + attenuationStable * 0.72);
+            float averageStable = (leftLumaStable + rightLumaStable + downLumaStable + upLumaStable) * 0.25;
+            float contactStable = smoothstep(0.12, 0.48, averageStable - centerStable) * (0.055 + foregroundStable * 0.035) * uAoStrength * uDepthStrength;
+
+            vec3 halfStable = normalize(lightStable + vec3(0.0, 0.0, 1.0));
+            float specularStable = pow(max(0.0, dot(normalStable, halfStable)), mix(30.0, 10.0, edgeStable)) * edgeStable * attenuationStable;
+            vec2 reflectedStable = reflect(vec3(-lightStable.xy, lightStable.z), normalStable).xy;
+            vec3 reflectionStable = brightSample(uv + reflectedStable * texelStable * (8.0 + foregroundStable * 8.0));
+
+            vec3 bloomStable = baseStable * smoothstep(0.58, 1.02, centerStable) * 0.2;
+            bloomStable += leftStable * smoothstep(0.58, 1.02, leftLumaStable) * 0.08;
+            bloomStable += rightStable * smoothstep(0.58, 1.02, rightLumaStable) * 0.08;
+            bloomStable += downStable * smoothstep(0.58, 1.02, downLumaStable) * 0.08;
+            bloomStable += upStable * smoothstep(0.58, 1.02, upLumaStable) * 0.08;
+            bloomStable += (diagA + diagB + diagC + diagD) * 0.035;
+
+            vec2 rayStable = uLightPosition - vUv;
+            float shaftStable = 0.0;
+            shaftStable += smoothstep(0.7, 1.08, luminance(texture2D(uTexture, clamp(uv + rayStable * 0.12, 0.0, 1.0)).rgb)) * 0.42;
+            shaftStable += smoothstep(0.7, 1.08, luminance(texture2D(uTexture, clamp(uv + rayStable * 0.28, 0.0, 1.0)).rgb)) * 0.34;
+            shaftStable += smoothstep(0.7, 1.08, luminance(texture2D(uTexture, clamp(uv + rayStable * 0.46, 0.0, 1.0)).rgb)) * 0.24;
+            shaftStable *= (1.0 - smoothstep(0.1, 1.05, length(rayStable))) * uRayStrength;
+
+            vec2 hitDeltaStable = uHitLightPosition - vUv;
+            float hitAttenuationStable = 1.0 / (1.0 + dot(hitDeltaStable, hitDeltaStable) * 78.0);
+            float hitStable = hitAttenuationStable * uHitStrength;
+            float rimStable = edgeStable * uRimStrength * (0.35 + foregroundStable * 0.25);
+            float dustStable = dustLayer(vUv, 38.0, 0.13, 2.7) + dustLayer(vUv, 72.0, 0.24, 11.4) * 0.55;
+            dustStable *= uDustStrength * clamp(shaftStable * 1.8 + attenuationStable * 0.08, 0.0, 1.0);
+
+            vec3 colorStable = baseStable * (1.0 - clamp(contactStable, 0.0, 0.2) * uIntensity);
+            colorStable += baseStable * uKeyColor * diffuseStable * (0.105 + edgeStable * 0.075) * uIntensity;
+            colorStable += uKeyColor * specularStable * 0.21 * uReflectionStrength * uIntensity;
+            colorStable += reflectionStable * edgeStable * 0.095 * uReflectionStrength * uIntensity;
+            colorStable += mix(uFillColor, uKeyColor, 0.68) * rimStable * 0.05 * uIntensity;
+            colorStable += bloomStable * (0.23 + uAnamorphicStrength * 0.03) * uBloomStrength * uIntensity;
+            colorStable += uKeyColor * shaftStable * 0.07 * uIntensity;
+            colorStable += uHitColor * hitStable * (0.12 + edgeStable * 0.18) * uIntensity;
+            colorStable += mix(uFillColor, uKeyColor, hash21(vUv * uResolution + floor(uTime))) * dustStable * 0.055 * uIntensity;
+            vec3 filmicStable = (colorStable * (2.51 * colorStable + 0.03)) / (colorStable * (2.43 * colorStable + 0.59) + 0.14);
+            colorStable = mix(colorStable, filmicStable, 0.14 * uIntensity);
+            colorStable *= 1.0 - dot(vUv - 0.5, vUv - 0.5) * 0.085 * uIntensity;
+            float grainStable = (hash21(vUv * uResolution + fract(uTime) * 911.0) - 0.5) * 0.003;
+            gl_FragColor = vec4(max(colorStable + grainStable, vec3(0.0)), 1.0);
+// The legacy high-sample branch is disabled because some WebGL 1 drivers
+// miscompile it into horizontal scanline artifacts.
+#if 0
             vec2 texel = 1.0 / max(uResolution, vec2(1.0));
             vec3 base = texture2D(uTexture, vUv).rgb;
             vec3 left1 = texture2D(uTexture, vUv - vec2(texel.x, 0.0) * 1.5).rgb;
@@ -751,6 +857,7 @@
             color *= vignette;
             vec3 lightingDelta = clamp(color - base, -1.0, 1.0);
             gl_FragColor = vec4(lightingDelta * 0.5 + 0.5, 1.0);
+#endif
           }
         `);
         const combineProgram = createProgram(gl, `
@@ -842,6 +949,11 @@
           uReflectionStrength: gl.getUniformLocation(program, "uReflectionStrength"),
           uAoStrength: gl.getUniformLocation(program, "uAoStrength"),
           uAnamorphicStrength: gl.getUniformLocation(program, "uAnamorphicStrength"),
+          uDepthStrength: gl.getUniformLocation(program, "uDepthStrength"),
+          uRimStrength: gl.getUniformLocation(program, "uRimStrength"),
+          uUltraPerspectiveFocus: gl.getUniformLocation(program, "uPerspectiveFocus"),
+          uUltraPerspectiveStrength: gl.getUniformLocation(program, "uPerspectiveStrength"),
+          uUltraSharpenStrength: gl.getUniformLocation(program, "uSharpenStrength"),
           combinePosition: gl.getAttribLocation(combineProgram, "aPosition"),
           combineTexCoord: gl.getAttribLocation(combineProgram, "aTexCoord"),
           uSourceTexture: gl.getUniformLocation(combineProgram, "uSourceTexture"),
@@ -1693,38 +1805,26 @@
       if(!gl || !pass || !syncSize()) return false;
       if(typeof gl.isContextLost === "function" && gl.isContextLost()) return markFailed("WebGL context lost");
       try {
+        const uploadSource = stableUploadSource(source);
         const keyColor = Array.isArray(params?.keyColor) ? params.keyColor : [0.72, 0.9, 1];
         const fillColor = Array.isArray(params?.fillColor) ? params.fillColor : [1, 0.42, 0.64];
         const hitColor = Array.isArray(params?.hitColor) ? params.hitColor : keyColor;
-        const lightScale = clamp(params?.lightScale ?? 0.68, 0.5, 1);
-        const lightingWidth = Math.max(1, Math.round(state.width * lightScale));
-        const lightingHeight = Math.max(1, Math.round(state.height * lightScale));
-        if(pass.lightingWidth !== lightingWidth || pass.lightingHeight !== lightingHeight){
-          gl.activeTexture(gl.TEXTURE1);
-          gl.bindTexture(gl.TEXTURE_2D, pass.lightingTexture);
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, lightingWidth, lightingHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-          gl.bindFramebuffer(gl.FRAMEBUFFER, pass.framebuffer);
-          gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, pass.lightingTexture, 0);
-          if(gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error("Ultra lighting framebuffer incomplete");
-          pass.lightingWidth = lightingWidth;
-          pass.lightingHeight = lightingHeight;
-        }
 
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, pass.texture);
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
         gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
         if(pass.uploadedWidth === state.width && pass.uploadedHeight === state.height){
-          gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, source);
+          gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, uploadSource);
         } else {
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, uploadSource);
           pass.uploadedWidth = state.width;
           pass.uploadedHeight = state.height;
         }
 
-        gl.bindFramebuffer(gl.FRAMEBUFFER, pass.framebuffer);
-        gl.viewport(0, 0, lightingWidth, lightingHeight);
-        gl.clearColor(0.5, 0.5, 0.5, 1);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, state.width, state.height);
+        gl.clearColor(0, 0, 0, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
         gl.useProgram(pass.program);
         gl.bindBuffer(gl.ARRAY_BUFFER, pass.buffer);
@@ -1748,36 +1848,21 @@
         gl.uniform1f(pass.uReflectionStrength, clamp(params?.reflectionStrength ?? 1, 0, 1.6));
         gl.uniform1f(pass.uAoStrength, clamp(params?.aoStrength ?? 1, 0, 1.5));
         gl.uniform1f(pass.uAnamorphicStrength, clamp(params?.anamorphicStrength ?? 0.5, 0, 1.5));
+        gl.uniform1f(pass.uDepthStrength, clamp(params?.depthStrength ?? 1, 0, 2.2));
+        gl.uniform1f(pass.uRimStrength, clamp(params?.rimStrength ?? 1, 0, 2.2));
+        gl.uniform2f(pass.uUltraPerspectiveFocus, clamp(params?.lightX ?? 0.5, 0.08, 0.92), clamp(params?.lightY ?? 0.36, 0.08, 0.92));
+        gl.uniform1f(pass.uUltraPerspectiveStrength, clamp(params?.perspectiveStrength ?? 0.65, 0, 1.8));
+        gl.uniform1f(pass.uUltraSharpenStrength, clamp(params?.sharpenStrength ?? 0.18, 0, 0.32));
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        gl.viewport(0, 0, state.width, state.height);
-        gl.clearColor(0, 0, 0, 1);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-        gl.useProgram(pass.combineProgram);
-        gl.bindBuffer(gl.ARRAY_BUFFER, pass.buffer);
-        gl.enableVertexAttribArray(pass.combinePosition);
-        gl.vertexAttribPointer(pass.combinePosition, 2, gl.FLOAT, false, 16, 0);
-        gl.enableVertexAttribArray(pass.combineTexCoord);
-        gl.vertexAttribPointer(pass.combineTexCoord, 2, gl.FLOAT, false, 16, 8);
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, pass.texture);
-        gl.uniform1i(pass.uSourceTexture, 0);
-        gl.activeTexture(gl.TEXTURE1);
-        gl.bindTexture(gl.TEXTURE_2D, pass.lightingTexture);
-        gl.uniform1i(pass.uLightingTexture, 1);
-        gl.uniform2f(pass.uCombineResolution, state.width, state.height);
-        gl.uniform1f(pass.uCombineTime, Number(params?.time || 0));
-        gl.uniform1f(pass.uSharpenStrength, clamp(params?.sharpenStrength ?? 0.18, 0, 0.32));
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        // The source is the live 2D canvas. Finish the GPU read before clearing
+        // that canvas for the composed frame.
+        if(typeof gl.finish === "function") gl.finish();
         const error = gl.getError();
         if(error !== gl.NO_ERROR) throw new Error("WebGL error " + error);
         if(commit){
           if(rejectBlankOutput(gl, source)) return false;
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           ctx.drawImage(state.fxCanvas, 0, 0, canvas.width, canvas.height);
-        } else if(typeof gl.finish === "function") {
-          gl.finish();
         }
         return true;
       } catch(error) {
@@ -1811,7 +1896,10 @@
         reflectionStrength: 1,
         aoStrength: 1,
         anamorphicStrength: 0.5,
-        sharpenStrength: 0.18
+        sharpenStrength: 0.18,
+        depthStrength: 1.45,
+        rimStrength: 1.3,
+        perspectiveStrength: 0.95
       }, false);
     }
 

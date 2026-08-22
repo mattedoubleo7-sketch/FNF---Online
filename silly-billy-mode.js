@@ -192,6 +192,8 @@
     video.preload = "auto";
     video.muted = true;
     video.playsInline = true;
+    video.disablePictureInPicture = true;
+    try { video.fetchPriority = "high"; } catch {}
     video.style.display = "none";
     try { video.load(); } catch {}
     return video;
@@ -869,9 +871,28 @@
   function playVideoInSync(video, targetTime) {
     if (!video || targetTime < 0) return;
     try {
-      if (Math.abs((video.currentTime || 0) - targetTime) > 0.18) video.currentTime = targetTime;
+      const drift = targetTime - Number(video.currentTime || 0);
+      if (!video.seeking && Math.abs(drift) > 0.72) {
+        video.currentTime = targetTime;
+        video.playbackRate = 1;
+      } else if (!video.seeking) {
+        video.playbackRate = Math.max(0.94, Math.min(1.06, 1 + drift * 0.12));
+      }
       if (video.paused && !video.ended) video.play().catch(() => {});
     } catch {}
+  }
+
+  function pauseSillyVideo(video) {
+    if (!video || video.paused) return;
+    try {
+      video.pause();
+      video.playbackRate = 1;
+    } catch {}
+  }
+
+  function smoothVideoMix(value) {
+    const amount = Math.max(0, Math.min(1, value));
+    return amount * amount * (3 - 2 * amount);
   }
 
   function drawCoverVideo(video, alpha = 1) {
@@ -893,32 +914,42 @@
   function drawSillyVideos(t) {
     ensureSillyBillyVideos();
     const introDelay = 3;
-    if (silly.videoIntro && t >= introDelay && t < introDelay + 11.8) {
+    const introEnd = introDelay + 11.8;
+    if (silly.videoIntro && t >= introDelay && t < introEnd) {
       playVideoInSync(silly.videoIntro, t - introDelay);
-      drawCoverVideo(silly.videoIntro, Math.min(1, (introDelay + 11.8 - t) / 1.2));
-    }
+      const fadeIn = smoothVideoMix((t - introDelay) / 0.1);
+      const fadeOut = 1 - smoothVideoMix((t - (introEnd - 0.14)) / 0.14);
+      drawCoverVideo(silly.videoIntro, Math.min(fadeIn, fadeOut));
+    } else pauseSillyVideo(silly.videoIntro);
     // SO_STAY_FINAL plays AFTER the lyric sprite animation, delayed 1s. Its
     // last ~16s are replaced by the (muted) flashback cutscene.
     const stayStart = stepTime(3660) + 1;
     const flashStart = stayStart + (34.2 - 16) - 1; // flashback takes over ~1s before the last 16s
-    const flashDur = 17.6;                       // full flashback (~17.54s)
-    if (silly.videoStay && t >= stayStart && t < flashStart) {
+    const crossfadeDuration = 0.14;
+    const flashDur = 17.6; // full flashback (~17.54s)
+    const stayActive = t >= stayStart && t < flashStart + crossfadeDuration;
+    const flashActive = t >= flashStart && t < flashStart + flashDur;
+
+    if (silly.videoStay && stayActive) {
       if (!silly.stayStarted) {
         silly.stayStarted = true;
         try { silly.videoStay.currentTime = 0; } catch {}
       }
       playVideoInSync(silly.videoStay, t - stayStart);
-      drawCoverVideo(silly.videoStay, Math.min(1, (t - stayStart) / 0.4));
-    } else if (silly.videoFlashback && t >= flashStart && t < flashStart + flashDur) {
-      try { if (silly.videoStay && !silly.videoStay.paused) silly.videoStay.pause(); } catch {}
+      drawCoverVideo(silly.videoStay, smoothVideoMix((t - stayStart) / 0.1));
+    } else pauseSillyVideo(silly.videoStay);
+
+    if (silly.videoFlashback && flashActive) {
       if (!silly.flashStarted) {
         silly.flashStarted = true;
         try { silly.videoFlashback.currentTime = 0; } catch {}
       }
       silly.videoFlashback.muted = true; // no sound
       playVideoInSync(silly.videoFlashback, t - flashStart);
-      drawCoverVideo(silly.videoFlashback, Math.min(1, (t - flashStart) / 0.4));
-    }
+      const fadeIn = smoothVideoMix((t - flashStart) / crossfadeDuration);
+      const fadeOut = 1 - smoothVideoMix((t - (flashStart + flashDur - 0.14)) / 0.14);
+      drawCoverVideo(silly.videoFlashback, Math.min(fadeIn, fadeOut));
+    } else pauseSillyVideo(silly.videoFlashback);
   }
 
   function drawTintedStretch(image, x, y, w, h, color, alpha = 1) {

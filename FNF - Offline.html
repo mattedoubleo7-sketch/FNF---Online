@@ -1336,7 +1336,7 @@ body.gamepadOn.gameRunning #consoleHud { display: none; }
 <script src="snowed-in-data.js?v=20260809b"></script>
 <script src="lazy-bones-data.js?v=20260809e"></script>
 <script src="client-config.js?v=20260723a"></script>
-<script src="webgl-renderer.js?v=20260810c"></script>
+<script src="webgl-renderer.js?v=20260822a"></script>
 <script>
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
@@ -1450,11 +1450,11 @@ function superHeavyHitLight(){
     return { strength, x, y, color: colorToUnitRgb(selected?.color, [0.3, 0.9, 1]) };
 }
 function superHeavyShaderProfile(songId){
-    const base = { intensity:1.2, bloomStrength:0.9, rayStrength:0.72, dustStrength:0.22, reflectionStrength:0.95, aoStrength:1.08, anamorphicStrength:0.35, sharpenStrength:0.18 };
-    if(["combat","oneHit","shimmy"].includes(songId)) return { ...base, intensity:1.23, bloomStrength:1.02, rayStrength:1.08, dustStrength:0.28, reflectionStrength:0.92, anamorphicStrength:1.05 };
-    if(["sporting","boxingMatch","boxingMatchWg","boxingFight"].includes(songId)) return { ...base, intensity:1.18, rayStrength:0.5, dustStrength:0.1, reflectionStrength:1.24, anamorphicStrength:0.5, sharpenStrength:0.22 };
-    if(["perseverance","brokenReality","snowedIn","lazyBones"].includes(songId)) return { ...base, intensity:1.17, bloomStrength:0.74, rayStrength:0.68, dustStrength:0.46, reflectionStrength:0.72, aoStrength:1.28, anamorphicStrength:0.18 };
-    if(["outskirtz","overthrone","sillyBilly","ballistic"].includes(songId)) return { ...base, intensity:1.24, bloomStrength:0.98, rayStrength:0.84, dustStrength:0.16, reflectionStrength:1.18, aoStrength:1.24, anamorphicStrength:0.64 };
+    const base = { intensity:1.3, bloomStrength:1.02, rayStrength:0.92, dustStrength:0.26, reflectionStrength:1.25, aoStrength:1.3, anamorphicStrength:0.48, sharpenStrength:0.16, depthStrength:1.32, rimStrength:1.02, perspectiveStrength:1.04 };
+    if(["combat","oneHit","shimmy"].includes(songId)) return { ...base, intensity:1.33, bloomStrength:1.16, rayStrength:1.3, dustStrength:0.34, reflectionStrength:1.3, anamorphicStrength:1.28, depthStrength:1.5, rimStrength:1.12, perspectiveStrength:1.22 };
+    if(["sporting","boxingMatch","boxingMatchWg","boxingFight"].includes(songId)) return { ...base, intensity:1.27, rayStrength:0.72, dustStrength:0.14, reflectionStrength:1.5, anamorphicStrength:0.72, sharpenStrength:0.18, depthStrength:1.48, rimStrength:1.16, perspectiveStrength:1.12 };
+    if(["perseverance","brokenReality","snowedIn","lazyBones"].includes(songId)) return { ...base, intensity:1.28, bloomStrength:0.9, rayStrength:0.88, dustStrength:0.58, reflectionStrength:1.06, aoStrength:1.42, anamorphicStrength:0.28, depthStrength:1.38, rimStrength:0.94, perspectiveStrength:0.94 };
+    if(["outskirtz","overthrone","sillyBilly","ballistic"].includes(songId)) return { ...base, intensity:1.33, bloomStrength:1.13, rayStrength:1.08, dustStrength:0.22, reflectionStrength:1.46, aoStrength:1.4, anamorphicStrength:0.86, depthStrength:1.54, rimStrength:1.18, perspectiveStrength:1.24 };
     return base;
 }
 function drawSuperHeavyCanvasFallback(t, keyColor, fillColor, hitStrength){
@@ -3558,7 +3558,7 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 <script src="fallen-stars-mode.js?v=20260601h"></script>
 <script src="genocide-mode.js?v=20260601h"></script>
 <script src="overthrone-mode.js?v=20260601h"></script>
-<script src="silly-billy-mode.js?v=20260602a"></script>
+<script src="silly-billy-mode.js?v=20260822a"></script>
 <script src="outskirtz-mode.js?v=20260809a"></script>
 <script src="snowed-in-mode.js?v=20260809e"></script>
 <script src="lazy-bones-mode.js?v=20260809f"></script>
