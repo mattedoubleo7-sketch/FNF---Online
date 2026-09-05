@@ -181,6 +181,10 @@ function importedTracksForSong(songId = state.selectedSong) {
     if (typeof window.ensureLazyBonesAudio === "function") return mediaListFrom(window.ensureLazyBonesAudio());
     return [state.audio.lazyBonesInst];
   }
+  if (chartSource === "liminalLyrics") {
+    if (typeof window.ensureLiminalLyricsAudio === "function") return mediaListFrom(window.ensureLiminalLyricsAudio());
+    return [state.audio.liminalInst, state.audio.liminalVoices].filter(Boolean);
+  }
   return [];
 }
 
@@ -368,6 +372,15 @@ async function preloadSongForMatch(songId, matchId) {
         : []);
     const media = mediaListFrom(prepared);
     const tracks = media.length ? media : [state.audio.lazyBonesInst];
+    await Promise.all(tracks.filter(Boolean).map(track => waitForTrackReady(track)));
+  } else if (SONGS[songId]?.chartSource === "liminalLyrics") {
+    const prepared = typeof window.prepareLiminalLyricsOnlineStart === "function"
+      ? window.prepareLiminalLyricsOnlineStart()
+      : (typeof window.ensureLiminalLyricsAudio === "function"
+        ? window.ensureLiminalLyricsAudio()
+        : []);
+    const media = mediaListFrom(prepared);
+    const tracks = media.length ? media : [state.audio.liminalInst, state.audio.liminalVoices];
     await Promise.all(tracks.filter(Boolean).map(track => waitForTrackReady(track)));
   }
   if (state.network.prepareMatchId !== matchId) return false;

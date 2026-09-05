@@ -50,6 +50,8 @@
       ultraLighting: null,
       dustinPost: null,
       outskirtzPost: null,
+      liminalPost: null,
+      liminalBulge: null,
       warmCanvas: null,
       uploadCanvas: null,
       uploadCtx: null,
@@ -1619,6 +1621,241 @@
       }
     }
 
+    function ensureLiminalPostPass(){
+      if(state.liminalPost) return state.liminalPost;
+      const gl = ensureContext();
+      if(!gl) return null;
+      const vertexSource = `
+        attribute vec2 aPosition;
+        attribute vec2 aTexCoord;
+        varying vec2 vTexCoord;
+        void main(){
+          vTexCoord = aTexCoord;
+          gl_Position = vec4(aPosition, 0.0, 1.0);
+        }
+      `;
+      // Direct WebGL adaptation of Musical Empire's vhs.frag and color_adjust.frag.
+      const fragmentSource = `
+        precision mediump float;
+        varying vec2 vTexCoord;
+        uniform sampler2D uTexture;
+        uniform float uTime;
+        uniform float uVhs;
+        uniform float uBrightness;
+        uniform float uContrast;
+        const float PI = 3.14159265;
+
+        vec3 tex2D(vec2 p){
+          vec3 col = texture2D(uTexture, p).xyz;
+          if(0.5 < abs(p.x - 0.5)) col = vec3(0.1);
+          return col;
+        }
+        float hash2(vec2 v){
+          return fract(sin(dot(v, vec2(89.44, 19.36))) * 22189.22);
+        }
+        float iHash(vec2 v, vec2 r){
+          float h00 = hash2(floor(v * r + vec2(0.0, 0.0)) / r);
+          float h10 = hash2(floor(v * r + vec2(1.0, 0.0)) / r);
+          float h01 = hash2(floor(v * r + vec2(0.0, 1.0)) / r);
+          float h11 = hash2(floor(v * r + vec2(1.0, 1.0)) / r);
+          vec2 ip = smoothstep(vec2(0.0), vec2(1.0), mod(v * r, 1.0));
+          return (h00 * (1.0 - ip.x) + h10 * ip.x) * (1.0 - ip.y) +
+            (h01 * (1.0 - ip.x) + h11 * ip.x) * ip.y;
+        }
+        float tapeNoise(vec2 v){
+          float sum = 0.0;
+          for(int i = 1; i < 9; i++){
+            float fi = float(i);
+            sum += iHash(v + vec2(fi), vec2(2.0 * pow(2.0, fi))) / pow(2.0, fi);
+          }
+          return sum;
+        }
+        void main(){
+          vec2 uv = vTexCoord;
+          vec4 base = texture2D(uTexture, uv);
+          vec3 col = base.rgb;
+          if(uVhs > 0.5){
+            vec2 uvn = uv;
+            uvn.x += (tapeNoise(vec2(uvn.y, uTime)) - 0.5) * 0.005;
+            uvn.x += (tapeNoise(vec2(uvn.y * 100.0, uTime * 10.0)) - 0.5) * 0.01;
+            float tcPhase = clamp((sin(uvn.y * 8.0 - uTime * PI * 1.2) - 0.92) * tapeNoise(vec2(uTime)), 0.0, 0.01) * 10.0;
+            float tcNoise = max(tapeNoise(vec2(uvn.y * 100.0, uTime * 10.0)) - 0.5, 0.0);
+            uvn.x -= tcNoise * tcPhase;
+            float snPhase = smoothstep(0.0001, 0.0, uvn.y);
+            uvn.y += snPhase * 0.3;
+            uvn.x += snPhase * ((tapeNoise(vec2(uv.y * 100.0, uTime * 10.0)) - 0.5) * 0.2);
+            col = tex2D(uvn);
+            col *= 1.0 - tcPhase;
+            col = mix(col, col.yzx, snPhase);
+            for(int i = -4; i < 3; i++){
+              float x = float(i);
+              col += vec3(
+                tex2D(uvn + vec2(x, 0.0) * 0.007).x,
+                tex2D(uvn + vec2(x - 1.0, 0.0) * 0.007).y,
+                tex2D(uvn + vec2(x - 1.0, 0.0) * 0.007).z
+              ) * 0.1;
+            }
+            col *= 0.75;
+            col *= 1.0 + clamp(tapeNoise(vec2(0.0, uv.y + uTime * 0.2)) * 0.6 - 0.25, 0.0, 0.1);
+          }
+          col += vec3(uBrightness);
+          col = (col - 0.5) * uContrast + 0.5;
+          gl_FragColor = vec4(col, base.a);
+        }
+      `;
+      try {
+        const program = createProgram(gl, vertexSource, fragmentSource);
+        const buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+          -1,-1, 0,0, 1,-1, 1,0, -1,1, 0,1, 1,1, 1,1
+        ]), gl.STATIC_DRAW);
+        const texture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        state.liminalPost = {
+          program, buffer, texture,
+          aPosition: gl.getAttribLocation(program, "aPosition"),
+          aTexCoord: gl.getAttribLocation(program, "aTexCoord"),
+          uTexture: gl.getUniformLocation(program, "uTexture"),
+          uTime: gl.getUniformLocation(program, "uTime"),
+          uVhs: gl.getUniformLocation(program, "uVhs"),
+          uBrightness: gl.getUniformLocation(program, "uBrightness"),
+          uContrast: gl.getUniformLocation(program, "uContrast")
+        };
+        return state.liminalPost;
+      } catch(error) {
+        markFailed(error);
+        return null;
+      }
+    }
+
+    function ensureLiminalBulgePass(){
+      if(state.liminalBulge) return state.liminalBulge;
+      const gl = ensureContext();
+      if(!gl) return null;
+      const vertexSource = `
+        attribute vec2 aPosition;
+        attribute vec2 aTexCoord;
+        varying vec2 vTexCoord;
+        void main(){ vTexCoord = aTexCoord; gl_Position = vec4(aPosition, 0.0, 1.0); }
+      `;
+      // Direct WebGL adaptation of Musical Empire's bulge.frag.
+      const fragmentSource = `
+        precision mediump float;
+        varying vec2 vTexCoord;
+        uniform sampler2D uTexture;
+        uniform float uTime;
+        uniform float uSpeed;
+        uniform float uIntensity;
+        void main(){
+          vec2 uv = vTexCoord;
+          vec2 centeredUV = (uv - 0.5) * 2.0;
+          float t = uTime * uSpeed;
+          float pulse = 1.0 + sin(t) * 0.0;
+          float fishyness = 0.2 * uIntensity * pulse;
+          vec2 fishuv;
+          fishuv.x = (1.0 - centeredUV.y * centeredUV.y) * fishyness * centeredUV.x;
+          fishuv.y = (1.0 - centeredUV.x * centeredUV.x) * fishyness * centeredUV.y;
+          vec2 distortion = fishuv * 0.5;
+          vec4 source = texture2D(uTexture, uv - distortion);
+          float cr = texture2D(uTexture, uv - distortion * 0.95).r;
+          vec2 cgb = source.gb;
+          vec3 color = vec3(cr, cgb);
+          float uvMagSqrd = dot(centeredUV, centeredUV);
+          float vignette = 1.0 - uvMagSqrd * fishyness;
+          color *= vignette;
+          gl_FragColor = vec4(color, source.a);
+        }
+      `;
+      try {
+        const program = createProgram(gl, vertexSource, fragmentSource);
+        const buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+          -1,-1, 0,0, 1,-1, 1,0, -1,1, 0,1, 1,1, 1,1
+        ]), gl.STATIC_DRAW);
+        const texture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        state.liminalBulge = {
+          program, buffer, texture,
+          aPosition: gl.getAttribLocation(program, "aPosition"),
+          aTexCoord: gl.getAttribLocation(program, "aTexCoord"),
+          uTexture: gl.getUniformLocation(program, "uTexture"),
+          uTime: gl.getUniformLocation(program, "uTime"),
+          uSpeed: gl.getUniformLocation(program, "uSpeed"),
+          uIntensity: gl.getUniformLocation(program, "uIntensity")
+        };
+        return state.liminalBulge;
+      } catch(error) {
+        markFailed(error);
+        return null;
+      }
+    }
+
+    function runLiminalPass(source, params, overlay){
+      if(window.PERFORMANCE_MODE || !source || state.sourceUploadBlocked) return false;
+      const gl = ensureContext();
+      const pass = gl && (overlay ? ensureLiminalBulgePass() : ensureLiminalPostPass());
+      if(!gl || !pass || !syncSize()) return false;
+      try {
+        gl.viewport(0, 0, state.width, state.height);
+        gl.clearColor(0, 0, 0, overlay ? 0 : 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.useProgram(pass.program);
+        gl.bindBuffer(gl.ARRAY_BUFFER, pass.buffer);
+        gl.enableVertexAttribArray(pass.aPosition);
+        gl.vertexAttribPointer(pass.aPosition, 2, gl.FLOAT, false, 16, 0);
+        gl.enableVertexAttribArray(pass.aTexCoord);
+        gl.vertexAttribPointer(pass.aTexCoord, 2, gl.FLOAT, false, 16, 8);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, pass.texture);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+        gl.uniform1i(pass.uTexture, 0);
+        gl.uniform1f(pass.uTime, Number(params?.time || 0));
+        if(overlay){
+          gl.uniform1f(pass.uSpeed, Number(params?.speed ?? 1));
+          gl.uniform1f(pass.uIntensity, clamp(params?.intensity ?? 1, 0, 3));
+        } else {
+          gl.uniform1f(pass.uVhs, params?.vhs ? 1 : 0);
+          gl.uniform1f(pass.uBrightness, clamp(params?.brightness ?? 0, -1, 1));
+          gl.uniform1f(pass.uContrast, clamp(params?.contrast ?? 1, 0, 4));
+        }
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        const error = gl.getError();
+        if(error !== gl.NO_ERROR) throw new Error("WebGL error " + error);
+        if(!overlay && rejectBlankOutput(gl, source)) return false;
+        if(!overlay) ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(state.fxCanvas, 0, 0, canvas.width, canvas.height);
+        return true;
+      } catch(error) {
+        return handleSourcePassError(error);
+      }
+    }
+
+    function drawLiminalPostStack(source, params){
+      return runLiminalPass(source, params, false);
+    }
+
+    function drawLiminalBulgeOverlay(source, params){
+      return runLiminalPass(source, params, true);
+    }
+
+    function warmLiminalPostStack(){
+      if(window.PERFORMANCE_MODE) return false;
+      const gl = ensureContext();
+      return !!(gl && syncSize() && ensureLiminalPostPass() && ensureLiminalBulgePass());
+    }
+
     function drawVsMattPostStack(source, params){
       if(window.PERFORMANCE_MODE || !source) return false;
       if(state.sourceUploadBlocked) return false;
@@ -2097,6 +2334,9 @@
       warmDustinPostStack,
       drawOutskirtzPostStack,
       warmOutskirtzPostStack,
+      drawLiminalPostStack,
+      drawLiminalBulgeOverlay,
+      warmLiminalPostStack,
       blockSourceUploads(reason){
         state.sourceUploadBlocked = true;
         if(reason) state.failReason = String(reason);

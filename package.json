@@ -56,6 +56,8 @@
       "snowed-in-mode.js",
       "lazy-bones-data.js",
       "lazy-bones-mode.js",
+      "liminal-lyrics-data.js",
+      "liminal-lyrics-mode.js",
       "combat-visual-data.js",
       "shimmy-visual-data.js",
       "combat-mode.js",
