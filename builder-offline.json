@@ -42,6 +42,8 @@
     "lazy-bones-mode.js",
     "liminal-lyrics-data.js",
     "liminal-lyrics-mode.js",
+    "knockout-data.js",
+    "knockout-mode.js",
     "combat-visual-data.js",
     "shimmy-visual-data.js",
     "combat-mode.js",

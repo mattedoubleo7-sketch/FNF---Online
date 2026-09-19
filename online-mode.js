@@ -382,6 +382,15 @@ async function preloadSongForMatch(songId, matchId) {
     const media = mediaListFrom(prepared);
     const tracks = media.length ? media : [state.audio.liminalInst, state.audio.liminalVoices];
     await Promise.all(tracks.filter(Boolean).map(track => waitForTrackReady(track)));
+  } else if (SONGS[songId]?.chartSource === "knockout") {
+    const prepared = typeof window.prepareKnockoutOnlineStart === "function"
+      ? window.prepareKnockoutOnlineStart()
+      : (typeof window.ensureKnockoutAudio === "function"
+        ? window.ensureKnockoutAudio()
+        : []);
+    const media = mediaListFrom(prepared);
+    const tracks = media.length ? media : [state.audio.knockoutInst, state.audio.knockoutVoices];
+    await Promise.all(tracks.filter(Boolean).map(track => waitForTrackReady(track)));
   }
   if (state.network.prepareMatchId !== matchId) return false;
   state.network.preparedSongId = songId;

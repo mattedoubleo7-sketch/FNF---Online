@@ -52,6 +52,7 @@
       outskirtzPost: null,
       liminalPost: null,
       liminalBulge: null,
+      knockoutPost: null,
       warmCanvas: null,
       uploadCanvas: null,
       uploadCtx: null,
@@ -1733,6 +1734,154 @@
       }
     }
 
+    function ensureKnockoutPostPass(){
+      if(state.knockoutPost) return state.knockoutPost;
+      const gl = ensureContext();
+      if(!gl) return null;
+      const vertexSource = `
+        attribute vec2 aPosition;
+        attribute vec2 aTexCoord;
+        varying vec2 vUv;
+        void main(){ vUv = aTexCoord; gl_Position = vec4(aPosition, 0.0, 1.0); }
+      `;
+      // Direct WebGL adaptation of Knockout's supplied bloom.frag and chrom.frag.
+      const fragmentSource = `
+        precision mediump float;
+        varying vec2 vUv;
+        uniform sampler2D uTexture;
+        uniform vec2 uResolution;
+        uniform float uDim;
+        uniform float uDirections;
+        uniform float uQuality;
+        uniform float uSize;
+        uniform float uROffset;
+        uniform float uGOffset;
+        uniform float uBOffset;
+        const float PI2 = 6.28318530718;
+
+        vec4 chromSample(vec2 uv){
+          uv = clamp(uv, 0.0, 1.0);
+          vec4 color = vec4(1.0);
+          color.r = texture2D(uTexture, uv - vec2(uROffset, 0.0)).r;
+          color.ga = texture2D(uTexture, uv - vec2(uGOffset, 0.0)).ga;
+          color.b = texture2D(uTexture, uv - vec2(uBOffset, 0.0)).b;
+          return color;
+        }
+
+        void main(){
+          vec4 color = chromSample(vUv);
+          for(int x = 0; x < 16; x++){
+            if(float(x) >= uDirections) break;
+            float direction = PI2 * float(x) / max(uDirections, 1.0);
+            for(int y = 1; y <= 8; y++){
+              if(float(y) > uQuality) break;
+              float distance = float(y) / max(uQuality, 1.0);
+              vec2 offset = vec2(cos(direction), sin(direction)) * uSize * distance / uResolution;
+              color += chromSample(vUv + offset);
+            }
+          }
+          color /= max((uDim * uQuality) * uDirections - 2.0, 1.0);
+          vec4 bloom = (chromSample(vUv) / max(uDim, 0.001)) + color;
+          gl_FragColor = vec4(bloom.rgb, 1.0);
+        }
+      `;
+      try {
+        const program = createProgram(gl, vertexSource, fragmentSource);
+        const buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+          -1,-1, 0,0, 1,-1, 1,0, -1,1, 0,1, 1,1, 1,1
+        ]), gl.STATIC_DRAW);
+        const texture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        state.knockoutPost = {
+          program, buffer, texture,
+          aPosition: gl.getAttribLocation(program, "aPosition"),
+          aTexCoord: gl.getAttribLocation(program, "aTexCoord"),
+          uTexture: gl.getUniformLocation(program, "uTexture"),
+          uResolution: gl.getUniformLocation(program, "uResolution"),
+          uDim: gl.getUniformLocation(program, "uDim"),
+          uDirections: gl.getUniformLocation(program, "uDirections"),
+          uQuality: gl.getUniformLocation(program, "uQuality"),
+          uSize: gl.getUniformLocation(program, "uSize"),
+          uROffset: gl.getUniformLocation(program, "uROffset"),
+          uGOffset: gl.getUniformLocation(program, "uGOffset"),
+          uBOffset: gl.getUniformLocation(program, "uBOffset")
+        };
+        return state.knockoutPost;
+      } catch(error) {
+        markFailed(error);
+        return null;
+      }
+    }
+
+    function drawKnockoutPostStack(source, params, commit = true){
+      if(window.PERFORMANCE_MODE || !source || state.sourceUploadBlocked) return false;
+      const gl = ensureContext();
+      const pass = gl && ensureKnockoutPostPass();
+      if(!gl || !pass || !state.fxCanvas) return false;
+      try {
+        // The source shader performs 60 bloom taps per pixel. Running those
+        // taps in a reduced post buffer preserves its exact kernel while
+        // avoiding a multi-million-sample spike on browsers using SwiftShader.
+        const renderScale = window.SUPER_HEAVY_EFFECTS ? 0.75 : 0.5;
+        const renderWidth = Math.max(320, Math.round(canvas.width * renderScale));
+        const renderHeight = Math.max(180, Math.round(canvas.height * renderScale));
+        if(state.fxCanvas.width !== renderWidth || state.fxCanvas.height !== renderHeight){
+          state.fxCanvas.width = renderWidth;
+          state.fxCanvas.height = renderHeight;
+        }
+        state.width = renderWidth;
+        state.height = renderHeight;
+        const upload = stableUploadSource(source);
+        gl.viewport(0, 0, state.width, state.height);
+        gl.clearColor(0, 0, 0, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.useProgram(pass.program);
+        gl.bindBuffer(gl.ARRAY_BUFFER, pass.buffer);
+        gl.enableVertexAttribArray(pass.aPosition);
+        gl.vertexAttribPointer(pass.aPosition, 2, gl.FLOAT, false, 16, 0);
+        gl.enableVertexAttribArray(pass.aTexCoord);
+        gl.vertexAttribPointer(pass.aTexCoord, 2, gl.FLOAT, false, 16, 8);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, pass.texture);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, upload);
+        gl.uniform1i(pass.uTexture, 0);
+        gl.uniform2f(pass.uResolution, state.width, state.height);
+        gl.uniform1f(pass.uDim, clamp(params?.dim ?? 1.9, 0.1, 4));
+        gl.uniform1f(pass.uDirections, clamp(params?.directions ?? 12, 1, 16));
+        gl.uniform1f(pass.uQuality, clamp(params?.quality ?? 5, 1, 8));
+        gl.uniform1f(pass.uSize, clamp((params?.size ?? 2) * renderScale, 0, 16));
+        gl.uniform1f(pass.uROffset, clamp(params?.rOffset ?? 0.001, -0.1, 0.1));
+        gl.uniform1f(pass.uGOffset, clamp(params?.gOffset ?? 0, -0.1, 0.1));
+        gl.uniform1f(pass.uBOffset, clamp(params?.bOffset ?? -0.001, -0.1, 0.1));
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        const error = gl.getError();
+        if(error !== gl.NO_ERROR) throw new Error("WebGL error " + error);
+        if(commit && rejectBlankOutput(gl, upload)) return false;
+        if(commit){
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(state.fxCanvas, 0, 0, canvas.width, canvas.height);
+        }
+        return true;
+      } catch(error) {
+        return handleSourcePassError(error);
+      }
+    }
+
+    function warmKnockoutPostStack(){
+      if(window.PERFORMANCE_MODE) return false;
+      const gl = ensureContext();
+      if(!gl || !syncSize() || !ensureKnockoutPostPass()) return false;
+      return drawKnockoutPostStack(warmSourceCanvas(), { dim: 1.9, directions: 12, quality: 5, size: 2, rOffset: 0.001, bOffset: -0.001 }, false);
+    }
+
     function ensureLiminalBulgePass(){
       if(state.liminalBulge) return state.liminalBulge;
       const gl = ensureContext();
@@ -2337,6 +2486,8 @@
       drawLiminalPostStack,
       drawLiminalBulgeOverlay,
       warmLiminalPostStack,
+      drawKnockoutPostStack,
+      warmKnockoutPostStack,
       blockSourceUploads(reason){
         state.sourceUploadBlocked = true;
         if(reason) state.failReason = String(reason);
