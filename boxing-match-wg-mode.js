@@ -12,6 +12,7 @@
       videos: {},
       runtimes: {},
       shaderEventIndex: null,
+      idleRepairStarted: false,
       fxCanvas: null,
       fxCtx: null,
       camera: { x: 640, y: 330, zoom: 1 },
@@ -38,22 +39,22 @@
 
     const WG_FLY_LAYOUT = {
       matt: {
-        x: 808,
-        y: 502,
-        scale: 0.5,
-        trailX: 75,
-        trailY: 135,
-        cameraX: 808,
-        cameraY: 378
+        worldX: 2475,
+        worldY: 1375,
+        scale: 0.6,
+        trailX: 150,
+        trailY: 270,
+        cameraX: 1955,
+        cameraY: 1725
       },
       bf: {
-        x: 486,
-        y: 506,
-        scale: 0.48,
-        trailX: 34,
-        trailY: -10,
-        cameraX: 486,
-        cameraY: 380
+        worldX: 1800,
+        worldY: 1375,
+        scale: 0.6,
+        trailX: 70,
+        trailY: -20,
+        cameraX: 1800,
+        cameraY: 1325
       }
     };
 
@@ -67,6 +68,44 @@
       landingFocus: { x: 640, y: 498 },
       finalLandingFocus: { x: 640, y: 500 }
     };
+
+    // The source stage uses Psych Engine's 0.6 camera zoom. Full-screen
+    // browser layers must counter that transform or they shrink into borders.
+    function stageCoverZoom(base = 1){
+      const cameraZoom = Number(state.camera?.zoom) || 1;
+      return base / Math.max(0.35, cameraZoom);
+    }
+
+    function repairWgFlightIdle(){
+      const sprite = DATA.sprites.bfFly;
+      if(wgState.idleRepairStarted || !sprite || sprite.animations?.idle?.length) return;
+      wgState.idleRepairStarted = true;
+      const fallback = () => {
+        if(!sprite.animations.idle?.length) sprite.animations.idle = (sprite.animations.left || []).slice(0, 11);
+      };
+      fetch("assets/boxing-match-wg/characters/WGBM-bffly.xml")
+        .then(response => response.ok ? response.text() : "")
+        .then(xml => {
+          if(!xml) return fallback();
+          const doc = new DOMParser().parseFromString(xml, "application/xml");
+          const frames = [...doc.querySelectorAll("SubTexture[name^='idle-scaled']")]
+            .sort((a, b) => a.getAttribute("name").localeCompare(b.getAttribute("name"), undefined, { numeric:true }))
+            .map(node => {
+              const number = name => Number(node.getAttribute(name) || 0);
+              return {
+                x: number("x"), y: number("y"),
+                w: number("width"), h: number("height"),
+                fx: number("frameX"), fy: number("frameY"),
+                fw: number("frameWidth") || number("width"),
+                fh: number("frameHeight") || number("height"),
+                rotated: node.getAttribute("rotated") === "true"
+              };
+            });
+          if(frames.length) sprite.animations.idle = frames;
+          else fallback();
+        })
+        .catch(fallback);
+    }
 
     function isWg(){
       return state?.currentSong?.chartSource === "boxingMatchWg" || state?.selectedSong === "boxingMatchWg";
@@ -178,6 +217,7 @@
     function initWgImages(){
       if(wgState.initialized) return;
       wgState.initialized = true;
+      repairWgFlightIdle();
       Object.entries(DATA.stage.images).forEach(([key, src]) => loadImage(key, src));
       Object.entries(DATA.sprites).forEach(([key, sprite]) => loadImage(key, sprite.image));
       DATA.stage.finalObjects.forEach(obj => loadImage(obj.image, obj.image));
@@ -475,20 +515,18 @@
     function drawBeam(key, x, y, color, t, direction = 1, options = {}){
       const image = wgState.images[key];
       const length = options.length || 520;
-      const nearHeight = options.nearHeight || 142;
-      const farHeight = options.farHeight || 78;
+      const nearHeight = options.nearHeight || 64;
+      const farHeight = options.farHeight || 5;
       const rise = options.rise ?? -34;
       const phaseSpeed = options.phaseSpeed ?? 0;
-      const textureStretch = options.textureStretch || 1.18;
+      const textureStretch = options.textureStretch || 0.04;
       const textureW = Math.max(1, length * textureStretch);
       const phase = ((t * phaseSpeed) % textureW + textureW) % textureW;
-      const nearJitter = Math.sin(t * 8.5) * 2;
-      const farJitter = Math.cos(t * 7.2) * 3;
       const pts = [
-        { x: 0, y: -nearHeight * 0.5 + nearJitter },
-        { x: length, y: rise - farHeight * 0.5 + farJitter },
-        { x: length, y: rise + farHeight * 0.5 + farJitter },
-        { x: 0, y: nearHeight * 0.5 + nearJitter }
+        { x: 0, y: -nearHeight * 0.5 },
+        { x: length, y: rise - farHeight * 0.5 },
+        { x: length, y: rise + farHeight * 0.5 },
+        { x: 0, y: nearHeight * 0.5 }
       ];
       function beamPath(){
         ctx.beginPath();
@@ -499,56 +537,27 @@
         ctx.closePath();
       }
       ctx.save();
-      ctx.globalCompositeOperation = "screen";
-      ctx.translate(x, y + Math.sin(t * 2.6) * 3);
+      // The source adds the beam as a normal sprite and lets perspectiveBeam
+      // do the shaping. Keep the browser equivalent quiet and texture-led.
+      ctx.globalCompositeOperation = "source-over";
+      ctx.translate(x, y);
       ctx.scale(direction, 1);
       ctx.rotate(options.angle || 0);
-
-      ctx.save();
-      ctx.shadowColor = color;
-      ctx.shadowBlur = options.glowBlur ?? 30;
-      ctx.fillStyle = color;
-      ctx.globalAlpha = options.glowAlpha ?? 0.34;
-      beamPath();
-      ctx.fill();
-      ctx.restore();
 
       beamPath();
       ctx.clip();
       if(imgReady(image)){
-        ctx.globalAlpha = options.alpha ?? 0.94;
+        ctx.globalAlpha = options.alpha ?? 0.9;
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = "high";
         for(let xx = -phase - textureW; xx < length + textureW; xx += textureW){
-          ctx.drawImage(image, xx, -nearHeight * 0.5 - 4, textureW + 2, nearHeight + 8);
-        }
-        ctx.globalAlpha = options.textureAlpha ?? 0.2;
-        const shimmerW = Math.max(18, length / 25);
-        const shimmerPhase = ((t * (phaseSpeed || 36)) % shimmerW + shimmerW) % shimmerW;
-        for(let xx = -shimmerPhase - shimmerW; xx < length + shimmerW; xx += shimmerW){
-          ctx.drawImage(image, xx, -nearHeight * 0.46, shimmerW + 1, nearHeight * 0.92);
+          ctx.drawImage(image, xx, -nearHeight * 0.5, textureW + 2, nearHeight);
         }
       } else {
         ctx.fillStyle = color;
-        ctx.globalAlpha = 0.78;
+        ctx.globalAlpha = 0.72;
         ctx.fillRect(0, -nearHeight * 0.5, length, nearHeight);
       }
-
-      const grad = ctx.createLinearGradient(0, 0, length, rise);
-      grad.addColorStop(0, "rgba(255,255,255,0.5)");
-      grad.addColorStop(0.18, color);
-      grad.addColorStop(0.72, "rgba(255,255,255,0.38)");
-      grad.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.globalAlpha = options.coreAlpha ?? 0.28;
-      ctx.fillStyle = grad;
-      const core = options.coreHeight || nearHeight * 0.52;
-      ctx.beginPath();
-      ctx.moveTo(0, -core * 0.5);
-      ctx.lineTo(length, rise - Math.max(24, farHeight * 0.38));
-      ctx.lineTo(length, rise + Math.max(24, farHeight * 0.38));
-      ctx.lineTo(0, core * 0.5);
-      ctx.closePath();
-      ctx.fill();
       ctx.restore();
     }
 
@@ -556,10 +565,57 @@
       return ((state.camera?.focusX || canvas.width / 2) - canvas.width / 2) / 360;
     }
 
-    function drawFlyPhase(t, step){
-      const pan = wgPan();
+    function flyCameraWorld(t){
+      const side = activeSideAt(t);
+      if(side === "opp") return { x:WG_FLY_LAYOUT.matt.cameraX, y:WG_FLY_LAYOUT.matt.cameraY };
+      if(side === "player") return { x:WG_FLY_LAYOUT.bf.cameraX, y:WG_FLY_LAYOUT.bf.cameraY };
+      return {
+        x: (WG_FLY_LAYOUT.matt.cameraX + WG_FLY_LAYOUT.bf.cameraX) * 0.5,
+        y: (WG_FLY_LAYOUT.matt.cameraY + WG_FLY_LAYOUT.bf.cameraY) * 0.5
+      };
+    }
 
-      drawCover("spaceEmpty", -pan * 2, -10, 1.1);
+    function flyScroll(camera){
+      const zoom = 0.6;
+      return {
+        x: camera.x - canvas.width / (2 * zoom),
+        y: camera.y - canvas.height / (2 * zoom),
+        zoom
+      };
+    }
+
+    function flyWorldPoint(worldX, worldY, camera, scrollFactor = 1){
+      const view = flyScroll(camera);
+      return {
+        x: (worldX - view.x * scrollFactor) * view.zoom,
+        y: (worldY - view.y * scrollFactor) * view.zoom
+      };
+    }
+
+    function drawFlySourceLayer(camera){
+      const image = wgState.images.spaceEmpty;
+      if(!imgReady(image)) return;
+      const view = flyScroll(camera);
+      const sourceX = -1300;
+      const sourceY = -750;
+      const sourceScale = 2;
+      ctx.save();
+      ctx.globalAlpha = 1;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(
+        image,
+        (sourceX - view.x * 0.03) * view.zoom,
+        (sourceY - view.y * 0.03) * view.zoom,
+        image.naturalWidth * sourceScale * view.zoom,
+        image.naturalHeight * sourceScale * view.zoom
+      );
+      ctx.restore();
+    }
+
+    function drawFlyPhase(t, step){
+      const camera = flyCameraWorld(t);
+      drawFlySourceLayer(camera);
 
       // Greyscale-fade-in at the very start of the intro (matches WF's
       // greyscale shader tweening from 1.0 to 0 over the first beats).
@@ -579,7 +635,7 @@
         ctx.save();
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         speedDone = window.FNF_WEBGL?.drawSpeedLines(Math.min(0.25, shader.speed), t, {
-          centerX: 0.5 + Math.max(-0.08, Math.min(0.08, pan * 0.04)),
+          centerX: 0.5,
           centerY: 0.46,
           alpha: 0.68
         });
@@ -623,55 +679,49 @@
         ctx.restore();
       }
 
-      const lean = Math.sin(t * 1.25) * 0.032;
-      const flyBob = Math.sin(t * 1.55) * 6;
-      const mattX = WG_FLY_LAYOUT.matt.x + Math.sin(t * 0.52) * 4 - pan * 18;
-      const mattY = WG_FLY_LAYOUT.matt.y + flyBob;
-      const bfX = WG_FLY_LAYOUT.bf.x + Math.sin(t * 0.56 + 1.7) * 4 - pan * 18;
-      const bfY = WG_FLY_LAYOUT.bf.y - flyBob * 0.65;
-      const mattTrailX = mattX + WG_FLY_LAYOUT.matt.trailX;
-      const mattTrailY = mattY + WG_FLY_LAYOUT.matt.trailY;
-      const bfTrailX = bfX + WG_FLY_LAYOUT.bf.trailX;
-      const bfTrailY = bfY + WG_FLY_LAYOUT.bf.trailY;
+      // eclipsewg.lua leaves both flight characters fixed in world space;
+      // only the singing animation and camera shaders change during this part.
+      const matt = flyWorldPoint(WG_FLY_LAYOUT.matt.worldX, WG_FLY_LAYOUT.matt.worldY, camera);
+      const bf = flyWorldPoint(WG_FLY_LAYOUT.bf.worldX, WG_FLY_LAYOUT.bf.worldY, camera);
+      const mattTrail = flyWorldPoint(
+        WG_FLY_LAYOUT.matt.worldX + WG_FLY_LAYOUT.matt.trailX,
+        WG_FLY_LAYOUT.matt.worldY + WG_FLY_LAYOUT.matt.trailY,
+        camera
+      );
+      const bfTrail = flyWorldPoint(
+        WG_FLY_LAYOUT.bf.worldX + WG_FLY_LAYOUT.bf.trailX,
+        WG_FLY_LAYOUT.bf.worldY + WG_FLY_LAYOUT.bf.trailY,
+        camera
+      );
 
       // Flight trails match eclipsewg.lua's trail placements:
       // trailMatt = dad +150,+270 and trailBF = boyfriend +70,-20.
       // The red trail scrolls with iTime = -elapsed * 2.5 in Wii Funkin.
-      drawBeam("beamBlue", bfTrailX, bfTrailY, "rgba(60,220,255,1)", t, -1, {
-        length: 515,
-        nearHeight: 118,
-        farHeight: 22,
-        rise: -4,
+      drawBeam("beamBlue", bfTrail.x, bfTrail.y, "rgba(60,220,255,1)", t, -1, {
+        length: 510,
+        nearHeight: 64,
+        farHeight: 5,
+        rise: -18,
         phaseSpeed: 0,
         textureStretch: 0.04,
-        alpha: 0.94,
-        textureAlpha: 0.32,
-        coreAlpha: 0.46,
-        coreHeight: 60,
-        glowAlpha: 0.48,
-        glowBlur: 34
+        alpha: 0.9
       });
-      drawBeam("beamRed", mattTrailX, mattTrailY, "rgba(255,55,55,1)", t, -1, {
-        length: 565,
-        nearHeight: 122,
-        farHeight: 24,
-        rise: -6,
+      drawBeam("beamRed", mattTrail.x, mattTrail.y, "rgba(255,55,55,1)", t, -1, {
+        length: 560,
+        nearHeight: 66,
+        farHeight: 5,
+        rise: -22,
         phaseSpeed: -92,
         textureStretch: 0.04,
-        alpha: 0.96,
-        textureAlpha: 0.32,
-        coreAlpha: 0.48,
-        coreHeight: 64,
-        glowAlpha: 0.5,
-        glowBlur: 36
+        alpha: 0.92
       });
-      drawAtlasCharacter("mattFly", "mattFly", "matt", mattX, mattY, WG_FLY_LAYOUT.matt.scale, t, { glow:"rgba(255,70,45,0.5)", glowBlur:16, lean, noBob:true });
-      drawAtlasCharacter("bfFly", "bfFly", "player", bfX, bfY, WG_FLY_LAYOUT.bf.scale, t, { glow:"rgba(80,200,255,0.56)", glowBlur:16, lean:-lean, noBob:true });
+      drawAtlasCharacter("mattFly", "mattFly", "matt", matt.x, matt.y, WG_FLY_LAYOUT.matt.scale, t, { noBob:true });
+      drawAtlasCharacter("bfFly", "bfFly", "player", bf.x, bf.y, WG_FLY_LAYOUT.bf.scale, t, { noBob:true, flipX:true });
     }
 
     function drawArenaPhase(t, step){
       const pan = wgPan();
-      drawCover("space", -pan * 8, -18, 1.04);
+      drawCover("space", -pan * 8, -18, stageCoverZoom(1.04));
       drawImageKey("wiikz", -112 - pan * 14, 365, 0.34, 0.82);
       drawImageKey("bluematt", 1014 - pan * 14 + Math.sin(t * 1.5) * 0.5, 368 + Math.cos(t * 1.5) * 0.5, 0.34, 0.82);
       drawMoonSurface(t, step, pan, step < DATA.meta.phaseSteps.splash ? clamp01((step - DATA.meta.phaseSteps.endFly) / 16) : 1);
@@ -689,8 +739,8 @@
         ctx.stroke();
         ctx.restore();
       }
-      drawAtlasCharacter("matt", "matt", "matt", 392, 642, 0.64, t, { glow:"rgba(255,160,72,0.24)", glowBlur:8, noBob:true });
-      drawAtlasCharacter("bf", "bf", "player", 890, 646, 0.78, t, { glow:"rgba(75,194,255,0.28)", glowBlur:10, noBob:true, flipX:false });
+      drawAtlasCharacter("matt", "matt", "matt", 392, 642, 0.64, t, { noBob:true });
+      drawAtlasCharacter("bf", "bf", "player", 890, 646, 0.78, t, { noBob:true, flipX:true });
     }
 
     function drawFinalObjects(t){
@@ -709,7 +759,7 @@
 
     function drawFinalPhase(t){
       const pan = wgPan();
-      drawCover("spaceEmpty", -pan * 3, -8, 1.08);
+      drawCover("spaceEmpty", -pan * 3, -8, stageCoverZoom(1.08));
       ctx.save();
       ctx.globalCompositeOperation = "screen";
       drawImageKey("sunF", 80 - pan * 12, -130, 0.7, 0.9);
@@ -717,8 +767,8 @@
       drawImageKey("astF", -40 - pan * 45, 360, 0.7, 0.72);
       ctx.restore();
       drawFinalObjects(t);
-      drawAnimateCharacter("mattFinal", "matt", 270, 286, 0.48, t, { glow:"rgba(255,175,70,0.24)", glowBlur:10 });
-      drawAnimateCharacter("bfFinal", "player", 640, 852, 0.38, t, { glow:"rgba(92,198,255,0.32)", glowBlur:12 });
+      drawAnimateCharacter("mattFinal", "matt", 270, 286, 0.48, t);
+      drawAnimateCharacter("bfFinal", "player", 640, 852, 0.38, t, { flipX:true });
     }
 
     function drawWgStage(t){
@@ -731,12 +781,6 @@
       if(phase === "fly") drawFlyPhase(t, step);
       else if(phase === "arena") drawArenaPhase(t, step);
       else drawFinalPhase(t);
-      const haze = ctx.createRadialGradient(canvas.width * 0.5, canvas.height * 0.54, 80, canvas.width * 0.5, canvas.height * 0.54, 760);
-      haze.addColorStop(0, "rgba(255,255,255,0.05)");
-      haze.addColorStop(0.55, "rgba(76,100,190,0.04)");
-      haze.addColorStop(1, "rgba(0,0,0,0.34)");
-      ctx.fillStyle = haze;
-      ctx.fillRect(-300, -200, canvas.width + 600, canvas.height + 400);
     }
 
     function activeVideoForTime(t){
@@ -935,8 +979,11 @@
       let player = { x: 890, y: 420 };
       let zoom = WG_SOURCE_STAGE.browserZoom;
       if(phase === "fly"){
-        opp = { x: WG_FLY_LAYOUT.matt.cameraX, y: WG_FLY_LAYOUT.matt.cameraY };
-        player = { x: WG_FLY_LAYOUT.bf.cameraX, y: WG_FLY_LAYOUT.bf.cameraY };
+        // Flight applies the source world camera inside drawFlyPhase. Keep
+        // the outer browser camera neutral so notes and HUD do not receive a
+        // second transform.
+        opp = { x: canvas.width / 2, y: canvas.height / 2 };
+        player = { x: canvas.width / 2, y: canvas.height / 2 };
         zoom = WG_SOURCE_STAGE.browserZoom;
       } else if(phase === "final"){
         opp = { x: 640, y: 268 };
@@ -948,7 +995,7 @@
         zoom = step < DATA.meta.phaseSteps.splash ? WG_SOURCE_STAGE.browserZoom : WG_SOURCE_STAGE.focusedZoom;
       }
       const target = side === "opp" ? opp : side === "player" ? player : { x:(opp.x + player.x) / 2, y:(opp.y + player.y) / 2 };
-      const dirBump = phase === "arena" ? { x:0, y:0 } : recentDirectionBump(t);
+      const dirBump = { x:0, y:0 };
       const shader = shaderSnapshot(step);
       const mirrorPush = Math.max(
         Math.abs(1 - shader.mirrorZoom) * 1.6,
