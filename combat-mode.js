@@ -897,7 +897,13 @@
     return value;
   }
 
+  // One Hit drops 342 -> 275 BPM at step 4360; source shader steps after that are in 275 BPM steps.
+  const ONE_HIT_TEMPO_CHANGE = { time: 191.2204, step: 4360, bpm: 275 };
+
   function combatSongStep(t){
+    if(isOneHit() && t >= ONE_HIT_TEMPO_CHANGE.time){
+      return ONE_HIT_TEMPO_CHANGE.step + (t - ONE_HIT_TEMPO_CHANGE.time) / (60 / ONE_HIT_TEMPO_CHANGE.bpm / 4);
+    }
     const spb = Number(state.chart?.spb) || 60 / (Number(state.chart?.bpm || state.currentSong?.tempo) || 150);
     return t / (spb / 4);
   }
@@ -1493,14 +1499,9 @@
     const oneHitCameraFx = isOneHit() ? oneHitCameraState(t) : null;
     const shimmyFx = useChartShaders || isShimmy() ? chartShaderFx : null;
     const active = fx.mirror + fx.bloom + fx.speed + fx.burst + (oneHitFx?.active || 0) + (shimmyFx?.active || 0) + (oneHitCameraFx?.flash || 0);
-    const bars = Math.max(
-      Math.min(0.24, (fx.bars || 0) * 0.15),
-      Math.min(0.24, (oneHitFx?.bars || 0) * 0.15),
-      Math.min(0.45, shimmyFx?.bars || 0)
-    );
     const flash = oneHitCameraFx?.flash || 0;
     if(cameraShadersEnabled && active <= 0.015 && fx.chrom <= 1.21 && (!oneHitFx || oneHitFx.active <= 0.015) && (!shimmyFx || shimmyFx.active <= 0.015) && flash <= 0.015) return;
-    if(!cameraShadersEnabled && bars <= 0.003 && flash <= 0.01) return;
+    if(!cameraShadersEnabled && flash <= 0.01) return;
     let source = cameraShadersEnabled ? ensureCombatFxCanvas() : null;
     let cameraShaderRedrawn = false;
     if(cameraShadersEnabled && drawWiiGameCameraShaders(shimmyFx, fx, oneHitFx, source, t)){
@@ -1588,14 +1589,7 @@
 
     if(cameraShadersEnabled) drawCombatSpeedLines(Math.max(fx.burst * 0.7, (fx.speed || 0) * 0.45, (oneHitFx?.speed || 0) * 0.45), t);
 
-    if(bars > 0.003){
-      ctx.save();
-      const h = canvas.height * bars;
-      ctx.fillStyle = "#000";
-      ctx.fillRect(0, 0, canvas.width, h);
-      ctx.fillRect(0, canvas.height - h, canvas.width, h);
-      ctx.restore();
-    }
+    // Letterbox bars are drawn at the end of drawCombatStage (under receptors/notes), not here.
 
     if(flash > 0.01){
       ctx.save();
@@ -1684,6 +1678,34 @@
     drawBfSwordCharacter(anchors.bf.x, anchors.bf.y, WIIK_Z_BF_SCALE, false, t, 0);
     drawCombatDust("near", t, depth);
     // (Wii Funkin's unknownnew has no top-of-screen purple glow; removed.)
+    drawCombatLetterboxBars(t);
+  }
+
+  // Cinematic bars belong to the game layer: drawn before receptors/notes so they never hide the strums.
+  function combatLetterboxBarsAmount(t){
+    if(!isCombat() || !state.playing || !Number.isFinite(t)) return 0;
+    const chartShaderFx = shimmyShaderFxState(t);
+    const useChartShaders = !!chartShaderFx?.hasEvents;
+    const fx = useChartShaders || isShimmy() ? null : combatInsaneFxState(t);
+    const oneHitFx = !useChartShaders && isOneHit() ? oneHitShaderFxState(t) : null;
+    const shimmyFx = useChartShaders || isShimmy() ? chartShaderFx : null;
+    return Math.max(
+      Math.min(0.24, (fx?.bars || 0) * 0.15),
+      Math.min(0.24, (oneHitFx?.bars || 0) * 0.15),
+      Math.min(0.45, shimmyFx?.bars || 0)
+    );
+  }
+
+  function drawCombatLetterboxBars(t){
+    const bars = combatLetterboxBarsAmount(t);
+    if(bars <= 0.003) return;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const h = canvas.height * bars;
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, canvas.width, h);
+    ctx.fillRect(0, canvas.height - h, canvas.width, h);
+    ctx.restore();
   }
 
   function combatTimelineSide(t){

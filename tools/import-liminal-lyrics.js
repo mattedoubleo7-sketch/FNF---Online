@@ -147,6 +147,18 @@ function convertChart() {
     }
   });
   notes.sort((a, b) => a.time - b.time || a.lane - b.lane);
+  // hard.json stacks some notes (same side+time+lane); one press can only hit
+  // one, so keep a single note per slot (the longest hold wins).
+  const slots = new Map();
+  for (const note of notes) {
+    const key = `${note.side}|${note.lane}|${Math.round(note.time * 1000)}`;
+    const prev = slots.get(key);
+    if (!prev || note.sLen > prev.sLen) slots.set(key, note);
+  }
+  for (let index = notes.length - 1; index >= 0; index -= 1) {
+    const note = notes[index];
+    if (slots.get(`${note.side}|${note.lane}|${Math.round(note.time * 1000)}`) !== note) notes.splice(index, 1);
+  }
 
   const events = sourceEvents.map((event, index) => ({
     id: `liminal-event-${index}`,

@@ -896,28 +896,69 @@
         ? localControlsSide(side)
         : side === "player" || state.mode === "versus";
       if (!controlsSide) return;
+      // Madness notes only claim a press inside their own 50ms window; otherwise
+      // the press falls through to the nearest real note so a nearby avoid note
+      // can't swallow it.
+      let madness = null;
+      let madnessDiff = Infinity;
       let best = null;
       let bestDiff = Infinity;
       for (const note of state.chart.notes) {
         if (note.judged || note.side !== side || note.lane !== lane) continue;
         const d = Math.abs(note.time - t);
-        if (d < bestDiff) {
+        if (note.specialType === "madness") {
+          if (d < madnessDiff) {
+            madnessDiff = d;
+            madness = note;
+          }
+        } else if (d < bestDiff) {
           bestDiff = d;
           best = note;
         }
         if (note.time - t > 0.2) break;
       }
-      if (best?.specialType === "madness") {
-        if (bestDiff <= MADNESS_HIT_WINDOW) hitMadnessNote(best, lane);
+      if (madness && madnessDiff <= MADNESS_HIT_WINDOW && madnessDiff <= bestDiff) {
+        hitMadnessNote(madness, lane);
         return;
       }
-      return baseHandlePress(lane);
+      if (!best || bestDiff > hitWinBad()) return;
+      best.judged = true;
+      best.played = true;
+      best.hit = true;
+      if (isHoldNote(best)) {
+        best.holdActive = true;
+        best.holdDone = false;
+        best.played = false;
+        best._lastHoldTick = t;
+      }
+      if (bestDiff <= hitWinPerfect()) judge(side, "perfect", lane, best.character);
+      else if (bestDiff <= hitWinGood()) judge(side, "good", lane, best.character);
+      else judge(side, "bad", lane, best.character);
     }
 
     function overthroneHandleMisses(t) {
       if (state.selectedSong !== "overthrone") return baseHandleMisses(t);
+      if (window.__lagSpikeGrace) return;
+      const missCutoff = typeof missWin === "function" ? missWin() : 0.16;
+      // Auto Player (solo only): hit every real player note perfectly, never madness notes.
+      const autoP = !!(state.settings && state.settings.autoPlayer && state.mode === "solo");
+      const autoHoldLanes = autoP ? new Set() : null;
       for (const note of state.chart?.notes || []) {
         if (note.judged) continue;
+        if (autoP && note.side === "player" && note.specialType !== "madness" && t >= note.time) {
+          note.judged = true;
+          note.played = true;
+          note.hit = true;
+          if (isHoldNote(note)) {
+            note.holdActive = true;
+            note.holdDone = false;
+            note.played = false;
+            note._lastHoldTick = t;
+            autoHoldLanes.add(note.lane);
+          }
+          judge("player", "perfect", note.lane, note.character);
+          continue;
+        }
         if (note.side === "opp" && state.mode === "solo" && t >= note.time) {
           note.judged = true;
           note.played = true;
@@ -926,22 +967,31 @@
             note.holdActive = true;
             note.holdDone = false;
             note.played = false;
+            note._lastHoldTick = t;
           }
           if (note.character) pose(note.character, note.lane % 4, "hit");
           if (note.character === "sans" && state.health > 0.02) state.health = clamp(state.health - healthDrainForAnger(), 0, 1);
           continue;
         }
         if (state.mode === "online" && typeof localControlsSide === "function" && !localControlsSide(note.side)) continue;
-        if (note.specialType === "madness" && t > note.time + 0.16) {
+        if (note.specialType === "madness" && t > note.time + missCutoff) {
           note.judged = true;
           note.played = true;
           continue;
         }
-        if (t > note.time + 0.16) {
+        if (t > note.time + missCutoff) {
           note.judged = true;
           note.played = true;
           judge(note.side, "miss", note.lane, note.character || "player");
         }
+      }
+      if (autoP) {
+        for (const note of state.chart?.notes || []) {
+          if (note.holdActive && !note.holdDone && isHoldNote(note) && note.side === "player") {
+            if (t >= note.time && t <= holdEndTime(note)) autoHoldLanes.add(note.lane);
+          }
+        }
+        for (let lane = 4; lane < 8; lane++) state.keysDown[lane] = autoHoldLanes.has(lane);
       }
     }
 
@@ -1271,7 +1321,7 @@
       const level = angerLevel();
       ui.statusText.textContent = level >= 7 ? "RED DEMON" : level >= 4 ? "Sans is furious" : level >= 1 ? "Madness rising" : "Overthrone";
       ui.statusSub.textContent = level
-        ? `Anger ${Math.min(7, level)}/7. Sans drains ${(healthDrainForAnger(level) * 100).toFixed(1)}% health per hit.`
+        ? `Anger ${level}/8. Sans drains ${(healthDrainForAnger(level) * 100).toFixed(1)}% health per hit.`
         : "Avoid the red Madness notes. Missing them is safe; hitting them feeds the anger bar.";
     };
 

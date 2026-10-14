@@ -50,7 +50,8 @@
       warmed: false,
       introSoundPlayed: false,
       mugmanKoPlayed: false,
-      mugmanHurtPlayed: false
+      mugmanHurtPlayed: false,
+      lastPostTime: -Infinity
     };
     ko.warmCanvas.width = 256;
     ko.warmCanvas.height = 144;
@@ -71,6 +72,7 @@
     const baseRenderScene = renderScene;
     const baseUpdateCamera = updateCamera;
     const baseJudge = judge;
+    const baseHandlePress = handlePress;
     const baseHandleMisses = handleMisses;
     const baseApplyDustinBloom = typeof applyDustinBloom === "function" ? applyDustinBloom : null;
 
@@ -204,6 +206,7 @@
       ko.introSoundPlayed = false;
       ko.mugmanKoPlayed = false;
       ko.mugmanHurtPlayed = false;
+      ko.lastPostTime = -Infinity;
       ko.mechanics = {
         bullets: [],
         deaths: [],
@@ -214,6 +217,7 @@
         hasCard: false,
         cardAnim: "",
         cardAnimStart: -10,
+        splashes: [],
         bfSpecial: null,
         cupSpecial: null,
         specialShot: null,
@@ -603,16 +607,30 @@
       }
     }
 
-    function startSpecial(type, eventTime) {
+    function startSpecial(type, eventTime, startTime = eventTime) {
       const mechanic = ko.mechanics;
       if (!mechanic || mechanic.specialShot) return;
+      const visualStart = Math.max(Number(eventTime) || 0, Number(startTime) || 0);
       mechanic.peaActive = false;
       mechanic.chaserActive = false;
-      mechanic.specialShot = { type, start: eventTime, shotAt: eventTime + (type === "peaEx" ? 0.55 : 0.5), checkAt: eventTime + 0.9, end: eventTime + (type === "peaEx" ? 1.8 : 2), spawned: false, checked: false };
-      mechanic.cupSpecial = { name: "big shot", start: eventTime, end: eventTime + 1.8, loop: false };
-      mechanic.dodgeWindow = { start: eventTime + 0.45, end: eventTime + 0.9, source: "special" };
+      mechanic.specialShot = { type, sourceTime: eventTime, start: visualStart, shotAt: visualStart + (type === "peaEx" ? 0.55 : 0.5), checkAt: visualStart + 0.9, end: visualStart + (type === "peaEx" ? 1.8 : 2), spawned: false, checked: false };
+      mechanic.cupSpecial = { name: "big shot", start: visualStart, end: visualStart + 1.8, loop: false };
+      mechanic.dodgeWindow = { start: visualStart + 0.45, end: visualStart + 0.9, source: "special" };
       mechanic.dodged = false;
       playSound("exAttack", 0.9);
+    }
+
+    function requestSpecial(type, eventTime, currentTime) {
+      const mechanic = ko.mechanics;
+      if (!mechanic) return;
+      const late = Math.max(0, Number(currentTime) - Number(eventTime));
+      // Events are consumed from the source timeline exactly once. If the
+      // browser wakes up late, begin the visual immediately instead of
+      // replaying an old EX attack after a newer section has already started.
+      // The source events are spaced far enough apart that a live special is
+      // the only valid reason to ignore a duplicate request.
+      if (mechanic.specialShot) return;
+      startSpecial(type, Number(eventTime) || 0, late > 0.35 ? currentTime : eventTime);
     }
 
     function useAttack(t) {
@@ -655,8 +673,8 @@
       } else if (name === "chaser") {
         mechanic.peaActive = false;
         mechanic.chaserActive = String(event.value1).toLowerCase() === "true";
-      } else if (name === "peashooterex" && currentTime - event.time < 2.1) startSpecial("peaEx", event.time);
-      else if (name === "roundaboutex" && currentTime - event.time < 2.3) startSpecial("roundEx", event.time);
+      } else if (name === "peashooterex") requestSpecial("peaEx", event.time, currentTime);
+      else if (name === "roundaboutex") requestSpecial("roundEx", event.time, currentTime);
     }
 
     function updateMechanics(t, dt) {
@@ -687,9 +705,15 @@
         mechanic.restoreChaserAt = -1;
       }
       if (mechanic.peaActive) {
-        while (t - mechanic.lastPeaShot >= 0.2) {
+        let catchUpShots = 0;
+        while (t - mechanic.lastPeaShot >= 0.2 && catchUpShots < 3) {
           mechanic.lastPeaShot += 0.2;
           spawnBullet("pea", 0, mechanic.lastPeaShot);
+          catchUpShots += 1;
+        }
+        if (t - mechanic.lastPeaShot >= 0.2) {
+          // A stalled tab must not dump a whole magazine into one frame.
+          mechanic.lastPeaShot = t;
         }
       }
       if (state.settings?.autoPlayer && mechanic.peaActive && mechanic.hasCard) useAttack(t);
@@ -832,6 +856,41 @@
       }
     }
 
+    function spawnNoteSplash(note, t) {
+      const mechanic = ko.mechanics;
+      if (!mechanic || note.side !== "player" || isHoldNote(note) || !note.noteType) return;
+      const isParry = note.noteType === "parryNote";
+      const animation = isParry ? K.notes.parrySplash : K.notes.splash?.purple;
+      const image = ko.images[isParry ? "parrySplash" : "noteSplashes"];
+      if (!animation || !image) return;
+      mechanic.splashes.push({
+        animation,
+        image,
+        start: t,
+        x: laneX(note.lane) + NOTE_CENTER.x - (isParry ? 120 : 0),
+        y: receptorY() + NOTE_CENTER.y - (isParry ? 150 : 0),
+        scale: isParry ? 0.8 : 0.76,
+        alpha: 0.6,
+        parry: isParry
+      });
+      if (mechanic.splashes.length > 12) mechanic.splashes.shift();
+    }
+
+    function drawNoteSplashes(t) {
+      const mechanic = ko.mechanics;
+      if (!mechanic?.splashes?.length) return;
+      const active = [];
+      for (const splash of mechanic.splashes) {
+        const frame = frameFor(splash.animation, t - splash.start, false);
+        if (!frame) continue;
+        const duration = splash.animation.frames.length / Number(splash.animation.fps || 22);
+        if (t - splash.start >= duration) continue;
+        active.push(splash);
+        drawAtlasCenteredLocal(splash.image, frame, splash.x, splash.y, splash.scale, splash.alpha);
+      }
+      mechanic.splashes = active;
+    }
+
     function drawCard(t) {
       const mechanic = ko.mechanics;
       if (!mechanic) return;
@@ -925,14 +984,25 @@
     function applySourceShaders(t) {
       if (window.PERFORMANCE_MODE || state.settings?.performance) return;
       const lightning = lightningAt(t);
-      const dim = lightning >= 0 ? lerp(1, 1.9, clamp01(lightning / 0.4)) : 1.9;
-      const chrom = 0.001 + Number(ko.mechanics?.chromPulse || 0) * 0.019;
+      const mechanic = ko.mechanics;
+      const pulse = Number(mechanic?.chromPulse || 0);
+      const special = mechanic?.specialShot && t >= mechanic.specialShot.start && t <= mechanic.specialShot.end;
+      const attack = mechanic?.bfSpecial && t >= mechanic.bfSpecial.start && t <= mechanic.bfSpecial.end;
+      if (lightning < 0 && pulse <= 0.02 && !special && !attack) return;
+      // The source shaders are full-screen passes. Keep their cadence bounded
+      // so a slow frame cannot turn one lightning/attack event into a burst of
+      // synchronous canvas-to-WebGL uploads.
+      if (t - ko.lastPostTime < 0.05) return;
+      ko.lastPostTime = t;
+      const dim = lightning >= 0 ? lerp(1, 1.9, clamp01(lightning / 0.4)) : 1.55;
+      const chrom = 0.001 + pulse * 0.019;
       try {
         window.FNF_WEBGL?.drawKnockoutPostStack?.(canvas, {
           dim,
-          directions: 12,
-          quality: 5,
-          size: 2,
+          directions: 8,
+          quality: 2,
+          size: 1.35,
+          renderScale: 0.42,
           rOffset: chrom,
           gOffset: 0,
           bOffset: -chrom
@@ -946,6 +1016,7 @@
       updateMechanics(t, dt);
       drawWorld(t);
       drawNotesAndReceptors(t);
+      drawNoteSplashes(t);
       drawCard(t);
       drawHealth(t);
       drawIntro(t);
@@ -961,6 +1032,7 @@
       const poseInfo = state.poses[side === "player" ? "knockoutBf" : "knockoutCuphead"];
       if (poseInfo) poseInfo.alt = !!best.alt;
       if (kind === "miss") return;
+      spawnNoteSplash(best, t);
       if (side === "player") {
         if (best.noteType === "parryNote") {
           ko.mechanics.hasCard = true;
@@ -1133,6 +1205,30 @@
     judge = function(side, kind, lane, char) {
       baseJudge(side, kind, lane, char);
       processJudgedNote(side, kind, lane);
+    };
+
+    handlePress = function(lane) {
+      if (!isKnockout(state.currentSong)) return baseHandlePress(lane);
+      if (!state.playing || !state.chart || lane < 4) return baseHandlePress(lane);
+      const t = songTime();
+      let parry = null;
+      let parryDiff = Infinity;
+      for (const note of state.chart.notes || []) {
+        if (note.judged || note.side !== "player" || note.lane !== lane || note.noteType !== "parryNote") continue;
+        const diff = Math.abs(note.time - t);
+        if (diff < parryDiff) { parry = note; parryDiff = diff; }
+        if (note.time - t > 0.25) break;
+      }
+      // The source parry note has a normal FNF hit window. The extra 45 ms
+      // only prevents the custom note from losing a close race to a neighbor.
+      const parryWindow = hitWinBad() + 0.045;
+      if (!parry || parryDiff > parryWindow) return baseHandlePress(lane);
+      parry.judged = true;
+      parry.played = true;
+      parry.hit = true;
+      const perfectWindow = hitWinPerfect() + 0.025;
+      const goodWindow = hitWinGood() + 0.035;
+      judge("player", parryDiff <= perfectWindow ? "perfect" : parryDiff <= goodWindow ? "good" : "bad", lane, parry.character);
     };
 
     handleMisses = function(t) {

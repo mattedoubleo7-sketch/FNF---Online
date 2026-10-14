@@ -1053,9 +1053,25 @@
 
     isImportedSong = song => isLiminal(song) || baseIsImportedSong(song);
 
+    // logo_end() hides the strum at 152.03s, but hard.json keeps charting the
+    // player afterwards. Those notes are invisible, so drop them from the
+    // playable chart, and collapse the source chart's stacked duplicates (same
+    // side+time+lane), which one press can never clear.
+    const LIMINAL_HUD_END = 152.032355915066;
+    function playableLiminalNotes(sourceNotes) {
+      const kept = new Map();
+      for (const note of sourceNotes) {
+        if (note.side === "player" && Number(note.time || 0) >= LIMINAL_HUD_END) continue;
+        const key = `${note.side}|${note.lane}|${Math.round(Number(note.time || 0) * 1000)}`;
+        const prev = kept.get(key);
+        if (!prev || Number(note.sLen || 0) > Number(prev.sLen || 0)) kept.set(key, note);
+      }
+      return sourceNotes.filter(note => kept.get(`${note.side}|${note.lane}|${Math.round(Number(note.time || 0) * 1000)}`) === note);
+    }
+
     makeChart = function(song) {
       if (!isLiminal(song)) return baseMakeChart(song);
-      return { ...clone(LIMINAL.chart), notes: clone(LIMINAL.chart.notes || []), events: clone(LIMINAL.chart.events || []), timeline: clone(LIMINAL.chart.timeline || []) };
+      return { ...clone(LIMINAL.chart), notes: playableLiminalNotes(clone(LIMINAL.chart.notes || [])), events: clone(LIMINAL.chart.events || []), timeline: clone(LIMINAL.chart.timeline || []) };
     };
 
     stopExternalAudio = function() {

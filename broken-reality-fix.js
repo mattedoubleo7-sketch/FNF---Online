@@ -27,7 +27,9 @@
   const originalFinish = typeof finish === "function" ? finish : null;
   const SOUL = window.BROKEN_REALITY_SOUL_DATA || {};
   const baseLaneShift = 36;
-  const layoutBaseY = originalReceptorY();
+  // Flip layouts are absolute positions on the 720px canvas; anchor them to the upscroll
+  // receptor line so the user's downscroll setting cannot push "down" (base + 392) off screen.
+  const layoutBaseY = 172;
 
   if (typeof window.brDrawOverlays !== "function") {
     window.brDrawOverlays = function() {};
@@ -790,28 +792,13 @@
     return mode;
   }
 
+  // Scroll flips only change scroll direction (like standard downscroll); notes keep
+  // their lane identity and the arrows are not mirrored, so the key you press must be
+  // the arrow you see. Do not remap inputs for Broken Reality.
   const previousGameplayLaneMapper = window.mapGameplayLaneForCurrentView;
-  function brokenRealityInputLane(lane, t) {
-    const raw = Number(lane);
-    if (!Number.isFinite(raw)) {
-      return lane;
-    }
-    const dir = ((raw % 4) + 4) % 4;
-    if (dir !== 1 && dir !== 2) {
-      return raw;
-    }
-    const time = Number.isFinite(Number(t)) ? Number(t) : brokenRealityLiveTime();
-    const fix = getFixState();
-    const upsideDown = currentModeAt(time) === "down" || Number(fix.currentYMult || 0) < -0.35;
-    if (!upsideDown) {
-      return raw;
-    }
-    return raw + (dir === 1 ? 1 : -1);
-  }
-
   window.mapGameplayLaneForCurrentView = function(lane, t) {
     if (state.selectedSong === "brokenReality" || state.currentSong?.chartSource === "brokenReality") {
-      return brokenRealityInputLane(lane, t);
+      return lane;
     }
     return typeof previousGameplayLaneMapper === "function" ? previousGameplayLaneMapper(lane, t) : lane;
   };

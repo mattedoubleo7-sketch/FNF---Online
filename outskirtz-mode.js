@@ -748,7 +748,6 @@
   }
 
   const previousGameplayLaneMapper = window.mapGameplayLaneForCurrentView;
-  let outskirtzUpsideDownWindowsCache = null;
 
   function normalizeOutskirtzAngle(angle) {
     return ((Number(angle) % 360) + 360) % 360;
@@ -758,79 +757,19 @@
     return state.selectedSong === "outskirtz" || state.currentSong?.chartSource === "outskirtz";
   }
 
-  function outskirtzAngleEventRecords() {
-    const records = [];
-    for (const event of OUT.events || []) {
-      const name = String(event.name || "");
-      if (name !== "mirror" && name !== "mirrorbump" && name !== "barrel" && name !== "barrelbump") continue;
-      const prefix = name.startsWith("barrel") ? "barrel" : "mirror";
-      const props = parseList(event.value1);
-      const args = parseList(event.value2);
-      props.forEach((prop, index) => {
-        if (prop !== "angle") return;
-        const target = Number(args[index * 3] || 0);
-        const duration = Math.max(0, Number(args[index * 3 + 1] || 0) * STEP_SEC);
-        const time = Number(event.time || 0);
-        if (!Number.isFinite(time) || !Number.isFinite(target)) return;
-        records.push({ time, prefix, target, duration });
-      });
-    }
-    return records.sort((a, b) => a.time - b.time);
-  }
-
-  function mergeOutskirtzWindows(windows) {
-    const sorted = windows
-      .filter(windowInfo => Number.isFinite(windowInfo.start) && Number.isFinite(windowInfo.end) && windowInfo.end > windowInfo.start)
-      .sort((a, b) => a.start - b.start);
-    const merged = [];
-    for (const windowInfo of sorted) {
-      const last = merged[merged.length - 1];
-      if (last && windowInfo.start <= last.end + STEP_SEC) {
-        last.end = Math.max(last.end, windowInfo.end);
-      } else {
-        merged.push({ start: windowInfo.start, end: windowInfo.end });
-      }
-    }
-    return merged;
-  }
-
-  function outskirtzUpsideDownWindows() {
-    if (outskirtzUpsideDownWindowsCache) return outskirtzUpsideDownWindowsCache;
-    const records = outskirtzAngleEventRecords();
-    const windows = [];
-    for (let i = 0; i < records.length; i++) {
-      const record = records[i];
-      if (Math.abs(record.target) < 180) continue;
-      let end = record.time + Math.max(record.duration, STEP_SEC * 2);
-      for (let j = i + 1; j < records.length; j++) {
-        const next = records[j];
-        if (next.prefix !== record.prefix) continue;
-        if (next.time - record.time > 8) break;
-        if (Math.abs(next.target) <= 30) {
-          end = Math.max(end, next.time + Math.max(next.duration, STEP_SEC));
-          break;
-        }
-      }
-      windows.push({
-        start: Math.max(0, record.time - STEP_SEC * 0.5),
-        end: end + STEP_SEC * 1.5
-      });
-    }
-    outskirtzUpsideDownWindowsCache = mergeOutskirtzWindows(windows);
-    return outskirtzUpsideDownWindowsCache;
-  }
-
-  function outskirtzUpsideDownWindowActive(time) {
-    const numberTime = Number(time);
-    if (!Number.isFinite(numberTime)) return false;
-    return outskirtzUpsideDownWindows().some(windowInfo => numberTime >= windowInfo.start && numberTime <= windowInfo.end);
-  }
-
-  function outskirtzCameraUpsideDown(t, fxOverride) {
+  // Live rotation the post-fx pass applies to the whole frame (0 when camera fx are off).
+  function outskirtzViewAngle(t, fxOverride) {
+    if (window.PERFORMANCE_MODE || window.REDUCE_MOTION) return 0;
     const time = Number.isFinite(Number(t)) ? Number(t) : (state.playing ? songTime() : 0);
     const fx = fxOverride || fxAt(time);
-    const gameAngle = normalizeOutskirtzAngle((Number(fx.mirrorAngle) || 0) + (Number(fx.barrelAngle) || 0));
-    return outskirtzUpsideDownWindowActive(time) || (gameAngle > 95 && gameAngle < 265);
+    return normalizeOutskirtzAngle((Number(fx.mirrorAngle) || 0) + (Number(fx.barrelAngle) || 0));
+  }
+
+  // Swap ↓/↑ only while the view is actually upside down, so note drawing and the
+  // input remap (both via outskirtzDisplayLane) follow the live rotation.
+  function outskirtzCameraUpsideDown(t, fxOverride) {
+    const gameAngle = outskirtzViewAngle(t, fxOverride);
+    return gameAngle > 90 && gameAngle < 270;
   }
 
   function outskirtzInputLane(lane, t, fx) {
@@ -842,7 +781,7 @@
   }
 
   window.outskirtzCameraUpsideDown = outskirtzCameraUpsideDown;
-  window.outskirtzUpsideDownWindows = outskirtzUpsideDownWindows;
+  window.outskirtzViewAngle = outskirtzViewAngle;
   window.mapGameplayLaneForCurrentView = function(lane, t) {
     if (isOutskirtzCurrentSong()) {
       return outskirtzInputLane(lane, t);

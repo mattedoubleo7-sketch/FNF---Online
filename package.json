@@ -7,6 +7,7 @@
     "start": "electron .",
     "dist": "electron-builder --win nsis",
     "server": "node server.js",
+    "local:html": "node local-html-server.js",
     "dist:online": "electron-builder --win nsis --config.directories.output=dist-online-installer",
     "dist:offline": "electron-builder --win nsis --config builder-offline.json --config.directories.output=dist-offline-installer"
   },
@@ -60,6 +61,8 @@
       "liminal-lyrics-mode.js",
       "knockout-data.js",
       "knockout-mode.js",
+      "inopia-data.js",
+      "inopia-mode.js",
       "combat-visual-data.js",
       "shimmy-visual-data.js",
       "combat-mode.js",

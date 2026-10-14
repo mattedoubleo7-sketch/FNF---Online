@@ -44,6 +44,8 @@
     "liminal-lyrics-mode.js",
     "knockout-data.js",
     "knockout-mode.js",
+    "inopia-data.js",
+    "inopia-mode.js",
     "combat-visual-data.js",
     "shimmy-visual-data.js",
     "combat-mode.js",

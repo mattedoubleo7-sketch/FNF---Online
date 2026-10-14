@@ -171,6 +171,7 @@ const images = {
   notes: copyImage("CUP_assets.png", "notes.png"),
   parryNotes: copyImage("PARRYCUP_assets.png", "parry-notes.png"),
   noteSplashes: copyImage("noteSplashes.png", "note-splashes.png"),
+  parrySplash: copyImage("cup/NOTECup_assetsSplash.png", "ui/note-cup-splash.png"),
   stageBack: copyImage("rain/CH-RN-00.png", "stage/back.png"),
   stageWorld: copyImage("rain/world1.png", "stage/world.png"),
   stageHouse: copyImage("rain/house.png", "stage/house.png"),
@@ -241,6 +242,10 @@ const noteSkin = notePrefixes.map(prefix => ({
   tail: framesByPrefix(noteAtlas, prefix.tail)[0] || null
 }));
 const parrySkin = parryPrefixes.map(prefix => frameByExactBase(parryAtlas, prefix));
+const noteSplash = {
+  purple: atlasAnimation("images/noteSplashes.xml", "note splash purple 1", 22, false)
+};
+const parrySplash = atlasAnimation("images/cup/NOTECup_assetsSplash.xml", "ParryFX", 22, false);
 
 const atlas = (xml, prefix, fps = 24, loop = false) => atlasAnimation(xml, prefix, fps, loop);
 const data = {
@@ -315,7 +320,16 @@ const data = {
       roundExDeath: { image: images.roundExDeath, fly: atlas("images/weapons/roundaboutEX_death.xml", "roundaboutEX", 24, false), scale: 1.7 }
     }
   },
-  notes: { image: images.notes, parryImage: images.parryNotes, skin: noteSkin, parrySkin },
+  notes: {
+    image: images.notes,
+    parryImage: images.parryNotes,
+    skin: noteSkin,
+    parrySkin,
+    splashImage: images.noteSplashes,
+    parrySplashImage: images.parrySplash,
+    splash: noteSplash,
+    parrySplash
+  },
   sounds
 };
 

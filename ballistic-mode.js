@@ -11,7 +11,8 @@
     fxCanvas: null,
     fxCtx: null,
     lastSongId: "",
-    lastEventIndex: -1
+    lastEventIndex: -1,
+    playerOnly: false
   };
 
   Object.assign(SONGS, {
@@ -269,7 +270,8 @@
     for(const event of events){
       if(event.time > t) break;
       if(event.name !== "Camera Flash") continue;
-      const duration = Math.max(0.1, Number(event.value2 || 0.4));
+      const durationPart = String(event.value2 ?? "").split(",").pop().trim();
+      const duration = Math.max(0.1, Number(durationPart) || 0.4);
       const age = t - event.time;
       if(age >= 0 && age < duration) alpha = Math.max(alpha, 1 - age / duration);
     }
@@ -286,52 +288,91 @@
     return x * x * (3 - 2 * x);
   }
 
-  function ballisticBeat(t){
-    return Math.max(0, t / (activeWhittyData().chart.spb || 60 / 212));
+  // The modchart and scream cues are authored in SOURCE beats (Psych curBeat, which follows
+  // the chart's BPM changes: a 150-BPM intro, then 212/210/220 sections). The engine's beat
+  // (t / spb at one song BPM) runs ~3.3 beats ahead, so convert source beats to song time
+  // by walking the section timeline instead.
+  const sourceBeatCache = new WeakMap();
+  function sourceBeatSections(chart){
+    let sections = sourceBeatCache.get(chart);
+    if(!sections){
+      sections = [];
+      let beat = 0;
+      for(const section of chart.timeline || []){
+        const bpm = Number(section.bpm) || 60 / (chart.spb || 60 / 212);
+        const startTime = Number(section.startTime) || 0;
+        const beats = Math.max(0, (Number(section.endTime) || 0) - startTime) * bpm / 60;
+        sections.push({ beat, startTime, beats, spb: 60 / bpm });
+        beat += beats;
+      }
+      sourceBeatCache.set(chart, sections);
+    }
+    return sections;
   }
 
-  function secondsToBeats(seconds){
-    return seconds / (activeWhittyData().chart.spb || 60 / 212);
+  function sourceBeatTime(sourceBeat, songData = activeWhittyData()){
+    const chart = songData.chart;
+    const sections = sourceBeatSections(chart);
+    if(!sections.length) return sourceBeat * (chart.spb || 60 / 212);
+    for(const section of sections){
+      if(sourceBeat < section.beat + section.beats) return section.startTime + Math.max(0, sourceBeat - section.beat) * section.spb;
+    }
+    const last = sections[sections.length - 1];
+    return last.startTime + (sourceBeat - last.beat) * last.spb;
   }
 
-  function beatTween(beat, startBeat, durationBeats){
-    return smoothStep((beat - startBeat) / Math.max(0.001, durationBeats));
+  function timeTween(t, startTime, duration){
+    return smoothStep((t - startTime) / Math.max(0.001, duration));
+  }
+
+  function whittyScreamWindow(songData = activeWhittyData()){
+    const cutscene = songData.cutscenes && songData.cutscenes.whittyScream;
+    if(!cutscene) return null;
+    const start = sourceBeatTime(cutscene.beatStart || 366, songData);
+    const beatEnd = sourceBeatTime(cutscene.beatEnd || 368, songData);
+    // Let the scream play all of its frames once instead of cropping it to the 2-beat window.
+    const full = start + (cutscene.frames?.length || 0) / (cutscene.fps || 24);
+    return { start, end: Math.max(beatEnd, full) };
   }
 
   function ballisticSpecialState(t){
-    const beat = ballisticBeat(t);
-    const twoSeconds = secondsToBeats(2);
-    const whittyFadeBeats = secondsToBeats(2.4);
-    const halfSecond = secondsToBeats(0.5);
     const songData = activeWhittyData();
-    const cutscene = songData.special === "ballistic" && songData.cutscenes && songData.cutscenes.whittyScream;
+    const special = songData.special === "ballistic";
     let playerCenter = 0;
     let opponentAlpha = 1;
     let blackAlpha = 0;
     let whiteAlpha = 0;
+    let midBlackout = false;
+    let scream = false;
 
-    if(songData.special === "ballistic"){
-      if(beat >= 515 && beat < 515 + twoSeconds) playerCenter = beatTween(beat, 515, twoSeconds);
-      else if(beat >= 515 + twoSeconds && beat < 662) playerCenter = 1;
-      else if(beat >= 662 && beat < 662 + halfSecond) playerCenter = 1 - beatTween(beat, 662, halfSecond);
+    if(special){
+      const T = beat => sourceBeatTime(beat, songData);
+      const t500 = T(500), t515 = T(515), t660 = T(660), t662 = T(662);
+      const t432 = T(432), t433 = T(433), t436 = T(436), t728 = T(728);
+      if(t >= t515 && t < t515 + 2) playerCenter = timeTween(t, t515, 2);
+      else if(t >= t515 + 2 && t < t662) playerCenter = 1;
+      else if(t >= t662 && t < t662 + 0.5) playerCenter = 1 - timeTween(t, t662, 0.5);
 
-      if(beat >= 500 && beat < 500 + whittyFadeBeats) opponentAlpha = 1 - beatTween(beat, 500, whittyFadeBeats);
-      else if(beat >= 500 + whittyFadeBeats && beat < 660) opponentAlpha = 0;
-      else if(beat >= 660 && beat < 660 + whittyFadeBeats) opponentAlpha = beatTween(beat, 660, whittyFadeBeats);
+      if(t >= t500 && t < t500 + 2.4) opponentAlpha = 1 - timeTween(t, t500, 2.4);
+      else if(t >= t500 + 2.4 && t < t660) opponentAlpha = 0;
+      else if(t >= t660 && t < t660 + 2.4) opponentAlpha = timeTween(t, t660, 2.4);
 
-      if(beat >= 432 && beat < 436) blackAlpha = 1;
-      if(beat >= 728) blackAlpha = 1;
-      if(beat >= 433 && beat < 436) whiteAlpha = beatTween(beat, 433, secondsToBeats(1.1)) * 0.82;
-      else if(beat >= 436 && beat < 436 + secondsToBeats(0.6)) whiteAlpha = (1 - beatTween(beat, 436, secondsToBeats(0.6))) * 0.82;
+      if(t >= t432 && t < t436){ blackAlpha = 1; midBlackout = true; }
+      if(t >= t728) blackAlpha = 1;
+      if(t >= t433 && t < t436) whiteAlpha = timeTween(t, t433, 1.1) * 0.82;
+      else if(t >= t436 && t < t436 + 0.6) whiteAlpha = (1 - timeTween(t, t436, 0.6)) * 0.82;
+
+      const screamWindow = whittyScreamWindow(songData);
+      scream = !!screamWindow && t >= screamWindow.start && t < screamWindow.end;
     }
 
     return {
-      beat,
-      scream: !!cutscene && beat >= (cutscene.beatStart || 366) && beat < (cutscene.beatEnd || 368),
+      scream,
       playerCenter,
       opponentAlpha,
       blackAlpha,
-      whiteAlpha
+      whiteAlpha,
+      midBlackout
     };
   }
 
@@ -655,9 +696,8 @@
     const cutscene = activeWhittyData().cutscenes && activeWhittyData().cutscenes.whittyScream;
     const img = ballisticState.images.whittyScream;
     if(!cutscene || !imgReady(img)) return false;
-    const spb = activeWhittyData().chart.spb || 60 / 212;
-    const elapsed = Math.max(0, t - (cutscene.beatStart || 366) * spb);
-    const frame = frameFromList(cutscene.frames, elapsed, cutscene.fps || 24, true);
+    const elapsed = Math.max(0, t - whittyScreamWindow().start);
+    const frame = frameFromList(cutscene.frames, elapsed, cutscene.fps || 24, false);
     if(!frame) return false;
     ctx.save();
     ctx.shadowBlur = 14 + ballisticRage(t) * 16;
@@ -728,18 +768,20 @@
     if(!isBallistic()) return baseReceptors(t);
     const pulse = 0.5 + Math.sin(t * 7.5) * 0.5;
     const y = receptorY();
-    ctx.strokeStyle = "rgba(255,255,255,0.12)";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(canvas.width * 0.5, 72);
-    ctx.lineTo(canvas.width * 0.5, 452);
-    ctx.stroke();
+    if(!ballisticState.playerOnly){
+      ctx.strokeStyle = "rgba(255,255,255,0.12)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(canvas.width * 0.5, 72);
+      ctx.lineTo(canvas.width * 0.5, 452);
+      ctx.stroke();
+    }
     const special = ballisticSpecialState(t);
     for(let lane = 0; lane < 8; lane++){
       const lanePos = ballisticLanePosition(lane, t, special);
       const x = lanePos.x;
       const laneY = y + lanePos.y;
-      const laneAlpha = lane < 4 ? special.opponentAlpha : 1;
+      const laneAlpha = lane < 4 ? (ballisticState.playerOnly ? 0 : special.opponentAlpha) : 1;
       if(laneAlpha <= 0.01) continue;
       ctx.save();
       ctx.globalAlpha = laneAlpha;
@@ -804,7 +846,7 @@
       const drawY = y + lanePos.y;
       const drawTailY = tailY + lanePos.y;
       const rawScale = clamp(1 - Math.pow(Math.abs(diff), 0.7) * 0.45, 0.75, 1.12);
-      const sideAlpha = (n.side === "opp" || lane < 4) ? special.opponentAlpha : 1;
+      const sideAlpha = (n.side === "opp" || lane < 4) ? (ballisticState.playerOnly ? 0 : special.opponentAlpha) : 1;
       const alpha = (n.side === "opp" ? 0.86 : 1) * sideAlpha;
       if(alpha <= 0.01) continue;
       if(isHoldNote(n)) drawBallisticSustain(lane, x, n.hit ? ry + lanePos.y : drawY, drawTailY, alpha);
@@ -853,6 +895,20 @@
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
     ctx.restore();
+    if(special.midBlackout && state.playing){
+      // A couple of player notes still land inside the beat-432 blackout; keep the
+      // player's strums and notes readable over it (opponent side stays hidden).
+      ctx.save();
+      ctx.translate(state.camera.highwayX || 0, state.camera.highwayY || 0);
+      ballisticState.playerOnly = true;
+      try {
+        receptors(t);
+        notes(songT);
+      } finally {
+        ballisticState.playerOnly = false;
+        ctx.restore();
+      }
+    }
   };
 
   function resetBallisticPose(){

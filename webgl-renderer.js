@@ -56,6 +56,7 @@
       warmCanvas: null,
       uploadCanvas: null,
       uploadCtx: null,
+      sharpen: null,
       sourceUploadBlocked: false,
       outputValidated: false,
       probeCanvas: null
@@ -201,6 +202,114 @@
       uploadCtx.drawImage(source, 0, 0, state.width, state.height);
       uploadCtx.globalCompositeOperation = "source-over";
       return state.uploadCanvas;
+    }
+
+    function ensureSharpenPass(){
+      if(state.sharpen) return state.sharpen;
+      const gl = ensureContext();
+      if(!gl) return null;
+      try {
+        const program = createProgram(gl, `
+          attribute vec2 aPosition;
+          attribute vec2 aTexCoord;
+          varying vec2 vUv;
+          void main(){
+            vUv = aTexCoord;
+            gl_Position = vec4(aPosition, 0.0, 1.0);
+          }
+        `, `
+          precision highp float;
+          uniform sampler2D uTexture;
+          uniform vec2 uTexel;
+          uniform float uAmount;
+          varying vec2 vUv;
+
+          void main(){
+            vec4 center = texture2D(uTexture, vUv);
+            vec3 cross = texture2D(uTexture, vUv + vec2(uTexel.x, 0.0)).rgb;
+            cross += texture2D(uTexture, vUv - vec2(uTexel.x, 0.0)).rgb;
+            cross += texture2D(uTexture, vUv + vec2(0.0, uTexel.y)).rgb;
+            cross += texture2D(uTexture, vUv - vec2(0.0, uTexel.y)).rgb;
+            vec3 sharpened = max(vec3(0.0), center.rgb * 5.0 - cross);
+            vec3 color = mix(center.rgb, sharpened, clamp(uAmount, 0.0, 1.0));
+            gl_FragColor = vec4(color, center.a);
+          }
+        `);
+        const buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+          -1, -1, 0, 0,
+           1, -1, 1, 0,
+          -1,  1, 0, 1,
+           1,  1, 1, 1
+        ]), gl.STATIC_DRAW);
+        const texture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        state.sharpen = {
+          program,
+          buffer,
+          texture,
+          aPosition: gl.getAttribLocation(program, "aPosition"),
+          aTexCoord: gl.getAttribLocation(program, "aTexCoord"),
+          uTexture: gl.getUniformLocation(program, "uTexture"),
+          uTexel: gl.getUniformLocation(program, "uTexel"),
+          uAmount: gl.getUniformLocation(program, "uAmount"),
+          uploadedWidth: 0,
+          uploadedHeight: 0
+        };
+        return state.sharpen;
+      } catch(error) {
+        markFailed(error);
+        return null;
+      }
+    }
+
+    function drawSharpenPass(source, params){
+      if(window.PERFORMANCE_MODE || !source || state.sourceUploadBlocked) return false;
+      const gl = ensureContext();
+      const pass = gl && ensureSharpenPass();
+      if(!gl || !pass || !syncSize()) return false;
+      try {
+        // Texture uploads are synchronous. Reading the live game canvas here
+        // avoids the extra 2D staging copy that made the sharpen pass expensive.
+        const upload = source === canvas ? source : stableUploadSource(source);
+        gl.viewport(0, 0, state.width, state.height);
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.useProgram(pass.program);
+        gl.bindBuffer(gl.ARRAY_BUFFER, pass.buffer);
+        gl.enableVertexAttribArray(pass.aPosition);
+        gl.vertexAttribPointer(pass.aPosition, 2, gl.FLOAT, false, 16, 0);
+        gl.enableVertexAttribArray(pass.aTexCoord);
+        gl.vertexAttribPointer(pass.aTexCoord, 2, gl.FLOAT, false, 16, 8);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, pass.texture);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+        if(pass.uploadedWidth === state.width && pass.uploadedHeight === state.height){
+          gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, upload);
+        } else {
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, upload);
+          pass.uploadedWidth = state.width;
+          pass.uploadedHeight = state.height;
+        }
+        gl.uniform1i(pass.uTexture, 0);
+        gl.uniform2f(pass.uTexel, 1 / Math.max(1, state.width), 1 / Math.max(1, state.height));
+        gl.uniform1f(pass.uAmount, clamp(params?.amount ?? 0.14, 0, 0.45));
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        const error = gl.getError();
+        if(error !== gl.NO_ERROR) throw new Error("WebGL error " + error);
+        if(rejectBlankOutput(gl, source)) return false;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(state.fxCanvas, 0, 0, canvas.width, canvas.height);
+        return true;
+      } catch(error) {
+        return handleSourcePassError(error);
+      }
     }
 
     function ensureCameraPass(){
@@ -1828,7 +1937,9 @@
         // The source shader performs 60 bloom taps per pixel. Running those
         // taps in a reduced post buffer preserves its exact kernel while
         // avoiding a multi-million-sample spike on browsers using SwiftShader.
-        const renderScale = window.SUPER_HEAVY_EFFECTS ? 0.75 : 0.5;
+        const requestedScale = Number(params?.renderScale);
+        const defaultScale = window.SUPER_HEAVY_EFFECTS ? 0.75 : 0.5;
+        const renderScale = Number.isFinite(requestedScale) ? clamp(requestedScale, 0.3, 0.75) : defaultScale;
         const renderWidth = Math.max(320, Math.round(canvas.width * renderScale));
         const renderHeight = Math.max(180, Math.round(canvas.height * renderScale));
         if(state.fxCanvas.width !== renderWidth || state.fxCanvas.height !== renderHeight){
@@ -2479,6 +2590,7 @@
       drawSpeedLines,
       drawUltraLighting,
       warmUltraLighting,
+      drawSharpenPass,
       drawDustinPostStack,
       warmDustinPostStack,
       drawOutskirtzPostStack,
