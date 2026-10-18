@@ -403,21 +403,35 @@
         const offset = data.animation.offset || [0, 0];
         const frameWidth = Number(frame.fw || frame.w || 0);
         const frameHeight = Number(frame.fh || frame.h || 0);
+        // Codename's character position is a root, not the top edge of the
+        // active trimmed frame. Preserve the idle foot line, then compensate
+        // the actual rendered rectangle (rotated atlases use frame.w as their
+        // vertical extent) and XML animation offset so every pose lands on
+        // the same ground line for both Sans and BF.
+        const idleFrame = data.def.animations?.idle?.frames?.[0];
+        const renderedHeight = frame.rotated
+          ? Number(frame.w || frame.fh || frame.h || 0)
+          : Number(frame.h || frame.fh || 0);
+        const idleRenderedHeight = idleFrame?.rotated
+          ? Number(idleFrame.w || idleFrame.fh || idleFrame.h || 0)
+          : Number(idleFrame?.h || idleFrame?.fh || 0);
+        const sourceFeetY = Number(base[1] || 0) + globalY + idleRenderedHeight;
+        position[1] = sourceFeetY + Number(offset[1] || 0) - renderedHeight;
         // Codename Engine applies the player-side flip correction after the
         // character XML is loaded (`isPlayer` toggles the declared flipX).
         const flip = isPlayer ? !data.def.flipX : !!data.def.flipX;
-        // drawAtlasFrame already applies the frame rectangle around a
-        // bottom-center anchor. Character XML positions are top-left source
-        // positions, so convert them exactly once; adding frame dimensions a
-        // second time was pushing BF and Sans off their authored roots.
+        // The source player path mirrors the animation X offset along with
+        // the sprite. Keep the authored root fixed while the pose changes.
+        const drawOffset = isPlayer && flip
+          ? [-Number(offset[0] || 0), Number(offset[1] || 0)]
+          : [Number(offset[0] || 0), Number(offset[1] || 0)];
+        // drawAtlasFrame expects a bottom-center anchor. Codename's atlas
+        // path derives it from the active frame's frameHeight/frameY and the
+        // animation offset; using the idle height here made feet drift on
+        // singing frames with different trimmed bounds.
         const frameTrimX = flip ? -Number(frame.fx || 0) : Number(frame.fx || 0);
-        const anchorX = position[0] - Number(offset[0] || 0) + (frameWidth * 0.5 + frameTrimX);
-        // Codename keeps the character root on the idle foot line. Sing
-        // frames have different trimmed heights, so using their own height
-        // here makes the feet jump whenever BF or Sans changes animation.
-        const idleFrame = data.def.animations?.idle?.frames?.[0];
-        const idleHeight = Number(idleFrame?.fh || idleFrame?.h || frameHeight);
-        const anchorY = position[1] + idleHeight + Number(frame.fy || 0);
+        const anchorX = position[0] - drawOffset[0] + (frameWidth * 0.5 + frameTrimX);
+        const anchorY = position[1] - drawOffset[1] + frameHeight + Number(frame.fy || 0);
         const characterAlpha = kind === "sans" ? alpha : 1;
         drawAtlasFrame(image, frame, anchorX, anchorY, Number(data.def.scale || 1), characterAlpha, flip);
       }
