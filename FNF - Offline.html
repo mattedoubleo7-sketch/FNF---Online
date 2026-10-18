@@ -425,7 +425,7 @@ body.mobile .touchBtn { height: 64px !important; font-size: 26px !important; bor
 }
 
 /* === Reworked menu — Silly Billy themed song selector === */
-#menu { padding: 22px; gap: 16px; flex-direction: column !important; align-items: stretch !important; }
+#menu { padding: 22px; gap: 16px; flex-direction: column !important; align-items: stretch !important; --menu-accent: #ff3a82; }
 .menuTopBar {
     display: flex;
     justify-content: space-between;
@@ -436,7 +436,8 @@ body.mobile .touchBtn { height: 64px !important; font-size: 26px !important; bor
     background:
         linear-gradient(135deg, rgba(255, 31, 109, 0.14), rgba(70, 197, 255, 0.04)),
         rgba(20, 5, 14, 0.78);
-    border: 1px solid rgba(255, 31, 109, 0.24);
+    border: 1px solid color-mix(in srgb, var(--menu-accent) 42%, transparent);
+    box-shadow: 0 18px 42px rgba(0,0,0,0.28), 0 0 34px color-mix(in srgb, var(--menu-accent) 16%, transparent);
 }
 .menuBrand { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .menuBrandLogo { width: 44px; height: 44px; border-radius: 10px; display: block; flex-shrink: 0; }
@@ -470,6 +471,34 @@ body.mobile .touchBtn { height: 64px !important; font-size: 26px !important; bor
 .songSearchInput:focus { outline: none; border-color: rgba(255, 31, 109, 0.65); box-shadow: 0 0 0 3px rgba(255, 31, 109, 0.18); }
 .songSearchCount { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.14em; padding: 0 8px; white-space: nowrap; }
 .songCategories { display: flex; gap: 8px; flex-wrap: wrap; }
+.menuSignalRow { display:flex; align-items:center; gap:9px; min-height:20px; color:#aebbe0; font-size:10px; text-transform:uppercase; letter-spacing:.14em; font-weight:800; }
+.menuSignalRow .signalDot { width:8px; height:8px; border-radius:50%; flex:0 0 auto; background:var(--menu-accent); box-shadow:0 0 14px var(--menu-accent); }
+.menuSignalRow .signalDot.live { animation:menuSignalPulse 1.6s ease-in-out infinite; }
+@keyframes menuSignalPulse { 0%,100% { opacity:.45; transform:scale(.86); } 50% { opacity:1; transform:scale(1.16); } }
+.menuSignalRow .signalRight { margin-left:auto; color:#7d8db9; }
+.songBrowseLayout { display:grid; grid-template-columns:minmax(0,1fr) minmax(300px,.43fr); gap:16px; flex:1; min-height:0; }
+.songListColumn { min-width:0; min-height:0; display:flex; flex-direction:column; gap:9px; }
+.songRailHeader { display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:0 3px; }
+.songRailTitle { font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:#dce5ff; font-weight:900; }
+.songRailHint { color:#7484ad; font-size:11px; white-space:nowrap; }
+.songListColumn .songGrid { overflow:auto; padding:2px 5px 8px 2px; scrollbar-color:var(--menu-accent) rgba(255,255,255,.06); }
+.songPreviewPanel { min-width:0; min-height:0; overflow:hidden; position:relative; display:flex; flex-direction:column; border-radius:18px; border:1px solid color-mix(in srgb,var(--menu-accent) 48%,transparent); background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.025) 38%,rgba(7,10,22,.88)); box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 20px 42px rgba(0,0,0,.26); }
+.songPreviewVisual { position:relative; height:190px; flex:0 0 auto; overflow:hidden; background:radial-gradient(circle at 72% 20%,color-mix(in srgb,var(--menu-accent) 45%,transparent),transparent 46%),#090b17; }
+.songPreviewVisual::after { content:""; position:absolute; inset:0; background:linear-gradient(180deg,transparent 35%,rgba(5,7,15,.86)); pointer-events:none; }
+.songPreviewVisual img { width:100%; height:100%; object-fit:cover; opacity:.82; filter:saturate(1.08) contrast(1.06); transform:scale(1.025); }
+.songPreviewGlow { position:absolute; width:180px; height:180px; right:-50px; top:-70px; border-radius:50%; background:var(--menu-accent); opacity:.18; filter:blur(32px); }
+.songPreviewContent { display:flex; flex-direction:column; gap:10px; padding:16px; min-height:0; }
+.songPreviewEyebrow { color:var(--menu-accent); font-size:10px; font-weight:900; letter-spacing:.18em; text-transform:uppercase; }
+.songPreviewTitle { margin:0; font-size:clamp(24px,2.5vw,38px); line-height:.98; font-weight:950; letter-spacing:-.025em; }
+.songPreviewBlurb { margin:0; color:#c4d0ef; font-size:12px; line-height:1.52; max-height:76px; overflow:auto; }
+.songPreviewStats { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; }
+.songPreviewStat { min-width:0; padding:9px 8px; border-radius:10px; background:rgba(4,7,17,.42); border:1px solid rgba(255,255,255,.08); }
+.songPreviewStat strong { display:block; color:#f4f7ff; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.songPreviewStat span { display:block; margin-top:3px; color:#7585ad; font-size:9px; text-transform:uppercase; letter-spacing:.1em; }
+.songPreviewTags { display:flex; flex-wrap:wrap; gap:6px; min-height:20px; }
+.songPreviewTag { padding:5px 8px; border-radius:999px; color:#dbe4ff; background:color-mix(in srgb,var(--menu-accent) 16%,transparent); border:1px solid color-mix(in srgb,var(--menu-accent) 30%,transparent); font-size:10px; font-weight:800; }
+.previewPlay { margin-top:auto; width:100%; padding:12px 14px; border:0; border-radius:12px; background:linear-gradient(135deg,var(--menu-accent),#ff7b54); color:#fff; font:inherit; font-size:13px; font-weight:950; letter-spacing:.08em; text-transform:uppercase; cursor:pointer; box-shadow:0 12px 28px color-mix(in srgb,var(--menu-accent) 24%,transparent); transition:transform .12s,filter .12s; }
+.previewPlay:hover { transform:translateY(-2px); filter:brightness(1.12); }
 .catChip {
     padding: 8px 14px;
     border-radius: 999px;
@@ -616,11 +645,14 @@ body.mobile .touchBtn { height: 64px !important; font-size: 26px !important; bor
     .selectedTrackActions { justify-content: stretch; }
     .playBig { flex: 1; }
 }
+@media (max-width: 900px) { .songBrowseLayout { grid-template-columns:1fr; } .songPreviewPanel { display:none; } }
 body.mobile .menuTopBar { padding: 10px 12px !important; }
 body.mobile .menuBrandName { font-size: 18px !important; }
 body.mobile .menuBrandLogo { width: 36px !important; height: 36px !important; }
 body.mobile .songSearchInput { font-size: 14px !important; padding: 10px 12px !important; }
 body.mobile .songGrid { grid-template-columns: 1fr !important; gap: 10px !important; }
+body.mobile .songRailHeader { display:none !important; }
+body.mobile .menuSignalRow { font-size:9px !important; }
 body.mobile .songCardName { font-size: 17px !important; }
 body.mobile .menuStickyBar { padding: 10px 12px !important; grid-template-columns: 1fr !important; }
 body.mobile .selectedTrackActions { gap: 6px !important; }
@@ -1181,7 +1213,24 @@ body.gamepadOn.gameRunning #consoleHud { display: none; }
             <span class="songSearchCount" id="songSearchCount">0 songs</span>
         </div>
         <div class="songCategories" id="songCategories"></div>
-        <div class="songGrid songList" id="songList"></div>
+        <div class="menuSignalRow"><span class="signalDot live"></span><span id="menuSignal">LOCAL LIBRARY READY</span><span class="signalRight" id="menuBuild">CHARTS · AUDIO · FX</span></div>
+        <div class="songBrowseLayout">
+            <section class="songListColumn" aria-label="Song library">
+                <div class="songRailHeader"><span class="songRailTitle">Track library</span><span class="songRailHint">Click to inspect · double-click to launch</span></div>
+                <div class="songGrid songList" id="songList"></div>
+            </section>
+            <aside class="songPreviewPanel" id="songPreviewPanel" aria-live="polite">
+                <div class="songPreviewVisual"><img id="songPreviewImage" src="assets/icon.ico" alt="Selected song artwork"><span class="songPreviewGlow"></span></div>
+                <div class="songPreviewContent">
+                    <div class="songPreviewEyebrow" id="songPreviewEyebrow">SELECTED TRACK</div>
+                    <h2 class="songPreviewTitle" id="songPreviewTitle">Pick a track</h2>
+                    <p class="songPreviewBlurb" id="songPreviewBlurb">Choose a track to inspect its chart, source, and visual profile.</p>
+                    <div class="songPreviewStats"><div class="songPreviewStat"><strong id="songPreviewTempo">--</strong><span>Tempo</span></div><div class="songPreviewStat"><strong id="songPreviewDiff">--</strong><span>Difficulty</span></div><div class="songPreviewStat"><strong id="songPreviewSource">--</strong><span>Build</span></div></div>
+                    <div class="songPreviewTags" id="songPreviewTags"></div>
+                    <button type="button" class="previewPlay" id="songPreviewPlay">▶ Launch track</button>
+                </div>
+            </aside>
+        </div>
         <div class="menuStickyBar">
             <div class="selectedTrack">
                 <div class="selectedTrackTitle" id="selectedSongName">Pick a track</div>
@@ -1338,6 +1387,7 @@ body.gamepadOn.gameRunning #consoleHud { display: none; }
 <script src="liminal-lyrics-data.js?v=20260904a"></script>
 <script src="knockout-data.js?v=20261002g"></script>
   <script src="inopia-data.js?v=20261002j"></script>
+  <script src="vindication-data.js?v=20261017i"></script>
 <script src="client-config.js?v=20260723a"></script>
 <script src="webgl-renderer.js?v=20261002g"></script>
 <script>
@@ -1384,6 +1434,7 @@ function syncPostFxCanvas(){
 function importedBloomStrength(t){
     if(typeof state === "undefined") return 0;
     if(state.selectedSong === "brokenReality") return 0;
+    if(state.selectedSong === "vindication") return 0.18;
     if(state.selectedSong === "perseverance" && typeof perseveranceBloomStrength === "function") return Math.max(0, perseveranceBloomStrength(t));
     return 0;
 }
@@ -1456,7 +1507,7 @@ function superHeavyShaderProfile(songId){
     const base = { intensity:1.3, bloomStrength:1.02, rayStrength:0.92, dustStrength:0.26, reflectionStrength:1.25, aoStrength:1.3, anamorphicStrength:0.48, sharpenStrength:0.16, depthStrength:1.32, rimStrength:1.02, perspectiveStrength:1.04 };
     if(["combat","oneHit","shimmy"].includes(songId)) return { ...base, intensity:1.33, bloomStrength:1.16, rayStrength:1.3, dustStrength:0.34, reflectionStrength:1.3, anamorphicStrength:1.28, depthStrength:1.5, rimStrength:1.12, perspectiveStrength:1.22 };
     if(["sporting","boxingMatch","boxingMatchWg","boxingFight"].includes(songId)) return { ...base, intensity:1.27, rayStrength:0.72, dustStrength:0.14, reflectionStrength:1.5, anamorphicStrength:0.72, sharpenStrength:0.18, depthStrength:1.48, rimStrength:1.16, perspectiveStrength:1.12 };
-    if(["perseverance","brokenReality","snowedIn","lazyBones","liminalLyrics","inopia"].includes(songId)) return { ...base, intensity:1.28, bloomStrength:0.9, rayStrength:0.88, dustStrength:0.58, reflectionStrength:1.06, aoStrength:1.42, anamorphicStrength:0.28, sharpenStrength:0.2, depthStrength:1.38, rimStrength:0.94, perspectiveStrength:0.94 };
+    if(["perseverance","brokenReality","snowedIn","lazyBones","liminalLyrics","inopia","vindication"].includes(songId)) return { ...base, intensity:1.28, bloomStrength:0.9, rayStrength:0.88, dustStrength:0.58, reflectionStrength:1.06, aoStrength:1.42, anamorphicStrength:0.28, sharpenStrength:0.2, depthStrength:1.38, rimStrength:0.94, perspectiveStrength:0.94 };
     if(["outskirtz","overthrone","sillyBilly","ballistic"].includes(songId)) return { ...base, intensity:1.33, bloomStrength:1.13, rayStrength:1.08, dustStrength:0.22, reflectionStrength:1.46, aoStrength:1.4, anamorphicStrength:0.86, depthStrength:1.54, rimStrength:1.18, perspectiveStrength:1.24 };
     return base;
 }
@@ -2535,10 +2586,38 @@ function selectSong(id){
     const metaEl = document.getElementById("selectedSongMeta");
     if (nameEl) nameEl.textContent = state.currentSong.title;
     if (metaEl) metaEl.textContent = `${state.currentSong.diff} • ${state.currentSong.tempo} BPM • ${state.currentSong.subtitle}`;
+    updateSongPreview(id, state.currentSong);
     if (!state.playing) {
         if (ui.statusText) ui.statusText.textContent = `Selected: ${state.currentSong.title}`;
         if (ui.statusSub) ui.statusSub.textContent = state.currentSong.blurb;
     }
+}
+
+function updateSongPreview(id, song){
+    const menu = document.getElementById("menu");
+    if (!menu || !song) return;
+    const accent = (song.palette && song.palette[5]) || "#ff3a82";
+    menu.style.setProperty("--menu-accent", accent);
+    const setText = (nodeId, value) => { const node = document.getElementById(nodeId); if (node) node.textContent = value; };
+    setText("menuSignal", `${song.title} · READY TO PLAY`);
+    setText("songPreviewEyebrow", song.chartSource ? `IMPORTED · ${String(song.chartSource).toUpperCase()}` : "BUILT-IN TRACK");
+    setText("songPreviewTitle", song.title || "Pick a track");
+    setText("songPreviewBlurb", song.blurb || song.subtitle || "Choose a track to inspect its chart, source, and visual profile.");
+    setText("songPreviewTempo", `${song.tempo || "--"} BPM`);
+    setText("songPreviewDiff", song.diff || "--");
+    setText("songPreviewSource", song.chartSource ? "SOURCE" : "NATIVE");
+    const tags = document.getElementById("songPreviewTags");
+    if (tags) tags.innerHTML = songCategoriesOf(song).slice(0, 4).map(category => {
+        const label = SONG_CATEGORIES.find(item => item.id === category)?.label || category;
+        return `<span class="songPreviewTag">${label}</span>`;
+    }).join("");
+    const image = document.getElementById("songPreviewImage");
+    if (image) {
+        image.onerror = () => { image.onerror = null; image.src = "assets/icon.ico"; };
+        image.src = song.previewImage || "assets/icon.ico";
+    }
+    const launch = document.getElementById("songPreviewPlay");
+    if (launch) launch.onclick = () => { selectSong(id); if (ui.playBtn) ui.playBtn.click(); };
 }
 
 function renderSongCategories() {
@@ -3326,7 +3405,7 @@ function frame(now){
         ctx.save();
         ctx.translate(Math.random() * s * 2 - s, Math.random() * s * 2 - s);
     }
-    if(state.playing && (state.audio.ctx || state.audio.inst || state.audio.boxingInst || state.audio.combatInst || state.audio.oneHitInst || state.audio.shimmyInst || state.audio.inst2)){ const t = songTime(); if(t >= 0){ if(!isImportedSong(state.currentSong)) scheduleMusic(); if(state.selectedSong === "perseverance") updatePerseveranceState(Math.max(0, t)); handleMisses(t); updateHoldNotes(t); updateCamera(Math.max(0, t), dt); } refreshHUD(Math.max(0, t)); renderScene(Math.max(0, t), preview); drawHitGlows(); applyDustinBloom(Math.max(0, t)); if(state.health <= 0) finish(true); else if(t >= songEndTime() + .4) finish(false); }
+    if(state.playing && (state.audio.ctx || state.audio.inst || state.audio.boxingInst || state.audio.combatInst || state.audio.oneHitInst || state.audio.shimmyInst || state.audio.inst2 || state.audio.vindicationInst)){ const t = songTime(); if(t >= 0){ if(!isImportedSong(state.currentSong)) scheduleMusic(); if(state.selectedSong === "perseverance") updatePerseveranceState(Math.max(0, t)); handleMisses(t); updateHoldNotes(t); updateCamera(Math.max(0, t), dt); } refreshHUD(Math.max(0, t)); renderScene(Math.max(0, t), preview); drawHitGlows(); applyDustinBloom(Math.max(0, t)); if(state.health <= 0) finish(true); else if(t >= songEndTime() + .4) finish(false); }
     else renderScene(0, preview);
     if(shakeAge < 0.15 && shakeAge >= 0) ctx.restore();
     applySuperHeavyEffects(state.playing ? Math.max(0, songTime()) : preview);
@@ -3570,6 +3649,7 @@ renderSongs(); renderBinds(); rebuildKeyMap(); ui.modeLabel.textContent = "Solo 
 <script src="liminal-lyrics-mode.js?v=20260904a"></script>
 <script src="knockout-mode.js?v=20261002g"></script>
   <script src="inopia-mode.js?v=20261003f"></script>
+<script src="vindication-mode.js?v=20261017u"></script>
 <script src="universal-stage-parallax.js?v=20260810b"></script>
 <script src="playback-stability-fix.js?v=20260524a"></script>
 <script src="playback-start-fix.js?v=20260524a"></script>
